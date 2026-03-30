@@ -77,11 +77,10 @@ Uses [Vitest](https://vitest.dev) and [React Testing Library](https://testing-li
 ### End-to-end tests
 
 ```sh
-npm run tauri build     # build the app first
-npm run test:e2e        # launch app via tauri-driver and run e2e specs
+npm run test:e2e
 ```
 
-Uses [WebdriverIO](https://webdriver.io) with `tauri-driver` to launch the real desktop app and drive it via the WebDriver protocol. E2e specs live in [e2e/](e2e/).
+Uses [Playwright](https://playwright.dev) (Chromium) against the Vite dev server. The server starts automatically before the tests and stops afterwards. Tauri IPC calls are intercepted by a fixture in [e2e/fixtures.ts](e2e/fixtures.ts) so no built app binary is needed. E2e specs live in [e2e/](e2e/).
 
 ## Documentation
 

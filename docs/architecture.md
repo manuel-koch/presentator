@@ -18,4 +18,4 @@
   * Debounce of ~300ms to avoid double-reloads when both files change simultaneously (e.g. a script regenerating SVG and config together)
 * **Vitest** — unit and component tests
 * **React Testing Library** — component interaction tests (D3/SVG DOM)
-* **WebdriverIO + Tauri WebDriver** — end-to-end desktop app tests
+* **Playwright** — end-to-end tests running against the Vite dev server (Chromium); Tauri IPC is mocked via a fixture so tests run on all platforms without a built app binary

@@ -11,7 +11,7 @@ Future Claude sessions should read this file to understand what has been done an
 - [x] Initialize Tauri + React + TypeScript project (using Vite)
 - [x] Configure path aliases and TypeScript strict mode
 - [x] Set up Vitest + React Testing Library
-- [x] Set up WebdriverIO + Tauri WebDriver for e2e tests
+- [x] Set up Playwright for e2e tests (replaces WebdriverIO; tauri-driver unsupported on macOS)
 - [x] Verify dev build and hot-reload works
 
 ## SVG Loading
