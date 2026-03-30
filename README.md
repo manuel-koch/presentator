@@ -9,31 +9,22 @@ Interactive / dynamic presentation app built from SVG input files, running on ma
 ```sh
 brew install rustup
 rustup-init
-```
 
-Follow the on-screen prompts (default installation is fine). Then restart your shell or source the environment:
-
-```sh
+# Follow the on-screen prompts (default installation is fine). Then restart your shell or source the environment:
 source "$HOME/.cargo/env"
-```
 
-Verify:
-
-```sh
-rustc --version
-cargo --version
+# Verify
+which rustc ; rustc --version
+which cargo ; cargo --version
 ```
 
 ### Node.js — via fnm
 
 ```sh
 brew install fnm
-```
 
-Add fnm to your shell (add this to your `~/.zshrc`):
-
-```sh
-eval "$(fnm env --use-on-cd)"
+# Add fnm to your shell (add this to your `~/.zshrc`):
+val "$(fnm env --use-on-cd)"
 ```
 
 Then install and activate the required Node version:
@@ -41,14 +32,56 @@ Then install and activate the required Node version:
 ```sh
 fnm install --lts
 fnm use lts-latest
+
+# Verify:
+which node ; node --version
+which npm ; npm --version
 ```
 
-Verify:
+## Development
+
+Install dependencies after cloning:
 
 ```sh
-node --version
-npm --version
+npm install
 ```
+
+### Run the app (development)
+
+```sh
+npm run tauri dev
+```
+
+Starts the Vite dev server and launches the Tauri desktop window. The UI hot-reloads on every file save; Rust changes trigger a Tauri rebuild automatically.
+
+### Build for production
+
+```sh
+npm run tauri build
+```
+
+Compiles the React frontend and the Rust backend, then bundles both into a self-contained macOS `.app` in `src-tauri/target/release/bundle/macos/`.
+
+## Testing
+
+### Unit and component tests
+
+```sh
+npm test                # run all tests once
+npm run test:watch      # re-run on file changes
+npm run test:coverage   # run with coverage report
+```
+
+Uses [Vitest](https://vitest.dev) and [React Testing Library](https://testing-library.com/react). Test files live next to the source they test (`*.test.tsx` / `*.test.ts`).
+
+### End-to-end tests
+
+```sh
+npm run tauri build     # build the app first
+npm run test:e2e        # launch app via tauri-driver and run e2e specs
+```
+
+Uses [WebdriverIO](https://webdriver.io) with `tauri-driver` to launch the real desktop app and drive it via the WebDriver protocol. E2e specs live in [e2e/](e2e/).
 
 ## Documentation
 

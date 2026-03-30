@@ -6,13 +6,13 @@ Future Claude sessions should read this file to understand what has been done an
 
 ## Project Setup
 
-- [ ] Install prerequisites: `rustup` (Rust toolchain) and `fnm` (Node version manager)
-- [ ] Install and activate the required Node version via `fnm`
-- [ ] Initialize Tauri + React + TypeScript project (using Vite)
-- [ ] Configure path aliases and TypeScript strict mode
-- [ ] Set up Vitest + React Testing Library
-- [ ] Set up WebdriverIO + Tauri WebDriver for e2e tests
-- [ ] Verify dev build and hot-reload works
+- [x] Install prerequisites: `rustup` (Rust toolchain) and `fnm` (Node version manager)
+- [x] Install and activate the required Node version via `fnm`
+- [x] Initialize Tauri + React + TypeScript project (using Vite)
+- [x] Configure path aliases and TypeScript strict mode
+- [x] Set up Vitest + React Testing Library
+- [x] Set up WebdriverIO + Tauri WebDriver for e2e tests
+- [x] Verify dev build and hot-reload works
 
 ## SVG Loading
 
