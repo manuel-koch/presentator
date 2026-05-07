@@ -22,17 +22,24 @@ Future Claude sessions should read this file to understand what has been done an
 
 ## Sidecar Config (YAML)
 
-- [ ] Integrate `js-yaml` (or equivalent) parser
-- [ ] Define TypeScript data model for presentation config and steps (see [config-schema.md](config-schema.md))
-- [ ] Load `.presentator.yaml` sidecar on SVG open (create empty config if absent)
-- [ ] Save config back to sidecar file on change
+- [x] Integrate `js-yaml` (or equivalent) parser
+- [x] Define TypeScript data model for presentation config and steps (see [config-schema.md](config-schema.md))
+- [x] Load `.presentator.yaml` sidecar on SVG open (create empty config if absent)
+- [x] Save config back to sidecar file on change
 
 ## File Watching
 
 - [ ] Watch SVG file and sidecar config for external changes
 - [ ] Debounce reload by ~300ms to handle simultaneous file writes
 - [ ] In editing mode: auto-reload on detected change
+- [ ] Use hash for the SVG and sidecar file content to skip updates of same content.
+      E.g. when the config is changed within the tool and we save that change to the sidecar config file,
+      that should not trigger a reload in UI, since the content of the config is the same we already know.
 - [ ] In presentation mode: suppress reload, show subtle pending-reload indicator
+- [ ] The pending-reload indicator should provide a button/link to trigger reloading
+- [ ] The pending-reload indicator should provide a cancel button or "x" to close it without
+      reloading changed files
+- [ ] Add a main menu entry to allow unconditional "reload" of SVG and sidecar on demand
 
 ## Mode Switching
 

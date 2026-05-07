@@ -1,9 +1,11 @@
 import { useSvgFile } from "./hooks/useSvgFile";
+import { useSidecarConfig } from "./hooks/useSidecarConfig";
 import { SvgViewport } from "./components/SvgViewport";
 import "./App.css";
 
 function App() {
   const { svgFile, error, pickFile } = useSvgFile();
+  useSidecarConfig(svgFile?.path ?? null);
 
   return (
     <main className="app">
