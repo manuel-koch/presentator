@@ -2,6 +2,7 @@ import { renderHook, waitFor } from "@testing-library/react";
 import { act } from "react";
 import { vi, describe, it, expect, beforeEach } from "vitest";
 import { useSidecarConfig } from "./useSidecarConfig";
+import { serializeConfig } from "../utils/configSidecar";
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 
@@ -79,5 +80,50 @@ describe("useSidecarConfig", () => {
       path: SIDECAR_PATH,
       content: expect.stringContaining("#ffffff"),
     });
+  });
+});
+
+describe("useSidecarConfig — reloadConfig", () => {
+  const UPDATED_YAML = `aspect_ratio: "16:9"\nbackground_color: "#ffffff"\nsteps: []\n`;
+
+  beforeEach(() => vi.resetAllMocks());
+
+  it("is a no-op when svgPath is null", async () => {
+    const { result } = renderHook(() => useSidecarConfig(null));
+    await act(() => result.current.reloadConfig());
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("updates config when file content has changed", async () => {
+    vi.mocked(invoke)
+      .mockResolvedValueOnce(SIDECAR_YAML)   // initial load
+      .mockResolvedValueOnce(UPDATED_YAML);  // reloadConfig
+
+    const { result } = renderHook(() => useSidecarConfig(SVG_PATH));
+    await waitFor(() => expect(result.current.config).not.toBeNull());
+
+    await act(() => result.current.reloadConfig());
+
+    expect(result.current.config?.background_color).toBe("#ffffff");
+  });
+
+  it("skips update when content hash is unchanged (prevents self-write loop)", async () => {
+    vi.mocked(invoke)
+      .mockResolvedValueOnce(SIDECAR_YAML)  // initial load
+      .mockResolvedValue(undefined);         // updateConfig write
+
+    const { result } = renderHook(() => useSidecarConfig(SVG_PATH));
+    await waitFor(() => expect(result.current.config).not.toBeNull());
+
+    // updateConfig serializes and stores the hash of what it writes
+    const next = { ...result.current.config!, background_color: "#aabbcc" };
+    await act(() => result.current.updateConfig(next));
+
+    // Watcher fires and reloadConfig reads back the exact same YAML that was written
+    vi.mocked(invoke).mockResolvedValueOnce(serializeConfig(next));
+    const configBefore = result.current.config;
+    await act(() => result.current.reloadConfig());
+
+    expect(result.current.config).toBe(configBefore); // same object — no re-render
   });
 });

@@ -59,3 +59,45 @@ describe("useSvgFile", () => {
     expect(result.current.error).toBe("Permission denied");
   });
 });
+
+describe("useSvgFile — reloadFile", () => {
+  const UPDATED_SVG = `<svg xmlns="http://www.w3.org/2000/svg">
+  <rect id="updated" x="0" y="0" width="10" height="10" />
+</svg>`;
+
+  beforeEach(() => vi.resetAllMocks());
+
+  it("is a no-op when no file is loaded", async () => {
+    const { result } = renderHook(() => useSvgFile());
+    await act(() => result.current.reloadFile());
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("updates state when content has changed", async () => {
+    vi.mocked(open).mockResolvedValue("/path/to/diagram.svg");
+    vi.mocked(invoke)
+      .mockResolvedValueOnce(SAMPLE_SVG)   // pickFile
+      .mockResolvedValueOnce(UPDATED_SVG); // reloadFile
+
+    const { result } = renderHook(() => useSvgFile());
+    await act(() => result.current.pickFile());
+    await act(() => result.current.reloadFile());
+
+    expect(result.current.svgFile?.content).toBe(UPDATED_SVG);
+    expect(result.current.svgFile?.namedElements).toEqual(["updated"]);
+  });
+
+  it("skips state update when content hash is unchanged", async () => {
+    vi.mocked(open).mockResolvedValue("/path/to/diagram.svg");
+    vi.mocked(invoke)
+      .mockResolvedValueOnce(SAMPLE_SVG)  // pickFile
+      .mockResolvedValueOnce(SAMPLE_SVG); // reloadFile — same content
+
+    const { result } = renderHook(() => useSvgFile());
+    await act(() => result.current.pickFile());
+    const snapshotBefore = result.current.svgFile;
+    await act(() => result.current.reloadFile());
+
+    expect(result.current.svgFile).toBe(snapshotBefore); // same object reference
+  });
+});
