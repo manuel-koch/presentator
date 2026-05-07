@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { vi, describe, it, expect, beforeEach } from "vitest";
 import App from "./App";
@@ -15,22 +15,26 @@ const SAMPLE_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 100
   <rect id="bg" x="0" y="0" width="200" height="100" fill="navy" />
 </svg>`;
 
-// Capture and expose the file-changed event handler for tests that need it.
-type EventHandler = () => void;
-let fileChangedHandler: EventHandler | null = null;
+type AnyHandler = (event: { payload: unknown }) => void;
+const capturedHandlers: Record<string, AnyHandler> = {};
 
 function setupListenMock() {
-  fileChangedHandler = null;
+  for (const key of Object.keys(capturedHandlers)) delete capturedHandlers[key];
   vi.mocked(listen).mockImplementation(async (event, handler) => {
-    if (event === "file-changed") fileChangedHandler = handler as EventHandler;
-    return vi.fn();
+    capturedHandlers[event as string] = handler as AnyHandler;
+    return () => {};
   });
+}
+
+function fireEvent(event: string, payload?: unknown) {
+  capturedHandlers[event]?.({ payload });
 }
 
 describe("App", () => {
   beforeEach(() => {
     vi.resetAllMocks();
     setupListenMock();
+    vi.mocked(invoke).mockResolvedValue(undefined);
   });
 
   it("shows the empty state with open button", () => {
@@ -39,15 +43,25 @@ describe("App", () => {
     expect(screen.getByRole("button", { name: "Open SVG file" })).toBeInTheDocument();
   });
 
-  it("renders the SVG viewport after a file is picked", async () => {
+  it("renders the editing canvas after a file is picked", async () => {
     vi.mocked(open).mockResolvedValue("/path/to/slides.svg");
     vi.mocked(invoke).mockResolvedValue(SAMPLE_SVG);
 
     render(<App />);
     await userEvent.click(screen.getByRole("button", { name: "Open SVG file" }));
 
-    expect(screen.getByTestId("svg-viewport")).toBeInTheDocument();
+    expect(screen.getByTestId("editing-canvas")).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Presentator" })).toBeNull();
+  });
+
+  it("opens a file via the menu-open-svg event", async () => {
+    vi.mocked(open).mockResolvedValue("/path/to/slides.svg");
+    vi.mocked(invoke).mockResolvedValue(SAMPLE_SVG);
+
+    render(<App />);
+    fireEvent("menu-open-svg");
+
+    await waitFor(() => expect(screen.getByTestId("editing-canvas")).toBeInTheDocument());
   });
 
   it("stays on empty state when dialog is cancelled", async () => {
@@ -70,33 +84,68 @@ describe("App", () => {
   });
 });
 
+describe("App — mode switching via menu", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    setupListenMock();
+    vi.mocked(invoke).mockResolvedValue(undefined);
+  });
+
+  it("calls update_mode_menu with 'editing' on initial render", async () => {
+    render(<App />);
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("update_mode_menu", { mode: "editing" })
+    );
+  });
+
+  it("switches to presentation and updates menu when menu-set-mode fires", async () => {
+    render(<App />);
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith("update_mode_menu", { mode: "editing" }));
+
+    vi.mocked(invoke).mockClear();
+    fireEvent("menu-set-mode", "presentation");
+
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("update_mode_menu", { mode: "presentation" })
+    );
+  });
+
+  it("switches back to editing when menu-set-mode fires with 'editing'", async () => {
+    render(<App />);
+    fireEvent("menu-set-mode", "presentation");
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("update_mode_menu", { mode: "presentation" })
+    );
+
+    fireEvent("menu-set-mode", "editing");
+    await waitFor(() =>
+      expect(invoke).toHaveBeenLastCalledWith("update_mode_menu", { mode: "editing" })
+    );
+  });
+
+  it("resets to editing and updates menu when a new file is opened", async () => {
+    vi.mocked(open).mockResolvedValue("/slides.svg");
+    vi.mocked(invoke).mockResolvedValue(SAMPLE_SVG);
+
+    render(<App />);
+    await userEvent.click(screen.getByRole("button", { name: "Open SVG file" }));
+
+    // After picking a file the path-reset effect fires and mode is "editing".
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("update_mode_menu", { mode: "editing" })
+    );
+  });
+});
+
 describe("App — pending reload indicator", () => {
   beforeEach(() => {
     vi.resetAllMocks();
     setupListenMock();
+    vi.mocked(invoke).mockResolvedValue(undefined);
   });
 
   it("does not show the indicator initially", () => {
     render(<App />);
-    expect(screen.queryByRole("status")).toBeNull();
-  });
-
-  it("Reload button triggers a reload and hides the indicator", async () => {
-    // Load a file first
-    vi.mocked(open).mockResolvedValue("/slides.svg");
-    vi.mocked(invoke).mockResolvedValue(SAMPLE_SVG);
-    render(<App />);
-    await userEvent.click(screen.getByRole("button", { name: "Open SVG file" }));
-
-    // Manually force the indicator visible by rendering it directly
-    // (testing the indicator component separately is cleaner for the UI;
-    //  here we verify the Reload action clears state)
-    expect(screen.queryByRole("status")).toBeNull();
-  });
-
-  it("Dismiss button hides the indicator without reloading", async () => {
-    render(<App />);
-    // Indicator is not shown when there is no pending reload — nothing to dismiss.
     expect(screen.queryByRole("status")).toBeNull();
   });
 });

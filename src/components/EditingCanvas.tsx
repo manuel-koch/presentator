@@ -1,0 +1,651 @@
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import type { Step, Viewport } from "../types/config";
+import type { ViewBox } from "../utils/svgViewBox";
+import { parseAspectRatio } from "../utils/svgViewBox";
+
+interface Props {
+  svgContent: string;
+  viewBox: ViewBox;
+  steps: Step[];
+  selectedStepIndex: number | null;
+  aspectRatio: string;
+  backgroundColor: string;
+  onViewportChange: (viewport: Viewport) => void;
+}
+
+export interface EditingCanvasHandle {
+  goToStep: (step: Step) => void;
+  getCanvasViewport: () => { left: number; top: number; width: number; height: number } | null;
+}
+
+const ZOOM_FACTOR = 1.04;
+const PAN_STEP = 20;
+const PAN_STEP_LARGE = 100;
+const MIN_ZOOM = 0.1;
+const MAX_ZOOM = 500;
+
+const CORNER_HIT = 28;
+
+const RECT_STROKE = "#3b82f6";
+const RECT_FILL = "rgba(59,130,246,0.08)";
+const OTHER_RECT_STROKE = "rgba(160,160,160,0.55)";
+const OTHER_RECT_FILL = "rgba(128,128,128,0.04)";
+
+const LABEL_SIZE_PX = 13;
+const LABEL_PAD_PX = 5;
+
+const MINIMAP_MAX_W = 130;
+const MINIMAP_MAX_H = 100;
+
+interface MiniMapProps {
+  vb: ViewBox;
+  svgInner: string;
+  visibleLeft: number;
+  visibleTop: number;
+  visibleW: number;
+  visibleH: number;
+  onNavigate: (cx: number, cy: number) => void;
+}
+
+function CanvasMiniMap({ vb, svgInner, visibleLeft, visibleTop, visibleW, visibleH, onNavigate }: MiniMapProps) {
+  const ar = vb.width / vb.height;
+  let mmW = MINIMAP_MAX_W;
+  let mmH = Math.round(mmW / ar);
+  if (mmH > MINIMAP_MAX_H) { mmH = MINIMAP_MAX_H; mmW = Math.round(mmH * ar); }
+
+  // Clamp viewport indicator to SVG bounds.
+  const vpLeft = Math.max(visibleLeft, vb.x);
+  const vpTop  = Math.max(visibleTop,  vb.y);
+  const vpW    = Math.max(0, Math.min(visibleLeft + visibleW, vb.x + vb.width)  - vpLeft);
+  const vpH    = Math.max(0, Math.min(visibleTop  + visibleH, vb.y + vb.height) - vpTop);
+  const strokeW = Math.max(vb.width, vb.height) * 0.016;
+
+  function handleMouseDown(e: React.MouseEvent<HTMLDivElement>) {
+    if (e.button !== 0) return;
+    e.stopPropagation();
+    e.preventDefault();
+    const rect = e.currentTarget.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    onNavigate(
+      vb.x + ((e.clientX - rect.left) / rect.width)  * vb.width,
+      vb.y + ((e.clientY - rect.top)  / rect.height) * vb.height,
+    );
+  }
+
+  return (
+    <div
+      data-testid="canvas-minimap"
+      style={{
+        position: "absolute", bottom: 12, right: 12,
+        width: mmW, height: mmH,
+        border: "1px solid rgba(100,100,100,0.6)",
+        borderRadius: 3, overflow: "hidden",
+        boxShadow: "0 2px 10px rgba(0,0,0,0.65)",
+        cursor: "crosshair",
+      }}
+      onMouseDown={handleMouseDown}
+    >
+      {/* SVG content at small scale — pointer events disabled so the div receives clicks */}
+      <svg
+        width={mmW} height={mmH}
+        viewBox={`${vb.x} ${vb.y} ${vb.width} ${vb.height}`}
+        style={{ display: "block", pointerEvents: "none" }}
+        dangerouslySetInnerHTML={{ __html: svgInner }}
+      />
+      {/* Dim out-of-view area, highlight current viewport */}
+      <svg
+        style={{ position: "absolute", top: 0, left: 0, pointerEvents: "none" }}
+        width={mmW} height={mmH}
+        viewBox={`${vb.x} ${vb.y} ${vb.width} ${vb.height}`}
+      >
+        <rect x={vb.x} y={vb.y} width={vb.width} height={vb.height} fill="rgba(0,0,0,0.42)" />
+        {vpW > 0 && vpH > 0 && (
+          <rect
+            x={vpLeft} y={vpTop} width={vpW} height={vpH}
+            fill="rgba(59,130,246,0.12)" stroke="#3b82f6" strokeWidth={strokeW}
+          />
+        )}
+      </svg>
+    </div>
+  );
+}
+
+const ROTATE_CURSOR =
+  `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 18 18'%3E` +
+  `%3Cpath d='M9 1A8 8 0 1 1 1 9' fill='none' stroke='%23000' stroke-width='2.5' stroke-linecap='round'/%3E` +
+  `%3Cpath d='M9 1A8 8 0 1 1 1 9' fill='none' stroke='%23fff' stroke-width='1.5' stroke-linecap='round'/%3E` +
+  `%3Cpath d='M7 0L9 1L7 2' fill='none' stroke='%23000' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/%3E` +
+  `%3Cpath d='M7 0L9 1L7 2' fill='none' stroke='%23fff' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E` +
+  `%3C/svg%3E") 9 9, grab`;
+
+interface CanvasTransform {
+  zoom: number;
+  panX: number;
+  panY: number;
+}
+
+function clamp(v: number, lo: number, hi: number) {
+  return Math.max(lo, Math.min(hi, v));
+}
+
+function computeViewportRectGeom(step: Step, vb: ViewBox, ar: string) {
+  const pAR = parseAspectRatio(ar);
+  const svgAR = vb.width / vb.height;
+  let baseW: number, baseH: number;
+  if (svgAR >= pAR) {
+    baseW = vb.width;
+    baseH = vb.width / pAR;
+  } else {
+    baseH = vb.height;
+    baseW = vb.height * pAR;
+  }
+  return {
+    cx: step.viewport.center[0] * vb.width + vb.x,
+    cy: step.viewport.center[1] * vb.height + vb.y,
+    w: baseW / step.viewport.zoom,
+    h: baseH / step.viewport.zoom,
+    rotation: step.viewport.rotation,
+    baseW,
+    baseH,
+  };
+}
+
+type DragMode = "none" | "move" | "rotate" | "resize";
+type EdgeSide = "top" | "right" | "bottom" | "left";
+
+interface DragState {
+  mode: DragMode;
+  startMouseX: number;
+  startMouseY: number;
+  startViewport: Viewport;
+  side?: EdgeSide;
+  startCx?: number;
+  startCy?: number;
+  baseW?: number;
+  baseH?: number;
+}
+
+export const EditingCanvas = forwardRef<EditingCanvasHandle, Props>(function EditingCanvas(
+  { svgContent, viewBox: vb, steps, selectedStepIndex, aspectRatio, backgroundColor, onViewportChange },
+  ref
+) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [transform, setTransform] = useState<CanvasTransform>({ zoom: 1, panX: 0, panY: 0 });
+  const transformRef = useRef(transform);
+  transformRef.current = transform;
+  const dragRef = useRef<DragState | null>(null);
+  const dragMoveRef = useRef<(mx: number, my: number, shiftKey: boolean) => void>(() => {});
+  const clipId = useRef(`ec-clip-${Math.random().toString(36).slice(2, 8)}`).current;
+  // Kept in a ref so goToStep always sees current values without stale closure issues.
+  const vbRef = useRef(vb);
+  vbRef.current = vb;
+  const aspectRatioRef = useRef(aspectRatio);
+  aspectRatioRef.current = aspectRatio;
+
+  // Track container pixel size so we can compute the SVG viewBox.
+  const [containerSize, setContainerSize] = useState({ w: 0, h: 0 });
+
+  const selectedStep = selectedStepIndex !== null ? steps[selectedStepIndex] ?? null : null;
+
+  // Extract SVG inner content (between the root <svg> tags) for embedding as a nested SVG.
+  const svgInner = useMemo(() => {
+    const openEnd = svgContent.indexOf('>');
+    if (openEnd === -1) return '';
+    const closeStart = svgContent.lastIndexOf('</svg>');
+    if (closeStart === -1) return svgContent.substring(openEnd + 1);
+    return svgContent.substring(openEnd + 1, closeStart);
+  }, [svgContent]);
+
+  // Fit SVG to canvas on first render / when viewBox changes.
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const cw = el.clientWidth;
+    const ch = el.clientHeight;
+    if (!cw || !ch) return;
+    const zoom = Math.min(cw / vb.width, ch / vb.height) * 0.9;
+    setTransform({
+      zoom,
+      panX: (cw - vb.width * zoom) / 2,
+      panY: (ch - vb.height * zoom) / 2,
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vb.width, vb.height]);
+
+  // Focus the canvas on mount so arrow-key pan works without needing a click first.
+  useEffect(() => { containerRef.current?.focus({ preventScroll: true }); }, []);
+
+  // Track container size so the viewBox stays correct on resize.
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    setContainerSize({ w: el.clientWidth, h: el.clientHeight });
+    if (typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => setContainerSize({ w: el.clientWidth, h: el.clientHeight }));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  // Expose goToStep so the parent can navigate the canvas to any step's viewport.
+  useImperativeHandle(ref, () => ({
+    goToStep(step: Step) {
+      const el = containerRef.current;
+      if (!el) return;
+      const cw = el.clientWidth;
+      const ch = el.clientHeight;
+      if (!cw || !ch) return;
+      const geom = computeViewportRectGeom(step, vbRef.current, aspectRatioRef.current);
+      const theta = geom.rotation * Math.PI / 180;
+      const cosT = Math.abs(Math.cos(theta));
+      const sinT = Math.abs(Math.sin(theta));
+      const bbW = geom.w * cosT + geom.h * sinT;
+      const bbH = geom.w * sinT + geom.h * cosT;
+      const newZoom = clamp(Math.min(cw / bbW, ch / bbH) * 0.85, MIN_ZOOM, MAX_ZOOM);
+      setTransform({
+        zoom: newZoom,
+        panX: cw / 2 - (geom.cx - vbRef.current.x) * newZoom,
+        panY: ch / 2 - (geom.cy - vbRef.current.y) * newZoom,
+      });
+    },
+    getCanvasViewport() {
+      const el = containerRef.current;
+      if (!el) return null;
+      const cw = el.clientWidth;
+      const ch = el.clientHeight;
+      if (!cw || !ch) return null;
+      const { zoom, panX, panY } = transformRef.current;
+      return {
+        left:   -panX / zoom + vbRef.current.x,
+        top:    -panY / zoom + vbRef.current.y,
+        width:  cw / zoom,
+        height: ch / zoom,
+      };
+    },
+  }));
+
+  const zoomAt = useCallback((cx: number, cy: number, factor: number) => {
+    setTransform((t) => {
+      const newZoom = clamp(t.zoom * factor, MIN_ZOOM, MAX_ZOOM);
+      const ratio = newZoom / t.zoom;
+      return {
+        zoom: newZoom,
+        panX: cx - (cx - t.panX) * ratio,
+        panY: cy - (cy - t.panY) * ratio,
+      };
+    });
+  }, []);
+
+  function handleWheel(e: React.WheelEvent) {
+    e.preventDefault();
+    const rect = containerRef.current!.getBoundingClientRect();
+    const cx = e.clientX - rect.left;
+    const cy = e.clientY - rect.top;
+    const factor = e.deltaY < 0 ? ZOOM_FACTOR : 1 / ZOOM_FACTOR;
+    zoomAt(cx, cy, factor);
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent) {
+    const meta = e.metaKey || e.ctrlKey;
+    if (meta && (e.key === "+" || e.key === "=" || e.key === "ArrowUp")) {
+      e.preventDefault();
+      const el = containerRef.current!;
+      zoomAt(el.clientWidth / 2, el.clientHeight / 2, ZOOM_FACTOR);
+      return;
+    }
+    if (meta && (e.key === "-" || e.key === "ArrowDown")) {
+      e.preventDefault();
+      const el = containerRef.current!;
+      zoomAt(el.clientWidth / 2, el.clientHeight / 2, 1 / ZOOM_FACTOR);
+      return;
+    }
+    const step = e.shiftKey ? PAN_STEP_LARGE : PAN_STEP;
+    if (e.key === "ArrowLeft") { e.preventDefault(); setTransform((t) => ({ ...t, panX: t.panX + step })); }
+    if (e.key === "ArrowRight") { e.preventDefault(); setTransform((t) => ({ ...t, panX: t.panX - step })); }
+    if (e.key === "ArrowUp") { e.preventDefault(); setTransform((t) => ({ ...t, panY: t.panY + step })); }
+    if (e.key === "ArrowDown") { e.preventDefault(); setTransform((t) => ({ ...t, panY: t.panY - step })); }
+  }
+
+  // --- Canvas pan via drag ---
+  const panDragRef = useRef<{ startX: number; startY: number; startPanX: number; startPanY: number } | null>(null);
+
+  function handleCanvasMouseDown(e: React.MouseEvent) {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    containerRef.current?.focus({ preventScroll: true });
+    panDragRef.current = { startX: e.clientX, startY: e.clientY, startPanX: transform.panX, startPanY: transform.panY };
+  }
+
+  useEffect(() => {
+    function onMouseMove(e: MouseEvent) {
+      const panDrag = panDragRef.current;
+      if (panDrag) {
+        const dx = e.clientX - panDrag.startX;
+        const dy = e.clientY - panDrag.startY;
+        const { startPanX, startPanY } = panDrag;
+        setTransform((t) => ({ ...t, panX: startPanX + dx, panY: startPanY + dy }));
+      }
+      if (dragRef.current) {
+        dragMoveRef.current(e.clientX, e.clientY, e.shiftKey);
+      }
+    }
+    function onMouseUp() {
+      panDragRef.current = null;
+      dragRef.current = null;
+    }
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+    return () => {
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+    };
+  }, []);
+
+  // --- Viewport rectangle drag ---
+  // screenToSvg: same formula as the CSS-transform approach because pan/zoom semantics are identical.
+  //   panX = container-pixel offset of vb.x; 1 SVG unit = zoom px.
+  function screenToSvg(sx: number, sy: number): [number, number] {
+    const rect = containerRef.current!.getBoundingClientRect();
+    const t = transformRef.current;
+    return [
+      (sx - rect.left - t.panX) / t.zoom + vb.x,
+      (sy - rect.top  - t.panY) / t.zoom + vb.y,
+    ];
+  }
+
+  function startViewportDrag(mode: DragMode, e: React.MouseEvent, side?: EdgeSide) {
+    e.stopPropagation();
+    containerRef.current?.focus({ preventScroll: true });
+    if (!selectedStep) return;
+    const geom = computeViewportRectGeom(selectedStep, vb, aspectRatio);
+    dragRef.current = {
+      mode,
+      startMouseX: e.clientX,
+      startMouseY: e.clientY,
+      startViewport: { ...selectedStep.viewport },
+      side,
+      startCx: geom.cx,
+      startCy: geom.cy,
+      baseW: geom.baseW,
+      baseH: geom.baseH,
+    };
+    panDragRef.current = null;
+  }
+
+  function handleViewportDragMove(mx: number, my: number, shiftKey: boolean) {
+    const drag = dragRef.current!;
+    const [svgX, svgY] = screenToSvg(mx, my);
+    const [startSvgX, startSvgY] = screenToSvg(drag.startMouseX, drag.startMouseY);
+
+    if (drag.mode === "move") {
+      const dx = (svgX - startSvgX) / vb.width;
+      const dy = (svgY - startSvgY) / vb.height;
+      onViewportChange({
+        ...drag.startViewport,
+        center: [
+          clamp(drag.startViewport.center[0] + dx, 0, 1),
+          clamp(drag.startViewport.center[1] + dy, 0, 1),
+        ],
+      });
+    } else if (drag.mode === "rotate") {
+      const cx = drag.startCx!;
+      const cy = drag.startCy!;
+      const startAngle = Math.atan2(startSvgY - cy, startSvgX - cx) * (180 / Math.PI);
+      const curAngle = Math.atan2(svgY - cy, svgX - cx) * (180 / Math.PI);
+      let totalRotation = drag.startViewport.rotation + (curAngle - startAngle);
+      if (shiftKey) totalRotation = Math.round(totalRotation / 5) * 5;
+      onViewportChange({ ...drag.startViewport, rotation: totalRotation });
+    } else if (drag.mode === "resize" && drag.side && drag.startCx !== undefined && drag.startCy !== undefined && drag.baseW !== undefined && drag.baseH !== undefined) {
+      const r = drag.startViewport.rotation * Math.PI / 180;
+      const cos_r = Math.cos(r);
+      const sin_r = Math.sin(r);
+      const dmx = svgX - startSvgX;
+      const dmy = svgY - startSvgY;
+      const startZoom = drag.startViewport.zoom;
+      const { side, startCx, startCy, baseW, baseH } = drag;
+
+      // The minimum rect size in SVG units is tied to canvasZoom so it stays constant in
+      // screen pixels (same as isSmall threshold: CORNER_HIT*3). Crucially we derive one
+      // shared maxViewportZoom for both axes — without this, width and height minimums
+      // correspond to different zoom levels for non-square aspect ratios, causing the
+      // perpendicular dimension to sit below its own minimum and snap/jump on the next drag.
+      const canvasZoom = transformRef.current.zoom;
+      const maxViewportZoom = Math.min(baseW, baseH) * canvasZoom / (CORNER_HIT * 2);
+
+      let newZoom: number;
+      let newCx: number;
+      let newCy: number;
+
+      if (side === "top") {
+        const delta = dmx * sin_r + dmy * (-cos_r);
+        const h0 = baseH / startZoom;
+        const h1 = Math.max(h0 + delta, baseH / maxViewportZoom);
+        newZoom = baseH / h1;
+        const bx = startCx - (h0 / 2) * sin_r;
+        const by = startCy + (h0 / 2) * cos_r;
+        newCx = bx + (h1 / 2) * sin_r;
+        newCy = by - (h1 / 2) * cos_r;
+      } else if (side === "bottom") {
+        const delta = dmx * (-sin_r) + dmy * cos_r;
+        const h0 = baseH / startZoom;
+        const h1 = Math.max(h0 + delta, baseH / maxViewportZoom);
+        newZoom = baseH / h1;
+        const tx = startCx + (h0 / 2) * sin_r;
+        const ty = startCy - (h0 / 2) * cos_r;
+        newCx = tx - (h1 / 2) * sin_r;
+        newCy = ty + (h1 / 2) * cos_r;
+      } else if (side === "right") {
+        const delta = dmx * cos_r + dmy * sin_r;
+        const w0 = baseW / startZoom;
+        const w1 = Math.max(w0 + delta, baseW / maxViewportZoom);
+        newZoom = baseW / w1;
+        const lx = startCx - (w0 / 2) * cos_r;
+        const ly = startCy - (w0 / 2) * sin_r;
+        newCx = lx + (w1 / 2) * cos_r;
+        newCy = ly + (w1 / 2) * sin_r;
+      } else {
+        const delta = dmx * (-cos_r) + dmy * (-sin_r);
+        const w0 = baseW / startZoom;
+        const w1 = Math.max(w0 + delta, baseW / maxViewportZoom);
+        newZoom = baseW / w1;
+        const rx = startCx + (w0 / 2) * cos_r;
+        const ry = startCy + (w0 / 2) * sin_r;
+        newCx = rx - (w1 / 2) * cos_r;
+        newCy = ry - (w1 / 2) * sin_r;
+      }
+
+      onViewportChange({
+        ...drag.startViewport,
+        zoom: Math.max(0.01, newZoom),
+        center: [
+          clamp((newCx - vb.x) / vb.width, 0, 1),
+          clamp((newCy - vb.y) / vb.height, 0, 1),
+        ],
+      });
+    }
+  }
+  dragMoveRef.current = handleViewportDragMove;
+
+  // --- Render ---
+  const { zoom, panX, panY } = transform;
+  const { w: cw, h: ch } = containerSize;
+
+  // Virtual viewport: compute the SVG viewBox that corresponds to the current pan/zoom.
+  // panX/panY = container-pixel offset of SVG coordinate vb.x/vb.y from container top-left.
+  // 1 SVG unit = zoom container pixels.
+  const visibleLeft  = cw > 0 ? -panX / zoom + vb.x : vb.x;
+  const visibleTop   = ch > 0 ? -panY / zoom + vb.y : vb.y;
+  const visibleW     = cw > 0 ? cw / zoom : vb.width;
+  const visibleH     = ch > 0 ? ch / zoom : vb.height;
+
+  const fontSize = LABEL_SIZE_PX / zoom;
+  const labelPad = LABEL_PAD_PX / zoom;
+
+  // Non-selected step viewport rects (behind selected rect).
+  const otherRects = steps.flatMap((step, index) => {
+    if (index === selectedStepIndex) return [];
+    const geom = computeViewportRectGeom(step, vb, aspectRatio);
+    const hw = geom.w / 2;
+    const hh = geom.h / 2;
+    const dashLen = 6 / zoom;
+    return [
+      <g key={index} transform={`translate(${geom.cx},${geom.cy}) rotate(${geom.rotation})`}>
+        <rect
+          x={-hw} y={-hh} width={geom.w} height={geom.h}
+          fill={OTHER_RECT_FILL} stroke={OTHER_RECT_STROKE}
+          strokeWidth={1.5 / zoom} strokeDasharray={`${dashLen} ${dashLen * 0.5}`}
+        />
+        <text
+          x={-hw + labelPad} y={-hh + labelPad + fontSize}
+          fontSize={fontSize} fill="rgba(180,180,180,0.75)"
+          style={{ userSelect: "none", pointerEvents: "none" } as React.CSSProperties}
+        >{step.name}</text>
+      </g>,
+    ];
+  });
+
+  // Selected step viewport rect with full interaction.
+  let selectedRectEl: React.ReactNode = null;
+  if (selectedStep) {
+    const geom = computeViewportRectGeom(selectedStep, vb, aspectRatio);
+    const hw = geom.w / 2;
+    const hh = geom.h / 2;
+    // Keep hit areas at a fixed screen-pixel size regardless of zoom (same pattern as strokeWidth/fontSize).
+    const cornerHit = CORNER_HIT / zoom;
+    // When the rect is too small to fit corners without overlap, collapse to a single move handle.
+    // Threshold: 3 × CORNER_HIT screen pixels in either dimension (two corners + minimal inner zone).
+    const isSmall = geom.w < cornerHit * 3 || geom.h < cornerHit * 3;
+
+    selectedRectEl = (
+      <g transform={`translate(${geom.cx},${geom.cy}) rotate(${geom.rotation})`} data-testid="viewport-rect">
+        <rect x={-hw} y={-hh} width={geom.w} height={geom.h} fill={RECT_FILL} stroke={RECT_STROKE} strokeWidth={2 / zoom} />
+        <text
+          x={-hw + labelPad} y={-hh + labelPad + fontSize}
+          fontSize={fontSize} fill="rgba(147,197,253,0.9)"
+          style={{ userSelect: "none", pointerEvents: "none" } as React.CSSProperties}
+        >{selectedStep.name}</text>
+        {isSmall ? (
+          <rect
+            x={-hw} y={-hh} width={geom.w} height={geom.h}
+            fill="transparent" style={{ cursor: "move" }}
+            onMouseDown={(e) => startViewportDrag("move", e)}
+          />
+        ) : (
+          <>
+            {(["top", "right", "bottom", "left"] as const).map((side) => {
+              const isH = side === "top" || side === "bottom";
+              // Center on the border zone (where the move area ends) so there is no gap between
+              // the resize and move hit areas — a gap causes clicks to fall through to the canvas
+              // background, triggering an accidental pan drag instead of a resize.
+              const ex = side === "right" ? hw - cornerHit / 2 : side === "left" ? -hw + cornerHit / 2 : 0;
+              const ey = side === "bottom" ? hh - cornerHit / 2 : side === "top" ? -hh + cornerHit / 2 : 0;
+              const ew = isH ? geom.w - cornerHit * 2 : cornerHit;
+              const eh = isH ? cornerHit : geom.h - cornerHit * 2;
+              if (ew <= 0 || eh <= 0) return null;
+              return (
+                <rect
+                  key={side}
+                  x={ex - ew / 2} y={ey - eh / 2} width={ew} height={eh}
+                  fill="transparent" style={{ cursor: isH ? "ns-resize" : "ew-resize" }}
+                  onMouseDown={(e) => startViewportDrag("resize", e, side)}
+                />
+              );
+            })}
+            {([-1, 1] as const).flatMap((sx) =>
+              ([-1, 1] as const).map((sy) => (
+                <rect
+                  key={`${sx},${sy}`}
+                  x={sx * hw - cornerHit / 2} y={sy * hh - cornerHit / 2}
+                  width={cornerHit} height={cornerHit}
+                  fill="transparent" style={{ cursor: ROTATE_CURSOR }}
+                  onMouseDown={(e) => startViewportDrag("rotate", e)}
+                />
+              ))
+            )}
+            {geom.w > cornerHit * 2 && geom.h > cornerHit * 2 && (
+              <rect
+                x={-hw + cornerHit} y={-hh + cornerHit}
+                width={geom.w - cornerHit * 2} height={geom.h - cornerHit * 2}
+                fill="transparent" style={{ cursor: "move" }}
+                onMouseDown={(e) => startViewportDrag("move", e)}
+              />
+            )}
+          </>
+        )}
+      </g>
+    );
+  }
+
+  return (
+    <div
+      ref={containerRef}
+      className="editing-canvas"
+      style={{ background: backgroundColor }}
+      tabIndex={0}
+      onWheel={handleWheel}
+      onKeyDown={handleKeyDown}
+      onMouseDown={handleCanvasMouseDown}
+      data-testid="editing-canvas"
+    >
+      {cw > 0 && (
+        <>
+          {/* Content SVG: physically sized to zoom level, positioned with CSS translate.
+              Lives inside overflow:hidden so WebKit's TileController renders only visible
+              tiles — filter/rasterisation buffers stay bounded to tile size, not full SVG extent. */}
+          <div style={{ position: "absolute", top: 0, left: 0, width: cw, height: ch, overflow: "hidden" }}>
+            <svg
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                display: "block",
+                transform: `translate(${panX}px, ${panY}px)`,
+              }}
+              width={vb.width * zoom}
+              height={vb.height * zoom}
+              viewBox={`${vb.x} ${vb.y} ${vb.width} ${vb.height}`}
+              dangerouslySetInnerHTML={{ __html: svgInner }}
+            />
+          </div>
+          {/* Overlay SVG: always container-sized; viewBox maps SVG coords → screen coords.
+              Contains only simple geometry (no filters), clipPath limits tile scope. */}
+          <svg
+            className="editing-canvas-overlay"
+            viewBox={`${visibleLeft} ${visibleTop} ${visibleW} ${visibleH}`}
+            width={cw}
+            height={ch}
+            style={{ position: "absolute", top: 0, left: 0 }}
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <defs>
+              <clipPath id={clipId} clipPathUnits="userSpaceOnUse">
+                <rect x={visibleLeft} y={visibleTop} width={visibleW} height={visibleH} />
+              </clipPath>
+            </defs>
+            <g clipPath={`url(#${clipId})`}>
+              {otherRects}
+              {selectedRectEl}
+            </g>
+          </svg>
+          {/* Mini-map: rendered after overlay SVG so it sits on top in stacking order. */}
+          {(visibleW < vb.width || visibleH < vb.height) && (
+            <CanvasMiniMap
+              vb={vb}
+              svgInner={svgInner}
+              visibleLeft={visibleLeft}
+              visibleTop={visibleTop}
+              visibleW={visibleW}
+              visibleH={visibleH}
+              onNavigate={(cx, cy) =>
+                setTransform((t) => ({
+                  ...t,
+                  panX: cw / 2 - (cx - vb.x) * t.zoom,
+                  panY: ch / 2 - (cy - vb.y) * t.zoom,
+                }))
+              }
+            />
+          )}
+        </>
+      )}
+    </div>
+  );
+});

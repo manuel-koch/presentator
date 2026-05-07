@@ -1,51 +1,40 @@
 # Presentator — Implementation TODO
 
 This is a living document. Check off tasks as they are completed.
-Remove sections once all tasks in them are done.
-Future Claude sessions should read this file to understand what has been done and what to work on next.
 
-## Project Setup
+- Cleanup todo on-demand and merge with [features](./features.md) document
+  - check if an existing feature matches the task content
+    - if a feature matches almost, rephrase the feature to include original and task content
+    - if a feature matches fully, don't add new feature, just drop the task
+    - if no feature matches, introduce a new feature from the task content
+  - create new feature sections, if task doesn't belong to any existing section
 
-- [x] Install prerequisites: `rustup` (Rust toolchain) and `fnm` (Node version manager)
-- [x] Install and activate the required Node version via `fnm`
-- [x] Initialize Tauri + React + TypeScript project (using Vite)
-- [x] Configure path aliases and TypeScript strict mode
-- [x] Set up Vitest + React Testing Library
-- [x] Set up Playwright for e2e tests (replaces WebdriverIO; tauri-driver unsupported on macOS)
-- [x] Verify dev build and hot-reload works
+Future AI Agent sessions should read this file to understand what has been done recently
+and what to work on next.
 
-## SVG Loading
+## Editing Mode
 
-- [x] File picker dialog (via Tauri API) to select an SVG file
-- [x] Load and render the SVG in the main viewport
-- [x] Parse and extract all named SVG elements (by `id` attribute)
+### Step Editing
 
-## Sidecar Config (YAML)
+- [ ] Make the icons in the step list a little bit brighter ( when not hovering over the icon ),
+      Maybe change the hover color too ( leave the red color for the trash can icon ).
+      Maybe use green for buttons that just alter the viewport but don't change the step ?
+      Maybe use blue for buttons that alter the step ( and its viewport-rect ) ?
 
-- [x] Integrate `js-yaml` (or equivalent) parser
-- [x] Define TypeScript data model for presentation config and steps (see [config-schema.md](config-schema.md))
-- [x] Load `.presentator.yaml` sidecar on SVG open (create empty config if absent)
-- [x] Save config back to sidecar file on change
+### Step Viewport Rectangle
 
-## File Watching
+- [ ] Add a new button with an icon to the step to resize current step's viewport-rect
+      to fit the current viewport ( same size/position that would be used for a new step )
 
-- [x] Watch SVG file and sidecar config for external changes
-- [x] Debounce reload by ~300ms to handle simultaneous file writes
-- [x] In editing mode: auto-reload on detected change
-- [x] Use hash for the SVG and sidecar file content to skip updates of same content.
-      E.g. when the config is changed within the tool and we save that change to the sidecar config file,
-      that should not trigger a reload in UI, since the content of the config is the same we already know.
-- [x] In presentation mode: suppress reload, show subtle pending-reload indicator
-- [x] The pending-reload indicator should provide a button/link to trigger reloading
-- [x] The pending-reload indicator should provide a cancel button or "x" to close it without
-      reloading changed files
-- [x] Add a main menu entry to allow unconditional "reload" of SVG and sidecar on demand
-- [x] Add a notification in lower right corner of UI when file(s) have been reloaded.
+### Element Picker & Config
 
-## Mode Switching
+- [x] Show/hide element picker: checkbox list of all named SVG elements, persisted per step
+  - [x] Shift click on a named SVG element checkbox selects / deselects just this element,
+        all other elements are deselected/selected
 
-- [ ] Toggle between editing mode and presentation mode
-- [ ] Persist mode state appropriately across SVG/config reloads
+## General settings
+
+- [x] UI controls for `aspect_ratio` and `background_color` (stored in sidecar config)
 
 ## Presentation Mode
 
@@ -55,24 +44,6 @@ Future Claude sessions should read this file to understand what has been done an
 - [ ] Show/hide SVG elements per step
 - [ ] Enforce fixed aspect ratio; scale viewport to fill screen
 - [ ] Animated transitions between steps
-
-## Editing Mode
-
-- [ ] Step list panel with human-readable step names
-  - [ ] Click to select step
-  - [ ] Double-click to rename step inline
-  - [ ] Drag'n'drop to reorder steps
-- [ ] Editing canvas: free zoom and pan of the full SVG scene (independent of the step viewport)
-  - [ ] Zoom via mouse wheel and Cmd+Plus / Cmd+Minus
-  - [ ] Pan via click-and-drag on the canvas
-  - [ ] Pan via arrow keys (normal step) and Shift+arrow keys (large step)
-- [ ] Visualize current step's viewport as a rectangle overlay in SVG-space coordinates
-  - [ ] Rectangle position/rotation reflects SVG-space coordinates and remains fixed when the editing canvas is panned/zoomed
-  - [ ] Hover feedback on edges (move cursor) and corners (rotate cursor)
-  - [ ] Move viewport rectangle via drag'n'drop on edges
-  - [ ] Rotate viewport rectangle via drag'n'drop on corners
-- [ ] Show/hide element picker: checkbox list of all named SVG elements, persisted per step
-- [ ] UI controls for `aspect_ratio` and `background_color` (stored in sidecar config)
 
 ## Packaging
 
