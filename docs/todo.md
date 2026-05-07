@@ -16,16 +16,9 @@ Future Claude sessions should read this file to understand what has been done an
 
 ## SVG Loading
 
-- [ ] File picker dialog (via Tauri API) to select an SVG file
-- [ ] Load and render the SVG in the main viewport
-- [ ] Parse and extract all named SVG elements (by `id` attribute)
-
-## File Watching
-
-- [ ] Watch SVG file and sidecar config for external changes
-- [ ] Debounce reload by ~300ms to handle simultaneous file writes
-- [ ] In editing mode: auto-reload on detected change
-- [ ] In presentation mode: suppress reload, show subtle pending-reload indicator
+- [x] File picker dialog (via Tauri API) to select an SVG file
+- [x] Load and render the SVG in the main viewport
+- [x] Parse and extract all named SVG elements (by `id` attribute)
 
 ## Sidecar Config (YAML)
 
@@ -33,6 +26,13 @@ Future Claude sessions should read this file to understand what has been done an
 - [ ] Define TypeScript data model for presentation config and steps (see [config-schema.md](config-schema.md))
 - [ ] Load `.presentator.yaml` sidecar on SVG open (create empty config if absent)
 - [ ] Save config back to sidecar file on change
+
+## File Watching
+
+- [ ] Watch SVG file and sidecar config for external changes
+- [ ] Debounce reload by ~300ms to handle simultaneous file writes
+- [ ] In editing mode: auto-reload on detected change
+- [ ] In presentation mode: suppress reload, show subtle pending-reload indicator
 
 ## Mode Switching
 
