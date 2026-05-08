@@ -49,17 +49,18 @@
   * clicking a list entry selects current presentation steps
   * double click a list entry allows to edit current presentation steps name
   * drag'n'drop of presentation step in the list can be used to re-order steps
-  * each step has a remove button (trash-can icon) on the right side for deletion
+  * each step has a duplicate button (two-rectangles icon, blue hover) that creates a copy of the step inserted directly below the original, with " (Clone)" appended to its name
+  * each step has a remove button (trash-can icon, red hover) on the right side for deletion
   * an add button (plus icon) at the top of the list appends a new step with a placeholder name
 * presentation step configuration regarding show/hide of SVG elements can be edited interactively
-  * elements to be shown/hidden can be checked in a per-step configurable list that displays all named SVG elements ( name likely comes from the element "id" attribute )
+  * elements to be shown/hidden can be checked in a per-step configurable list that displays all named SVG elements (name comes from the element `id` attribute); Shift-clicking a checkbox toggles only that element while selecting/deselecting all others
   
 * the viewport used within current step can be modified interactively
   * the editing canvas can be freely zoomed and panned to get an overview of the whole SVG scene
     * zoom in/out via mouse wheel or Cmd+Plus / Cmd+Minus
     * pan by clicking and dragging the canvas (moves the scene like sliding a piece of paper)
     * pan via arrow keys; Shift+arrow uses a larger step size
-    * a minimap shows where the current viewport is within the full SVG rectangle
+    * a minimap shows where the current viewport is within the full SVG scene; it uses the editing canvas container's aspect ratio, so it resizes correctly when the window is resized
   * the current step's viewport is visualized as a rectangle overlaid on the editing canvas
     * the rectangle has a customizable border and semitransparent background, with z-index above the SVG content
     * the rectangle stays at its configured position in SVG space — it does not move when the user pans/zooms the editing canvas
@@ -68,10 +69,10 @@
     * viewport rectangle can be resized (maintaining aspect ratio) via drag'n'drop on middle of edges
     * viewport rectangle can be rotated via drag'n'drop on a corner of the rectangle
     * holding Shift while rotating snaps the angle at 5° steps
-  * all other steps' viewports are visualized as semi-transparent rectangles in a different color
+  * all other steps' viewports are visualized as semi-transparent dashed rectangles; hovering a step in the step list highlights its viewport rectangle in light green
   * a small label with the step name appears at the inner top-left corner of each viewport rectangle; the label is clipped to the rectangle bounds so it never overflows outside
-  * a fit-all-steps button (expand icon, green hover) in the step-list header pans/zooms the editing canvas to show all step viewport-rectangles at once
-  * a jump-to-viewport button (rectangle icon, green hover) on each step in the list navigates to that step's viewport rectangle
+  * a fit-all-steps button (expand icon, green hover) in the step-list header pans/zooms the editing canvas to show all step viewport-rectangles at once, with a smooth 2-second ease-in-out animation
+  * a jump-to-viewport button (rectangle icon, green hover) on each step in the list navigates to that step's viewport rectangle with a smooth 2-second ease-in-out animation
   * a fit-to-current-view button (expand icon, blue hover) on each step in the list resizes that step's viewport rectangle to cover the current canvas view (same sizing as adding a new step); rotation is reset to 0
   * when adding a new step, its viewport rectangle is positioned to cover the center of the current viewport (filling most of the viewport based on configured aspect ratio)
 

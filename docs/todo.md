@@ -7,8 +7,8 @@ and what to work on next.
 
 ## Cleanup todo on-demand
 
-When user requests it, merge finished tasks with [features](./features.md) document, removing them
-from the todo in favor of updated feature descriptions.
+When user requests it, merge finished tasks with [features](./features.md) document,
+removing the finished tasks from the todo in favor of updated feature descriptions.
 
 - Check if an existing feature matches the task content partly/almost/fully to decide if it is a new
   feature or refactoring/enhancement of an existing feature.
@@ -31,40 +31,6 @@ from the todo in favor of updated feature descriptions.
 - [ ] Add prev / next overlay buttons ( with "<" / ">" like icon ) at top edge of canvas.
       The buttons could be reused when in "presentation mode" to cycle thru the steps.
       Disable a button when there is no "previous" or "next" change available for re-applying.
-
-### Step Editing
-
-- [x] Make the icons in the step list a little bit brighter ( when not hovering over the icon ),
-      Maybe change the hover color too ( leave the red color for the trash can icon ).
-      Maybe use green for buttons that just alter the viewport but don't change the step ?
-      Maybe use blue for buttons that alter the step ( and its viewport-rect ) ?
-- [x] Add a new ( blue colored icon ) button to a step to duplicate it ( assign a new name to the
-      new step, using postfix " (Clone)" )
-- [x] When hovering over a step in the steps-list, change to color of that steps viewport-rectangle
-      to light green to highlight it in current viewport.
-- [x] Use a smooth transition ( duration of 2s ) when using steps go-to-viewport functionality.
-- [x] Use a smooth transition ( duration of 2s ) when using step-list fit-viewport-to-all-steps.
-- [x] use same aspect-ratio for the minimap that is used for current viewport canvas.
-  
-### Step Viewport Rectangle
-
-- [x] Add a new button with an icon to the step to resize current step's viewport-rect
-      to fit the current viewport ( same size/position that would be used for a new step )
-- [x] Add a new button with an icon to the step-list header to adjust current viewport to see all step
-      viewport-rectangles. Use same icon as steps fit-to-current-viewport button.
-- [x] When zoom is at 100% and a step has a very small viewport-rectangle, then the step title label
-      ( that is supposed to be in the upper-left corner of the rect ) is actually floating outside the
-      rect ( likely because the rect is smaller than the rendered text ).
-
-### Element Picker & Config
-
-- [x] Show/hide element picker: checkbox list of all named SVG elements, persisted per step
-  - [x] Shift click on a named SVG element checkbox selects / deselects just this element,
-        all other elements are deselected/selected
-
-## General settings
-
-- [x] UI controls for `aspect_ratio` and `background_color` (stored in sidecar config)
 
 ## Presentation Mode
 
