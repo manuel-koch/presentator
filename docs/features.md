@@ -60,6 +60,8 @@
     * zoom in/out via mouse wheel or Cmd+Plus / Cmd+Minus
     * pan by clicking and dragging the canvas (moves the scene like sliding a piece of paper)
     * pan via arrow keys; Shift+arrow uses a larger step size
+    * the editing canvas maintains a non-persisted history of viewport positions; a new entry is recorded ~1s after movement stops, skipping entries produced by animations and ignoring changes too small to be perceptible (less than 2% zoom change or less than 20 screen pixels of pan)
+    * two chevron buttons centred at the top edge of the canvas navigate backward and forward through the history with a 2-second ease-in-out animation; each button is disabled when there is no entry available in that direction
     * a minimap shows where the current viewport is within the full SVG scene; it uses the editing canvas container's aspect ratio, so it resizes correctly when the window is resized
   * the current step's viewport is visualized as a rectangle overlaid on the editing canvas
     * the rectangle has a customizable border and semitransparent background, with z-index above the SVG content

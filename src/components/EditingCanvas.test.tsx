@@ -291,6 +291,94 @@ describe("EditingCanvas", () => {
     expect(overlayViewBoxWidth(el)).toBe(widthBefore);
   });
 
+  it("renders prev and next viewport history buttons", () => {
+    render(canvas());
+    expect(screen.getByRole("button", { name: "Go to previous position" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Go to next position" })).toBeInTheDocument();
+  });
+
+  it("both history buttons start disabled", () => {
+    render(canvas());
+    expect(screen.getByRole("button", { name: "Go to previous position" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Go to next position" })).toBeDisabled();
+  });
+
+  it("enables prev button after two debounced viewport snapshots", () => {
+    vi.useFakeTimers();
+    render(canvas());
+    const el = screen.getByTestId("editing-canvas");
+    // Let initial transform settle into history
+    act(() => { vi.advanceTimersByTime(1000); });
+    // User zooms in — creates a second snapshot
+    fireEvent.wheel(el, { deltaY: -100, clientX: 600, clientY: 400 });
+    act(() => { vi.advanceTimersByTime(1000); });
+    expect(screen.getByRole("button", { name: "Go to previous position" })).not.toBeDisabled();
+    expect(screen.getByRole("button", { name: "Go to next position" })).toBeDisabled();
+    vi.useRealTimers();
+  });
+
+  it("clicking prev restores the previous viewport", () => {
+    vi.useFakeTimers();
+    render(canvas());
+    const el = screen.getByTestId("editing-canvas");
+    act(() => { vi.advanceTimersByTime(1000); });
+    const widthInitial = overlayViewBoxWidth(el);
+    fireEvent.wheel(el, { deltaY: -100, clientX: 600, clientY: 400 });
+    act(() => { vi.advanceTimersByTime(1000); });
+    expect(overlayViewBoxWidth(el)).toBeLessThan(widthInitial);
+    act(() => {
+      fireEvent.click(screen.getByRole("button", { name: "Go to previous position" }));
+      vi.advanceTimersByTime(2100); // let animation complete
+    });
+    expect(overlayViewBoxWidth(el)).toBeCloseTo(widthInitial, 5);
+    expect(screen.getByRole("button", { name: "Go to next position" })).not.toBeDisabled();
+    vi.useRealTimers();
+  });
+
+  it("clicking next after going back re-applies the forward viewport", () => {
+    vi.useFakeTimers();
+    render(canvas());
+    const el = screen.getByTestId("editing-canvas");
+    act(() => { vi.advanceTimersByTime(1000); });
+    fireEvent.wheel(el, { deltaY: -100, clientX: 600, clientY: 400 });
+    act(() => { vi.advanceTimersByTime(1000); });
+    const widthZoomed = overlayViewBoxWidth(el);
+    act(() => {
+      fireEvent.click(screen.getByRole("button", { name: "Go to previous position" }));
+      vi.advanceTimersByTime(2100);
+    });
+    act(() => {
+      fireEvent.click(screen.getByRole("button", { name: "Go to next position" }));
+      vi.advanceTimersByTime(2100);
+    });
+    expect(overlayViewBoxWidth(el)).toBeCloseTo(widthZoomed, 5);
+    expect(screen.getByRole("button", { name: "Go to next position" })).toBeDisabled();
+    vi.useRealTimers();
+  });
+
+  it("goToStep animation does not push history entries during transition", () => {
+    vi.useFakeTimers();
+    const ref = createRef<EditingCanvasHandle>();
+    render(
+      <EditingCanvas
+        ref={ref}
+        svgContent={SVG_CONTENT}
+        viewBox={VB}
+        steps={[STEP, STEP2]}
+        selectedStepIndex={null}
+        aspectRatio="16:9"
+        backgroundColor="#000000"
+        onViewportChange={() => {}}
+      />
+    );
+    // Trigger animated navigation then wait past debounce period
+    act(() => { ref.current?.goToStep(STEP2); });
+    act(() => { vi.advanceTimersByTime(3000); }); // animation (2s) + debounce (1s)
+    // History should still be empty (no user-initiated changes)
+    expect(screen.getByRole("button", { name: "Go to previous position" })).toBeDisabled();
+    vi.useRealTimers();
+  });
+
   it("calls onViewportChange when an edge hit zone is dragged", () => {
     const onViewportChange = vi.fn();
     render(canvas({ steps: [STEP], selectedStepIndex: 0, onViewportChange }));

@@ -41,6 +41,31 @@ const LABEL_PAD_PX = 5;
 const MINIMAP_MAX_W = 130;
 const MINIMAP_MAX_H = 100;
 
+const ChevronLeftIcon = (
+  <svg width="10" height="14" viewBox="0 0 10 14" fill="none" aria-hidden="true">
+    <path d="M7 1L2 7L7 13" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+);
+const ChevronRightIcon = (
+  <svg width="10" height="14" viewBox="0 0 10 14" fill="none" aria-hidden="true">
+    <path d="M3 1L8 7L3 13" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+);
+
+function navBtnStyle(disabled: boolean): React.CSSProperties {
+  return {
+    width: 30, height: 26,
+    background: disabled ? "rgba(40,40,40,0.7)" : "rgba(60,60,60,0.95)",
+    border: "1px solid rgba(160,160,160,0.6)",
+    borderRadius: 4,
+    color: disabled ? "rgba(200,200,200,0.25)" : "#ffffff",
+    cursor: disabled ? "default" : "pointer",
+    display: "flex", alignItems: "center", justifyContent: "center",
+    padding: 0,
+    boxShadow: "0 1px 4px rgba(0,0,0,0.5)",
+  };
+}
+
 interface MiniMapProps {
   vb: ViewBox;
   svgInner: string;
@@ -194,6 +219,11 @@ export const EditingCanvas = forwardRef<EditingCanvasHandle, Props>(function Edi
   const dragRef = useRef<DragState | null>(null);
   const dragMoveRef = useRef<(mx: number, my: number, shiftKey: boolean) => void>(() => {});
   const animationIdRef = useRef<number | null>(null);
+  const isAnimatingRef = useRef(false);
+  // Viewport change history for prev/next navigation (not persisted).
+  const historyRef = useRef<CanvasTransform[]>([]);
+  const historyIndexRef = useRef(-1);
+  const [historyState, setHistoryState] = useState({ canBack: false, canForward: false });
   const clipId = useRef(`ec-clip-${Math.random().toString(36).slice(2, 8)}`).current;
   // Kept in a ref so goToStep always sees current values without stale closure issues.
   const vbRef = useRef(vb);
@@ -208,6 +238,7 @@ export const EditingCanvas = forwardRef<EditingCanvasHandle, Props>(function Edi
     if (animationIdRef.current !== null) {
       cancelAnimationFrame(animationIdRef.current);
       animationIdRef.current = null;
+      isAnimatingRef.current = false;
     }
   }
 
@@ -220,6 +251,7 @@ export const EditingCanvas = forwardRef<EditingCanvasHandle, Props>(function Edi
       return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
     }
     function tick() {
+      isAnimatingRef.current = true;
       const t = Math.min((Date.now() - startTime) / DURATION, 1);
       const e = easeInOutCubic(t);
       setTransform({
@@ -231,6 +263,7 @@ export const EditingCanvas = forwardRef<EditingCanvasHandle, Props>(function Edi
         animationIdRef.current = requestAnimationFrame(tick);
       } else {
         animationIdRef.current = null;
+        isAnimatingRef.current = false;
       }
     }
     animationIdRef.current = requestAnimationFrame(tick);
@@ -277,6 +310,49 @@ export const EditingCanvas = forwardRef<EditingCanvasHandle, Props>(function Edi
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
+
+  // Debounce user-initiated viewport changes (~1s) into a navigable history (max 100 entries).
+  // Changes produced by an ongoing animation are skipped entirely.
+  // After history navigation the animation lands exactly on an existing entry — skip that too.
+  useEffect(() => {
+    if (isAnimatingRef.current) return;
+    const snap = { ...transform };
+    const timer = setTimeout(() => {
+      const cur = historyRef.current[historyIndexRef.current];
+      if (cur) {
+        const zoomDiff = Math.abs(cur.zoom - snap.zoom) / cur.zoom;
+        const panDist = Math.hypot(cur.panX - snap.panX, cur.panY - snap.panY);
+        if (zoomDiff < 0.02 && panDist < 20) return;
+      }
+      let hist = historyRef.current.slice(0, historyIndexRef.current + 1);
+      hist.push(snap);
+      if (hist.length > 100) hist = hist.slice(hist.length - 100);
+      historyRef.current = hist;
+      historyIndexRef.current = hist.length - 1;
+      setHistoryState({ canBack: historyIndexRef.current > 0, canForward: false });
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [transform]);
+
+  function historyBack() {
+    if (historyIndexRef.current <= 0) return;
+    historyIndexRef.current--;
+    setHistoryState({
+      canBack: historyIndexRef.current > 0,
+      canForward: historyIndexRef.current < historyRef.current.length - 1,
+    });
+    animateTo(historyRef.current[historyIndexRef.current]);
+  }
+
+  function historyForward() {
+    if (historyIndexRef.current >= historyRef.current.length - 1) return;
+    historyIndexRef.current++;
+    setHistoryState({
+      canBack: historyIndexRef.current > 0,
+      canForward: historyIndexRef.current < historyRef.current.length - 1,
+    });
+    animateTo(historyRef.current[historyIndexRef.current]);
+  }
 
   // Expose goToStep so the parent can navigate the canvas to any step's viewport.
   useImperativeHandle(ref, () => ({
@@ -742,6 +818,25 @@ export const EditingCanvas = forwardRef<EditingCanvasHandle, Props>(function Edi
               }}
             />
           )}
+          {/* Viewport history prev/next buttons — centred at top edge of canvas. */}
+          <div style={{ position: "absolute", top: 10, left: "50%", transform: "translateX(-50%)", display: "flex", gap: 4 }}>
+            <button
+              disabled={!historyState.canBack}
+              onClick={historyBack}
+              title="Go to previous position"
+              aria-label="Go to previous position"
+              onMouseDown={(e) => e.stopPropagation()}
+              style={navBtnStyle(!historyState.canBack)}
+            >{ChevronLeftIcon}</button>
+            <button
+              disabled={!historyState.canForward}
+              onClick={historyForward}
+              title="Go to next position"
+              aria-label="Go to next position"
+              onMouseDown={(e) => e.stopPropagation()}
+              style={navBtnStyle(!historyState.canForward)}
+            >{ChevronRightIcon}</button>
+          </div>
         </>
       )}
     </div>

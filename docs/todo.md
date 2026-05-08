@@ -22,16 +22,6 @@ removing the finished tasks from the todo in favor of updated feature descriptio
 - If no feature matches, introduce a new feature from the task content.
 - Create new feature sections, if task doesn't belong to any existing section.
 
-## Editing Mode
-
-### Viewport Handling
-
-- [ ] Keep track of viewport changes ( debounce ~500ms ) like pan/zoom and
-      maintain an internal history ( not persisted in the config sidecar file ) of the viewport changes.
-- [ ] Add prev / next overlay buttons ( with "<" / ">" like icon ) at top edge of canvas.
-      The buttons could be reused when in "presentation mode" to cycle thru the steps.
-      Disable a button when there is no "previous" or "next" change available for re-applying.
-
 ## Presentation Mode
 
 - [ ] Step navigation UI (next / previous)
