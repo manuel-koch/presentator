@@ -8,6 +8,7 @@ interface Props {
   viewBox: ViewBox;
   steps: Step[];
   selectedStepIndex: number | null;
+  hoveredStepIndex?: number | null;
   aspectRatio: string;
   backgroundColor: string;
   onViewportChange: (viewport: Viewport) => void;
@@ -16,6 +17,7 @@ interface Props {
 export interface EditingCanvasHandle {
   goToStep: (step: Step) => void;
   getCanvasViewport: () => { left: number; top: number; width: number; height: number } | null;
+  fitAllSteps: (steps: Step[]) => void;
 }
 
 const ZOOM_FACTOR = 1.04;
@@ -30,6 +32,8 @@ const RECT_STROKE = "#3b82f6";
 const RECT_FILL = "rgba(59,130,246,0.08)";
 const OTHER_RECT_STROKE = "rgba(160,160,160,0.55)";
 const OTHER_RECT_FILL = "rgba(128,128,128,0.04)";
+const HOVER_RECT_STROKE = "#4ade80";
+const HOVER_RECT_FILL = "rgba(74,222,128,0.08)";
 
 const LABEL_SIZE_PX = 13;
 const LABEL_PAD_PX = 5;
@@ -166,7 +170,7 @@ interface DragState {
 }
 
 export const EditingCanvas = forwardRef<EditingCanvasHandle, Props>(function EditingCanvas(
-  { svgContent, viewBox: vb, steps, selectedStepIndex, aspectRatio, backgroundColor, onViewportChange },
+  { svgContent, viewBox: vb, steps, selectedStepIndex, hoveredStepIndex = null, aspectRatio, backgroundColor, onViewportChange },
   ref
 ) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -260,6 +264,37 @@ export const EditingCanvas = forwardRef<EditingCanvasHandle, Props>(function Edi
         width:  cw / zoom,
         height: ch / zoom,
       };
+    },
+    fitAllSteps(steps: Step[]) {
+      if (steps.length === 0) return;
+      const el = containerRef.current;
+      if (!el) return;
+      const cw = el.clientWidth;
+      const ch = el.clientHeight;
+      if (!cw || !ch) return;
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      for (const step of steps) {
+        const geom = computeViewportRectGeom(step, vbRef.current, aspectRatioRef.current);
+        const theta = geom.rotation * Math.PI / 180;
+        const cosT = Math.abs(Math.cos(theta));
+        const sinT = Math.abs(Math.sin(theta));
+        const aabbHW = geom.w / 2 * cosT + geom.h / 2 * sinT;
+        const aabbHH = geom.w / 2 * sinT + geom.h / 2 * cosT;
+        minX = Math.min(minX, geom.cx - aabbHW);
+        maxX = Math.max(maxX, geom.cx + aabbHW);
+        minY = Math.min(minY, geom.cy - aabbHH);
+        maxY = Math.max(maxY, geom.cy + aabbHH);
+      }
+      const totalW = maxX - minX;
+      const totalH = maxY - minY;
+      const centerX = (minX + maxX) / 2;
+      const centerY = (minY + maxY) / 2;
+      const newZoom = clamp(Math.min(cw / totalW, ch / totalH) * 0.85, MIN_ZOOM, MAX_ZOOM);
+      setTransform({
+        zoom: newZoom,
+        panX: cw / 2 - (centerX - vbRef.current.x) * newZoom,
+        panY: ch / 2 - (centerY - vbRef.current.y) * newZoom,
+      });
     },
   }));
 
@@ -483,22 +518,28 @@ export const EditingCanvas = forwardRef<EditingCanvasHandle, Props>(function Edi
   // Non-selected step viewport rects (behind selected rect).
   const otherRects = steps.flatMap((step, index) => {
     if (index === selectedStepIndex) return [];
+    const isHovered = index === hoveredStepIndex;
     const geom = computeViewportRectGeom(step, vb, aspectRatio);
     const hw = geom.w / 2;
     const hh = geom.h / 2;
     const dashLen = 6 / zoom;
+    const stroke = isHovered ? HOVER_RECT_STROKE : OTHER_RECT_STROKE;
+    const fill = isHovered ? HOVER_RECT_FILL : OTHER_RECT_FILL;
+    const strokeWidth = isHovered ? 2 / zoom : 1.5 / zoom;
     return [
-      <g key={index} transform={`translate(${geom.cx},${geom.cy}) rotate(${geom.rotation})`}>
+      <g key={index} transform={`translate(${geom.cx},${geom.cy}) rotate(${geom.rotation})`} {...(isHovered ? { "data-testid": "viewport-rect-hovered" } : {})}>
         <rect
           x={-hw} y={-hh} width={geom.w} height={geom.h}
-          fill={OTHER_RECT_FILL} stroke={OTHER_RECT_STROKE}
-          strokeWidth={1.5 / zoom} strokeDasharray={`${dashLen} ${dashLen * 0.5}`}
+          fill={fill} stroke={stroke}
+          strokeWidth={strokeWidth} strokeDasharray={isHovered ? undefined : `${dashLen} ${dashLen * 0.5}`}
         />
-        <text
-          x={-hw + labelPad} y={-hh + labelPad + fontSize}
-          fontSize={fontSize} fill="rgba(180,180,180,0.75)"
-          style={{ userSelect: "none", pointerEvents: "none" } as React.CSSProperties}
-        >{step.name}</text>
+        <svg x={-hw} y={-hh} width={geom.w} height={geom.h} overflow="hidden" style={{ pointerEvents: "none" } as React.CSSProperties}>
+          <text
+            x={labelPad} y={labelPad + fontSize}
+            fontSize={fontSize} fill="rgba(180,180,180,0.75)"
+            style={{ userSelect: "none" } as React.CSSProperties}
+          >{step.name}</text>
+        </svg>
       </g>,
     ];
   });
@@ -518,11 +559,13 @@ export const EditingCanvas = forwardRef<EditingCanvasHandle, Props>(function Edi
     selectedRectEl = (
       <g transform={`translate(${geom.cx},${geom.cy}) rotate(${geom.rotation})`} data-testid="viewport-rect">
         <rect x={-hw} y={-hh} width={geom.w} height={geom.h} fill={RECT_FILL} stroke={RECT_STROKE} strokeWidth={2 / zoom} />
-        <text
-          x={-hw + labelPad} y={-hh + labelPad + fontSize}
-          fontSize={fontSize} fill="rgba(147,197,253,0.9)"
-          style={{ userSelect: "none", pointerEvents: "none" } as React.CSSProperties}
-        >{selectedStep.name}</text>
+        <svg x={-hw} y={-hh} width={geom.w} height={geom.h} overflow="hidden" style={{ pointerEvents: "none" } as React.CSSProperties}>
+          <text
+            x={labelPad} y={labelPad + fontSize}
+            fontSize={fontSize} fill="rgba(147,197,253,0.9)"
+            style={{ userSelect: "none" } as React.CSSProperties}
+          >{selectedStep.name}</text>
+        </svg>
         {isSmall ? (
           <rect
             x={-hw} y={-hh} width={geom.w} height={geom.h}

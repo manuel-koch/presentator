@@ -132,7 +132,14 @@ button:active {
   letter-spacing: 0.05em;
 }
 
-.step-list-add-btn {
+.step-list-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.step-list-add-btn,
+.step-list-fit-all-btn {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -147,6 +154,12 @@ button:active {
 .step-list-add-btn:hover {
   background: #2a2a2a;
   color: #fff;
+}
+
+.step-list-fit-all-btn:hover {
+  background: #1a3a1a;
+  border-color: #2a5a2a;
+  color: #4ade80;
 }
 
 .step-list ul {
@@ -217,6 +230,8 @@ button:active {
 }
 
 .step-item-goto-btn,
+.step-item-fit-btn,
+.step-item-duplicate-btn,
 .step-item-remove-btn {
   display: flex;
   align-items: center;
@@ -226,7 +241,7 @@ button:active {
   padding: 0;
   background: transparent;
   border-color: transparent;
-  color: #555;
+  color: #888;
   flex-shrink: 0;
   opacity: 0;
   transition: opacity 0.1s;
@@ -234,12 +249,23 @@ button:active {
 
 .step-item:hover .step-item-goto-btn,
 .step-item.selected .step-item-goto-btn,
+.step-item:hover .step-item-fit-btn,
+.step-item.selected .step-item-fit-btn,
+.step-item:hover .step-item-duplicate-btn,
+.step-item.selected .step-item-duplicate-btn,
 .step-item:hover .step-item-remove-btn,
 .step-item.selected .step-item-remove-btn {
   opacity: 1;
 }
 
 .step-item-goto-btn:hover {
+  background: #1a3a1a;
+  border-color: #2a5a2a;
+  color: #4ade80;
+}
+
+.step-item-fit-btn:hover,
+.step-item-duplicate-btn:hover {
   background: #1a2a3a;
   border-color: #2a4a6a;
   color: #60a5fa;

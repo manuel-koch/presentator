@@ -25,6 +25,7 @@ function App() {
   const [pendingReload, setPendingReload] = useState(false);
   const [showReloadNotification, setShowReloadNotification] = useState(false);
   const [selectedStepIndex, setSelectedStepIndex] = useState<number | null>(null);
+  const [hoveredStepIndex, setHoveredStepIndex] = useState<number | null>(null);
   const canvasRef = useRef<EditingCanvasHandle>(null);
 
   const viewBox = useMemo(
@@ -173,6 +174,42 @@ function App() {
     updateConfig({ ...config, steps });
   }
 
+  function handleDuplicateStep(index: number) {
+    if (!config) return;
+    const source = config.steps[index];
+    const clone: Step = {
+      name: `${source.name} (Clone)`,
+      viewport: { ...source.viewport, center: [source.viewport.center[0], source.viewport.center[1]] },
+      hidden: [...source.hidden],
+    };
+    const steps = [...config.steps];
+    steps.splice(index + 1, 0, clone);
+    updateConfig({ ...config, steps });
+    setSelectedStepIndex(index + 1);
+  }
+
+  function handleFitToViewport(index: number) {
+    if (!config || !viewBox) return;
+    const cv = canvasRef.current?.getCanvasViewport();
+    if (!cv) return;
+    const vb = viewBox;
+    const pAR = parseAspectRatio(config.aspect_ratio);
+    const svgAR = vb.width / vb.height;
+    const baseW = svgAR >= pAR ? vb.width : vb.height * pAR;
+    const baseH = svgAR >= pAR ? vb.width / pAR : vb.height;
+    const zoom = Math.max(baseW / (cv.width * 0.85), baseH / (cv.height * 0.85));
+    const viewport: Viewport = {
+      center: [
+        Math.max(0, Math.min(1, (cv.left + cv.width  / 2 - vb.x) / vb.width)),
+        Math.max(0, Math.min(1, (cv.top  + cv.height / 2 - vb.y) / vb.height)),
+      ],
+      zoom: Math.max(0.01, zoom),
+      rotation: 0,
+    };
+    const steps = config.steps.map((s, i) => i === index ? { ...s, viewport } : s);
+    updateConfig({ ...config, steps });
+  }
+
   function handleHiddenChange(hidden: string[]) {
     if (!config || selectedStepIndex === null) return;
     const steps = config.steps.map((s, i) =>
@@ -213,7 +250,11 @@ function App() {
                   onReorder={handleReorderSteps}
                   onAdd={handleAddStep}
                   onRemove={handleRemoveStep}
+                  onDuplicate={handleDuplicateStep}
+                  onHoverChange={setHoveredStepIndex}
                   onGoToViewport={(index) => canvasRef.current?.goToStep(config.steps[index])}
+                  onFitToViewport={handleFitToViewport}
+                  onFitAllToView={() => canvasRef.current?.fitAllSteps(config.steps)}
                 />
                 {selectedStep && (
                   <ElementPicker
@@ -234,6 +275,7 @@ function App() {
                 viewBox={viewBox}
                 steps={config?.steps ?? []}
                 selectedStepIndex={selectedStepIndex}
+                hoveredStepIndex={hoveredStepIndex}
                 aspectRatio={config?.aspect_ratio ?? "16:9"}
                 backgroundColor={config?.background_color ?? "#000000"}
                 onViewportChange={handleViewportChange}

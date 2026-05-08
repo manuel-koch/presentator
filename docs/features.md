@@ -69,8 +69,10 @@
     * viewport rectangle can be rotated via drag'n'drop on a corner of the rectangle
     * holding Shift while rotating snaps the angle at 5° steps
   * all other steps' viewports are visualized as semi-transparent rectangles in a different color
-  * a small label with the step name appears at the inner top-left corner of each viewport rectangle
-  * a jump-to-viewport button (rectangle icon) on each step in the list navigates to that step's viewport rectangle
+  * a small label with the step name appears at the inner top-left corner of each viewport rectangle; the label is clipped to the rectangle bounds so it never overflows outside
+  * a fit-all-steps button (expand icon, green hover) in the step-list header pans/zooms the editing canvas to show all step viewport-rectangles at once
+  * a jump-to-viewport button (rectangle icon, green hover) on each step in the list navigates to that step's viewport rectangle
+  * a fit-to-current-view button (expand icon, blue hover) on each step in the list resizes that step's viewport rectangle to cover the current canvas view (same sizing as adding a new step); rotation is reset to 0
   * when adding a new step, its viewport rectangle is positioned to cover the center of the current viewport (filling most of the viewport based on configured aspect ratio)
 
 * SVG and config files are watched for external changes (e.g. hand-editing YAML, re-exporting SVG from a tool)

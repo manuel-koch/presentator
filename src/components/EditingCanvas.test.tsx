@@ -1,6 +1,8 @@
-import { render, screen, fireEvent } from "@testing-library/react";
+import { createRef } from "react";
+import { render, screen, fireEvent, act } from "@testing-library/react";
 import { vi, describe, it, expect, beforeEach } from "vitest";
 import { EditingCanvas } from "./EditingCanvas";
+import type { EditingCanvasHandle } from "./EditingCanvas";
 import type { Step } from "../types/config";
 import type { ViewBox } from "../utils/svgViewBox";
 
@@ -148,6 +150,60 @@ describe("EditingCanvas", () => {
 
     // Large pan step (100px) → viewBox x shift > 50 SVG units at any reasonable zoom
     expect(xBefore - overlayViewBoxX(el)).toBeGreaterThan(50);
+  });
+
+  it("renders the hovered non-selected step rect with green stroke", () => {
+    render(canvas({ steps: [STEP, STEP2], selectedStepIndex: 0, hoveredStepIndex: 1 }));
+    const hoveredGroup = screen.getByTestId("viewport-rect-hovered");
+    expect(hoveredGroup.querySelector("rect")?.getAttribute("stroke")).toBe("#4ade80");
+  });
+
+  it("does not apply hover highlight to the selected step", () => {
+    render(canvas({ steps: [STEP, STEP2], selectedStepIndex: 0, hoveredStepIndex: 0 }));
+    // Selected step has its own testid; no hovered testid should appear
+    expect(screen.queryByTestId("viewport-rect-hovered")).toBeNull();
+  });
+
+  it("fitAllSteps adjusts the canvas to show all step viewport-rects", () => {
+    const ref = createRef<EditingCanvasHandle>();
+    render(
+      <EditingCanvas
+        ref={ref}
+        svgContent={SVG_CONTENT}
+        viewBox={VB}
+        steps={[STEP, STEP2]}
+        selectedStepIndex={null}
+        aspectRatio="16:9"
+        backgroundColor="#000000"
+        onViewportChange={() => {}}
+      />
+    );
+    const el = screen.getByTestId("editing-canvas");
+    const widthBefore = overlayViewBoxWidth(el);
+    act(() => { ref.current?.fitAllSteps([STEP, STEP2]); });
+    // The viewBox should update (canvas re-positioned to show all rects)
+    expect(overlayViewBoxWidth(el)).toBeGreaterThan(0);
+    expect(overlayViewBoxWidth(el)).not.toBe(widthBefore);
+  });
+
+  it("fitAllSteps is a no-op when steps array is empty", () => {
+    const ref = createRef<EditingCanvasHandle>();
+    render(
+      <EditingCanvas
+        ref={ref}
+        svgContent={SVG_CONTENT}
+        viewBox={VB}
+        steps={[]}
+        selectedStepIndex={null}
+        aspectRatio="16:9"
+        backgroundColor="#000000"
+        onViewportChange={() => {}}
+      />
+    );
+    const el = screen.getByTestId("editing-canvas");
+    const widthBefore = overlayViewBoxWidth(el);
+    act(() => { ref.current?.fitAllSteps([]); });
+    expect(overlayViewBoxWidth(el)).toBe(widthBefore);
   });
 
   it("calls onViewportChange when an edge hit zone is dragged", () => {

@@ -21,7 +21,11 @@ function mkProps(overrides = {}) {
     onReorder: noop,
     onAdd: noop,
     onRemove: noop,
+    onDuplicate: noop,
     onGoToViewport: noop,
+    onFitToViewport: noop,
+    onFitAllToView: noop,
+    onHoverChange: noop,
     ...overrides,
   };
 }
@@ -135,6 +139,48 @@ describe("StepList", () => {
     expect(onSelect).not.toHaveBeenCalled();
   });
 
+  it("shows a duplicate button for each step", () => {
+    render(<StepList {...mkProps()} />);
+    expect(screen.getByRole("button", { name: "Duplicate Overview" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Duplicate Detail A" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Duplicate Close-up" })).toBeInTheDocument();
+  });
+
+  it("calls onDuplicate with the correct index", async () => {
+    const onDuplicate = vi.fn();
+    render(<StepList {...mkProps({ onDuplicate })} />);
+    await userEvent.click(screen.getByRole("button", { name: "Duplicate Detail A" }));
+    expect(onDuplicate).toHaveBeenCalledWith(1);
+  });
+
+  it("does not call onSelect when the duplicate button is clicked", async () => {
+    const onSelect = vi.fn();
+    render(<StepList {...mkProps({ onSelect })} />);
+    await userEvent.click(screen.getByRole("button", { name: "Duplicate Overview" }));
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it("shows a fit-to-viewport button for each step", () => {
+    render(<StepList {...mkProps()} />);
+    expect(screen.getByRole("button", { name: "Fit Overview viewport to current view" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Fit Detail A viewport to current view" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Fit Close-up viewport to current view" })).toBeInTheDocument();
+  });
+
+  it("calls onFitToViewport with the correct index", async () => {
+    const onFitToViewport = vi.fn();
+    render(<StepList {...mkProps({ onFitToViewport })} />);
+    await userEvent.click(screen.getByRole("button", { name: "Fit Detail A viewport to current view" }));
+    expect(onFitToViewport).toHaveBeenCalledWith(1);
+  });
+
+  it("does not call onSelect when the fit-to-viewport button is clicked", async () => {
+    const onSelect = vi.fn();
+    render(<StepList {...mkProps({ onSelect })} />);
+    await userEvent.click(screen.getByRole("button", { name: "Fit Overview viewport to current view" }));
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
   it("shows an inline input on double-click", async () => {
     render(<StepList {...mkProps({ selectedIndex: 0 })} />);
     await userEvent.dblClick(screen.getByText("Overview"));
@@ -195,6 +241,33 @@ describe("StepList", () => {
     fireEvent.mouseMove(window, { clientY: 140 });
     fireEvent.mouseUp(window, { clientY: 140 });
     expect(onReorder).toHaveBeenCalledWith(0, 2);
+  });
+
+  it("calls onHoverChange with index on mouseenter and null on mouseleave", async () => {
+    const onHoverChange = vi.fn();
+    render(<StepList {...mkProps({ onHoverChange })} />);
+    const items = screen.getAllByRole("listitem");
+    await userEvent.hover(items[1]);
+    expect(onHoverChange).toHaveBeenCalledWith(1);
+    await userEvent.unhover(items[1]);
+    expect(onHoverChange).toHaveBeenCalledWith(null);
+  });
+
+  it("shows fit-all-to-view button in header when there are steps", () => {
+    render(<StepList {...mkProps()} />);
+    expect(screen.getByRole("button", { name: "Fit all steps to view" })).toBeInTheDocument();
+  });
+
+  it("does not show fit-all-to-view button when steps list is empty", () => {
+    render(<StepList {...mkProps({ steps: [] })} />);
+    expect(screen.queryByRole("button", { name: "Fit all steps to view" })).toBeNull();
+  });
+
+  it("calls onFitAllToView when the fit-all button is clicked", async () => {
+    const onFitAllToView = vi.fn();
+    render(<StepList {...mkProps({ onFitAllToView })} />);
+    await userEvent.click(screen.getByRole("button", { name: "Fit all steps to view" }));
+    expect(onFitAllToView).toHaveBeenCalledOnce();
   });
 
   it("does not call onReorder when dropped on the same item", () => {

@@ -9,7 +9,11 @@ interface Props {
   onReorder: (fromIndex: number, toIndex: number) => void;
   onAdd: () => void;
   onRemove: (index: number) => void;
+  onDuplicate: (index: number) => void;
   onGoToViewport: (index: number) => void;
+  onFitToViewport: (index: number) => void;
+  onFitAllToView: () => void;
+  onHoverChange: (index: number | null) => void;
 }
 
 function PlusIcon() {
@@ -36,7 +40,25 @@ function FrameIcon() {
   );
 }
 
-export function StepList({ steps, selectedIndex, onSelect, onRename, onReorder, onAdd, onRemove, onGoToViewport }: Props) {
+function DuplicateIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <rect x="4" y="1" width="7" height="7"/>
+      <rect x="1" y="4" width="7" height="7"/>
+    </svg>
+  );
+}
+
+function FitViewportIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" aria-hidden>
+      <rect x="3" y="3" width="6" height="6"/>
+      <path d="M6 1v2M6 9v2M1 6h2M9 6h2"/>
+    </svg>
+  );
+}
+
+export function StepList({ steps, selectedIndex, onSelect, onRename, onReorder, onAdd, onRemove, onDuplicate, onGoToViewport, onFitToViewport, onFitAllToView, onHoverChange }: Props) {
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editingName, setEditingName] = useState("");
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
@@ -109,9 +131,16 @@ export function StepList({ steps, selectedIndex, onSelect, onRename, onReorder, 
     <div className="step-list">
       <div className="step-list-header">
         <span className="step-list-title">Steps</span>
-        <button className="step-list-add-btn" onClick={onAdd} aria-label="Add step" title="Add step">
-          <PlusIcon />
-        </button>
+        <div className="step-list-header-actions">
+          {steps.length > 0 && (
+            <button className="step-list-fit-all-btn" onClick={onFitAllToView} aria-label="Fit all steps to view" title="Fit all steps to view">
+              <FitViewportIcon />
+            </button>
+          )}
+          <button className="step-list-add-btn" onClick={onAdd} aria-label="Add step" title="Add step">
+            <PlusIcon />
+          </button>
+        </div>
       </div>
       <ul role="list" aria-label="Steps" ref={listRef}>
         {steps.map((step, index) => {
@@ -129,6 +158,8 @@ export function StepList({ steps, selectedIndex, onSelect, onRename, onReorder, 
             <li
               key={index}
               className={classes}
+              onMouseEnter={() => onHoverChange(index)}
+              onMouseLeave={() => onHoverChange(null)}
               onClick={() => {
                 if (suppressNextClickRef.current) {
                   suppressNextClickRef.current = false;
@@ -162,6 +193,22 @@ export function StepList({ steps, selectedIndex, onSelect, onRename, onReorder, 
                 onClick={(e) => { e.stopPropagation(); onGoToViewport(index); }}
               >
                 <FrameIcon />
+              </button>
+              <button
+                className="step-item-fit-btn"
+                aria-label={`Fit ${step.name} viewport to current view`}
+                title="Fit to current view"
+                onClick={(e) => { e.stopPropagation(); onFitToViewport(index); }}
+              >
+                <FitViewportIcon />
+              </button>
+              <button
+                className="step-item-duplicate-btn"
+                aria-label={`Duplicate ${step.name}`}
+                title="Duplicate step"
+                onClick={(e) => { e.stopPropagation(); onDuplicate(index); }}
+              >
+                <DuplicateIcon />
               </button>
               <button
                 className="step-item-remove-btn"
