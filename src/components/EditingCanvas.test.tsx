@@ -46,6 +46,13 @@ describe("EditingCanvas", () => {
     Object.defineProperty(HTMLElement.prototype, "clientHeight", { configurable: true, value: 800 });
   });
 
+  // A step whose rect center sits at SVG (0,0) — far top-left.
+  const STEP_FAR: Step = {
+    name: "Far",
+    viewport: { center: [0.0, 0.0], zoom: 3.0, rotation: 0 },
+    hidden: [],
+  };
+
   it("renders the SVG content", () => {
     render(canvas());
     expect(screen.getByTestId("editing-canvas")).toBeInTheDocument();
@@ -150,6 +157,22 @@ describe("EditingCanvas", () => {
 
     // Large pan step (100px) → viewBox x shift > 50 SVG units at any reasonable zoom
     expect(xBefore - overlayViewBoxX(el)).toBeGreaterThan(50);
+  });
+
+  it("does not show hover arrow when hovered step center is inside the viewport", () => {
+    // Initial zoom shows the full SVG — STEP center at (400,300) is visible.
+    render(canvas({ steps: [STEP], selectedStepIndex: null, hoveredStepIndex: 0 }));
+    expect(screen.queryByTestId("hover-arrow")).toBeNull();
+  });
+
+  it("shows hover arrow when hovered step center is outside the viewport", () => {
+    render(canvas({ steps: [STEP, STEP_FAR], selectedStepIndex: null, hoveredStepIndex: 1 }));
+    const el = screen.getByTestId("editing-canvas");
+    // Zoom in toward center so SVG (0,0) falls well outside the visible area.
+    for (let i = 0; i < 40; i++) {
+      fireEvent.wheel(el, { deltaY: -100, clientX: 600, clientY: 400 });
+    }
+    expect(screen.getByTestId("hover-arrow")).toBeInTheDocument();
   });
 
   it("renders the hovered non-selected step rect with green stroke", () => {

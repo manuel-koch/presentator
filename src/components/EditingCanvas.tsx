@@ -193,6 +193,20 @@ function computeViewportRectGeom(step: Step, vb: ViewBox, ar: string) {
   };
 }
 
+// Returns where the ray from (ox,oy) in unit direction (ux,uy) exits the given rectangle.
+// Assumes the origin is inside the rectangle.
+function rayToRectEdge(
+  ox: number, oy: number, ux: number, uy: number,
+  left: number, top: number, right: number, bottom: number,
+): { x: number; y: number } {
+  let t = Infinity;
+  if (ux > 0) t = Math.min(t, (right  - ox) / ux);
+  else if (ux < 0) t = Math.min(t, (left   - ox) / ux);
+  if (uy > 0) t = Math.min(t, (bottom - oy) / uy);
+  else if (uy < 0) t = Math.min(t, (top    - oy) / uy);
+  return { x: ox + ux * t, y: oy + uy * t };
+}
+
 type DragMode = "none" | "move" | "rotate" | "resize";
 type EdgeSide = "top" | "right" | "bottom" | "left";
 
@@ -748,6 +762,66 @@ export const EditingCanvas = forwardRef<EditingCanvasHandle, Props>(function Edi
     );
   }
 
+  // Off-screen indicator arrow for the hovered step
+  let hoverArrowEl: React.ReactNode = null;
+  if (hoveredStepIndex !== null) {
+    const hoveredStep = steps[hoveredStepIndex];
+    if (hoveredStep) {
+      const geom = computeViewportRectGeom(hoveredStep, vb, aspectRatio);
+      const centerVisible =
+        geom.cx >= visibleLeft && geom.cx <= visibleLeft + visibleW &&
+        geom.cy >= visibleTop  && geom.cy <= visibleTop  + visibleH;
+      if (!centerVisible) {
+        const visCx = visibleLeft + visibleW / 2;
+        const visCy = visibleTop  + visibleH / 2;
+        const dx = geom.cx - visCx;
+        const dy = geom.cy - visCy;
+        const len = Math.hypot(dx, dy);
+        if (len > 0) {
+          const ux = dx / len;
+          const uy = dy / len;
+          const edge = rayToRectEdge(visCx, visCy, ux, uy, visibleLeft, visibleTop, visibleLeft + visibleW, visibleTop + visibleH);
+          const margin    = 22 / zoom;
+          const arrowLen  = 48 / zoom;
+          const arrowHead = 15 / zoom;
+          const strokeW   =  5 / zoom;
+          // Wobble amplitude in SVG units so the screen-pixel distance stays constant.
+          const wobble    = 10 / zoom;
+          const tipX = edge.x - ux * margin;
+          const tipY = edge.y - uy * margin;
+          const angleDeg = Math.atan2(uy, ux) * 180 / Math.PI;
+          hoverArrowEl = (
+            <g
+              transform={`translate(${tipX},${tipY}) rotate(${angleDeg})`}
+              style={{ pointerEvents: "none" } as React.CSSProperties}
+              data-testid="hover-arrow"
+            >
+              {/* Inner group carries the translate-along-direction wobble animation. */}
+              <g>
+                <animateTransform
+                  attributeName="transform"
+                  type="translate"
+                  values={`0 0; ${wobble} 0; 0 0; ${-wobble * 0.25} 0; 0 0`}
+                  keyTimes="0; 0.35; 0.6; 0.8; 1"
+                  dur="0.85s"
+                  repeatCount="indefinite"
+                />
+                <line
+                  x1={-arrowLen} y1={0} x2={-arrowHead * 0.8} y2={0}
+                  stroke={HOVER_RECT_STROKE} strokeWidth={strokeW} strokeLinecap="round"
+                />
+                <polygon
+                  points={`0,0 ${-arrowHead},${-arrowHead * 0.5} ${-arrowHead},${arrowHead * 0.5}`}
+                  fill={HOVER_RECT_STROKE}
+                />
+              </g>
+            </g>
+          );
+        }
+      }
+    }
+  }
+
   return (
     <div
       ref={containerRef}
@@ -797,6 +871,7 @@ export const EditingCanvas = forwardRef<EditingCanvasHandle, Props>(function Edi
             <g clipPath={`url(#${clipId})`}>
               {otherRects}
               {selectedRectEl}
+              {hoverArrowEl}
             </g>
           </svg>
           {/* Mini-map: rendered after overlay SVG so it sits on top in stacking order. */}

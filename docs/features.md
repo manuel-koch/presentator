@@ -72,6 +72,7 @@
     * viewport rectangle can be rotated via drag'n'drop on a corner of the rectangle
     * holding Shift while rotating snaps the angle at 5° steps
   * all other steps' viewports are visualized as semi-transparent dashed rectangles; hovering a step in the step list highlights its viewport rectangle in light green
+  * when hovering a step whose viewport rectangle center lies outside the currently visible canvas area, a prominent green arrow is drawn inside the canvas pointing toward where that rectangle is located; the arrow animates back and forth along its direction to catch the eye
   * a small label with the step name appears at the inner top-left corner of each viewport rectangle; the label is clipped to the rectangle bounds so it never overflows outside
   * a fit-all-steps button (expand icon, green hover) in the step-list header pans/zooms the editing canvas to show all step viewport-rectangles at once, with a smooth 2-second ease-in-out animation
   * a jump-to-viewport button (rectangle icon, green hover) on each step in the list navigates to that step's viewport rectangle with a smooth 2-second ease-in-out animation
