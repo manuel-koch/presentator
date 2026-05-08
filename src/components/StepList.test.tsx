@@ -255,18 +255,18 @@ describe("StepList", () => {
 
   it("shows fit-all-to-view button in header when there are steps", () => {
     render(<StepList {...mkProps()} />);
-    expect(screen.getByRole("button", { name: "Fit all steps to view" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Fit view to all steps" })).toBeInTheDocument();
   });
 
   it("does not show fit-all-to-view button when steps list is empty", () => {
     render(<StepList {...mkProps({ steps: [] })} />);
-    expect(screen.queryByRole("button", { name: "Fit all steps to view" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Fit view to all steps" })).toBeNull();
   });
 
   it("calls onFitAllToView when the fit-all button is clicked", async () => {
     const onFitAllToView = vi.fn();
     render(<StepList {...mkProps({ onFitAllToView })} />);
-    await userEvent.click(screen.getByRole("button", { name: "Fit all steps to view" }));
+    await userEvent.click(screen.getByRole("button", { name: "Fit view to all steps" }));
     expect(onFitAllToView).toHaveBeenCalledOnce();
   });
 

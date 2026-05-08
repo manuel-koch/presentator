@@ -42,8 +42,9 @@ from the todo in favor of updated feature descriptions.
       new step, using postfix " (Clone)" )
 - [x] When hovering over a step in the steps-list, change to color of that steps viewport-rectangle
       to light green to highlight it in current viewport.
-- [ ] Use a smooth transition ( duration of 2s ) when using steps go-to-viewport functionality.
-- [ ] use same aspect-ratio for the minimap that is used for current viewport canvas.
+- [x] Use a smooth transition ( duration of 2s ) when using steps go-to-viewport functionality.
+- [x] Use a smooth transition ( duration of 2s ) when using step-list fit-viewport-to-all-steps.
+- [x] use same aspect-ratio for the minimap that is used for current viewport canvas.
   
 ### Step Viewport Rectangle
 

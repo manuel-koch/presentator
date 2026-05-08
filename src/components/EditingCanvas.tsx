@@ -52,17 +52,31 @@ interface MiniMapProps {
 }
 
 function CanvasMiniMap({ vb, svgInner, visibleLeft, visibleTop, visibleW, visibleH, onNavigate }: MiniMapProps) {
-  const ar = vb.width / vb.height;
-  let mmW = MINIMAP_MAX_W;
-  let mmH = Math.round(mmW / ar);
-  if (mmH > MINIMAP_MAX_H) { mmH = MINIMAP_MAX_H; mmW = Math.round(mmH * ar); }
+  // Use the actual canvas container AR (visibleW/visibleH = cw/ch, zoom cancels out)
+  // so the minimap resizes correctly when the main window is resized.
+  const containerAR = visibleW / visibleH;
+  const svgAR = vb.width / vb.height;
+  let mapW: number, mapH: number;
+  if (svgAR >= containerAR) {
+    mapW = vb.width;
+    mapH = vb.width / containerAR;
+  } else {
+    mapH = vb.height;
+    mapW = vb.height * containerAR;
+  }
+  const mapX = vb.x - (mapW - vb.width) / 2;
+  const mapY = vb.y - (mapH - vb.height) / 2;
 
-  // Clamp viewport indicator to SVG bounds.
-  const vpLeft = Math.max(visibleLeft, vb.x);
-  const vpTop  = Math.max(visibleTop,  vb.y);
-  const vpW    = Math.max(0, Math.min(visibleLeft + visibleW, vb.x + vb.width)  - vpLeft);
-  const vpH    = Math.max(0, Math.min(visibleTop  + visibleH, vb.y + vb.height) - vpTop);
-  const strokeW = Math.max(vb.width, vb.height) * 0.016;
+  let mmW = MINIMAP_MAX_W;
+  let mmH = Math.round(mmW / containerAR);
+  if (mmH > MINIMAP_MAX_H) { mmH = MINIMAP_MAX_H; mmW = Math.round(mmH * containerAR); }
+
+  // Clamp viewport indicator to map bounds.
+  const vpLeft = Math.max(visibleLeft, mapX);
+  const vpTop  = Math.max(visibleTop,  mapY);
+  const vpW    = Math.max(0, Math.min(visibleLeft + visibleW, mapX + mapW) - vpLeft);
+  const vpH    = Math.max(0, Math.min(visibleTop  + visibleH, mapY + mapH) - vpTop);
+  const strokeW = Math.max(mapW, mapH) * 0.016;
 
   function handleMouseDown(e: React.MouseEvent<HTMLDivElement>) {
     if (e.button !== 0) return;
@@ -71,8 +85,8 @@ function CanvasMiniMap({ vb, svgInner, visibleLeft, visibleTop, visibleW, visibl
     const rect = e.currentTarget.getBoundingClientRect();
     if (!rect.width || !rect.height) return;
     onNavigate(
-      vb.x + ((e.clientX - rect.left) / rect.width)  * vb.width,
-      vb.y + ((e.clientY - rect.top)  / rect.height) * vb.height,
+      mapX + ((e.clientX - rect.left) / rect.width)  * mapW,
+      mapY + ((e.clientY - rect.top)  / rect.height) * mapH,
     );
   }
 
@@ -92,7 +106,7 @@ function CanvasMiniMap({ vb, svgInner, visibleLeft, visibleTop, visibleW, visibl
       {/* SVG content at small scale — pointer events disabled so the div receives clicks */}
       <svg
         width={mmW} height={mmH}
-        viewBox={`${vb.x} ${vb.y} ${vb.width} ${vb.height}`}
+        viewBox={`${mapX} ${mapY} ${mapW} ${mapH}`}
         style={{ display: "block", pointerEvents: "none" }}
         dangerouslySetInnerHTML={{ __html: svgInner }}
       />
@@ -100,9 +114,9 @@ function CanvasMiniMap({ vb, svgInner, visibleLeft, visibleTop, visibleW, visibl
       <svg
         style={{ position: "absolute", top: 0, left: 0, pointerEvents: "none" }}
         width={mmW} height={mmH}
-        viewBox={`${vb.x} ${vb.y} ${vb.width} ${vb.height}`}
+        viewBox={`${mapX} ${mapY} ${mapW} ${mapH}`}
       >
-        <rect x={vb.x} y={vb.y} width={vb.width} height={vb.height} fill="rgba(0,0,0,0.42)" />
+        <rect x={mapX} y={mapY} width={mapW} height={mapH} fill="rgba(0,0,0,0.42)" />
         {vpW > 0 && vpH > 0 && (
           <rect
             x={vpLeft} y={vpTop} width={vpW} height={vpH}
@@ -179,6 +193,7 @@ export const EditingCanvas = forwardRef<EditingCanvasHandle, Props>(function Edi
   transformRef.current = transform;
   const dragRef = useRef<DragState | null>(null);
   const dragMoveRef = useRef<(mx: number, my: number, shiftKey: boolean) => void>(() => {});
+  const animationIdRef = useRef<number | null>(null);
   const clipId = useRef(`ec-clip-${Math.random().toString(36).slice(2, 8)}`).current;
   // Kept in a ref so goToStep always sees current values without stale closure issues.
   const vbRef = useRef(vb);
@@ -188,6 +203,38 @@ export const EditingCanvas = forwardRef<EditingCanvasHandle, Props>(function Edi
 
   // Track container pixel size so we can compute the SVG viewBox.
   const [containerSize, setContainerSize] = useState({ w: 0, h: 0 });
+
+  function cancelAnimation() {
+    if (animationIdRef.current !== null) {
+      cancelAnimationFrame(animationIdRef.current);
+      animationIdRef.current = null;
+    }
+  }
+
+  function animateTo(target: CanvasTransform) {
+    cancelAnimation();
+    const from = { ...transformRef.current };
+    const startTime = Date.now();
+    const DURATION = 2000;
+    function easeInOutCubic(t: number) {
+      return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+    }
+    function tick() {
+      const t = Math.min((Date.now() - startTime) / DURATION, 1);
+      const e = easeInOutCubic(t);
+      setTransform({
+        zoom: from.zoom + (target.zoom - from.zoom) * e,
+        panX: from.panX + (target.panX - from.panX) * e,
+        panY: from.panY + (target.panY - from.panY) * e,
+      });
+      if (t < 1) {
+        animationIdRef.current = requestAnimationFrame(tick);
+      } else {
+        animationIdRef.current = null;
+      }
+    }
+    animationIdRef.current = requestAnimationFrame(tick);
+  }
 
   const selectedStep = selectedStepIndex !== null ? steps[selectedStepIndex] ?? null : null;
 
@@ -207,6 +254,7 @@ export const EditingCanvas = forwardRef<EditingCanvasHandle, Props>(function Edi
     const cw = el.clientWidth;
     const ch = el.clientHeight;
     if (!cw || !ch) return;
+    cancelAnimation();
     const zoom = Math.min(cw / vb.width, ch / vb.height) * 0.9;
     setTransform({
       zoom,
@@ -245,7 +293,7 @@ export const EditingCanvas = forwardRef<EditingCanvasHandle, Props>(function Edi
       const bbW = geom.w * cosT + geom.h * sinT;
       const bbH = geom.w * sinT + geom.h * cosT;
       const newZoom = clamp(Math.min(cw / bbW, ch / bbH) * 0.85, MIN_ZOOM, MAX_ZOOM);
-      setTransform({
+      animateTo({
         zoom: newZoom,
         panX: cw / 2 - (geom.cx - vbRef.current.x) * newZoom,
         panY: ch / 2 - (geom.cy - vbRef.current.y) * newZoom,
@@ -290,7 +338,7 @@ export const EditingCanvas = forwardRef<EditingCanvasHandle, Props>(function Edi
       const centerX = (minX + maxX) / 2;
       const centerY = (minY + maxY) / 2;
       const newZoom = clamp(Math.min(cw / totalW, ch / totalH) * 0.85, MIN_ZOOM, MAX_ZOOM);
-      setTransform({
+      animateTo({
         zoom: newZoom,
         panX: cw / 2 - (centerX - vbRef.current.x) * newZoom,
         panY: ch / 2 - (centerY - vbRef.current.y) * newZoom,
@@ -312,6 +360,7 @@ export const EditingCanvas = forwardRef<EditingCanvasHandle, Props>(function Edi
 
   function handleWheel(e: React.WheelEvent) {
     e.preventDefault();
+    cancelAnimation();
     const rect = containerRef.current!.getBoundingClientRect();
     const cx = e.clientX - rect.left;
     const cy = e.clientY - rect.top;
@@ -323,21 +372,23 @@ export const EditingCanvas = forwardRef<EditingCanvasHandle, Props>(function Edi
     const meta = e.metaKey || e.ctrlKey;
     if (meta && (e.key === "+" || e.key === "=" || e.key === "ArrowUp")) {
       e.preventDefault();
+      cancelAnimation();
       const el = containerRef.current!;
       zoomAt(el.clientWidth / 2, el.clientHeight / 2, ZOOM_FACTOR);
       return;
     }
     if (meta && (e.key === "-" || e.key === "ArrowDown")) {
       e.preventDefault();
+      cancelAnimation();
       const el = containerRef.current!;
       zoomAt(el.clientWidth / 2, el.clientHeight / 2, 1 / ZOOM_FACTOR);
       return;
     }
     const step = e.shiftKey ? PAN_STEP_LARGE : PAN_STEP;
-    if (e.key === "ArrowLeft") { e.preventDefault(); setTransform((t) => ({ ...t, panX: t.panX + step })); }
-    if (e.key === "ArrowRight") { e.preventDefault(); setTransform((t) => ({ ...t, panX: t.panX - step })); }
-    if (e.key === "ArrowUp") { e.preventDefault(); setTransform((t) => ({ ...t, panY: t.panY + step })); }
-    if (e.key === "ArrowDown") { e.preventDefault(); setTransform((t) => ({ ...t, panY: t.panY - step })); }
+    if (e.key === "ArrowLeft") { e.preventDefault(); cancelAnimation(); setTransform((t) => ({ ...t, panX: t.panX + step })); }
+    if (e.key === "ArrowRight") { e.preventDefault(); cancelAnimation(); setTransform((t) => ({ ...t, panX: t.panX - step })); }
+    if (e.key === "ArrowUp") { e.preventDefault(); cancelAnimation(); setTransform((t) => ({ ...t, panY: t.panY + step })); }
+    if (e.key === "ArrowDown") { e.preventDefault(); cancelAnimation(); setTransform((t) => ({ ...t, panY: t.panY - step })); }
   }
 
   // --- Canvas pan via drag ---
@@ -346,6 +397,7 @@ export const EditingCanvas = forwardRef<EditingCanvasHandle, Props>(function Edi
   function handleCanvasMouseDown(e: React.MouseEvent) {
     if (e.button !== 0) return;
     e.preventDefault();
+    cancelAnimation();
     containerRef.current?.focus({ preventScroll: true });
     panDragRef.current = { startX: e.clientX, startY: e.clientY, startPanX: transform.panX, startPanY: transform.panY };
   }
@@ -370,6 +422,7 @@ export const EditingCanvas = forwardRef<EditingCanvasHandle, Props>(function Edi
     window.addEventListener("mousemove", onMouseMove);
     window.addEventListener("mouseup", onMouseUp);
     return () => {
+      cancelAnimation();
       window.removeEventListener("mousemove", onMouseMove);
       window.removeEventListener("mouseup", onMouseUp);
     };
@@ -389,6 +442,7 @@ export const EditingCanvas = forwardRef<EditingCanvasHandle, Props>(function Edi
 
   function startViewportDrag(mode: DragMode, e: React.MouseEvent, side?: EdgeSide) {
     e.stopPropagation();
+    cancelAnimation();
     containerRef.current?.focus({ preventScroll: true });
     if (!selectedStep) return;
     const geom = computeViewportRectGeom(selectedStep, vb, aspectRatio);
@@ -678,13 +732,14 @@ export const EditingCanvas = forwardRef<EditingCanvasHandle, Props>(function Edi
               visibleTop={visibleTop}
               visibleW={visibleW}
               visibleH={visibleH}
-              onNavigate={(cx, cy) =>
+              onNavigate={(cx, cy) => {
+                cancelAnimation();
                 setTransform((t) => ({
                   ...t,
                   panX: cw / 2 - (cx - vb.x) * t.zoom,
                   panY: ch / 2 - (cy - vb.y) * t.zoom,
-                }))
-              }
+                }));
+              }}
             />
           )}
         </>

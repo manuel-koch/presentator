@@ -133,7 +133,7 @@ export function StepList({ steps, selectedIndex, onSelect, onRename, onReorder, 
         <span className="step-list-title">Steps</span>
         <div className="step-list-header-actions">
           {steps.length > 0 && (
-            <button className="step-list-fit-all-btn" onClick={onFitAllToView} aria-label="Fit all steps to view" title="Fit all steps to view">
+            <button className="step-list-fit-all-btn" onClick={onFitAllToView} aria-label="Fit view to all steps" title="Fit view to all steps">
               <FitViewportIcon />
             </button>
           )}

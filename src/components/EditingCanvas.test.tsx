@@ -164,7 +164,87 @@ describe("EditingCanvas", () => {
     expect(screen.queryByTestId("viewport-rect-hovered")).toBeNull();
   });
 
-  it("fitAllSteps adjusts the canvas to show all step viewport-rects", () => {
+  it("goToStep animates the canvas to the step viewport over ~2s", () => {
+    vi.useFakeTimers();
+    const ref = createRef<EditingCanvasHandle>();
+    render(
+      <EditingCanvas
+        ref={ref}
+        svgContent={SVG_CONTENT}
+        viewBox={VB}
+        steps={[STEP, STEP2]}
+        selectedStepIndex={null}
+        aspectRatio="16:9"
+        backgroundColor="#000000"
+        onViewportChange={() => {}}
+      />
+    );
+    const el = screen.getByTestId("editing-canvas");
+    const widthBefore = overlayViewBoxWidth(el);
+    act(() => { ref.current?.goToStep(STEP2); });
+    // Mid-animation (1s): transform has started moving
+    act(() => { vi.advanceTimersByTime(1000); });
+    const widthMid = overlayViewBoxWidth(el);
+    // After full animation (2s+): transform has reached the target
+    act(() => { vi.advanceTimersByTime(1100); });
+    const widthAfter = overlayViewBoxWidth(el);
+    // Canvas should have moved from its initial position
+    expect(widthAfter).not.toBe(widthBefore);
+    // Mid-point should differ from final (still interpolating at 1s)
+    expect(widthAfter).not.toBe(widthMid);
+    vi.useRealTimers();
+  });
+
+  it("wheel zoom cancels an in-progress goToStep animation", () => {
+    vi.useFakeTimers();
+    const ref = createRef<EditingCanvasHandle>();
+    render(
+      <EditingCanvas
+        ref={ref}
+        svgContent={SVG_CONTENT}
+        viewBox={VB}
+        steps={[STEP, STEP2]}
+        selectedStepIndex={null}
+        aspectRatio="16:9"
+        backgroundColor="#000000"
+        onViewportChange={() => {}}
+      />
+    );
+    const el = screen.getByTestId("editing-canvas");
+    act(() => { ref.current?.goToStep(STEP2); });
+    // Fire a wheel event after one RAF tick — cancels the animation and applies a zoom
+    act(() => {
+      vi.advanceTimersByTime(16);
+      fireEvent.wheel(el, { deltaY: -100, clientX: 600, clientY: 400 });
+    });
+    // Capture width immediately after cancellation (animation stopped, zoom applied)
+    const widthAfterCancel = overlayViewBoxWidth(el);
+    // Advancing timers further should NOT change width (animation was cancelled)
+    act(() => { vi.advanceTimersByTime(3000); });
+    expect(overlayViewBoxWidth(el)).toBe(widthAfterCancel);
+    vi.useRealTimers();
+  });
+
+  it("minimap uses the configured aspect ratio for its viewBox", () => {
+    // Zoom in enough so the minimap appears (visibleW < vb.width)
+    render(canvas({ steps: [STEP], selectedStepIndex: null, aspectRatio: "16:9" }));
+    const el = screen.getByTestId("editing-canvas");
+    // Zoom in with 60 wheel events so the minimap becomes visible
+    for (let i = 0; i < 60; i++) {
+      fireEvent.wheel(el, { deltaY: -100, clientX: 600, clientY: 400 });
+    }
+    const minimap = screen.getByTestId("canvas-minimap");
+    // Container is mocked at 1200×800 (AR=1.5). SVG VB is 800×600 (AR=1.333 < 1.5):
+    //   mapW = 600 * 1.5 = 900, mapX = -(900-800)/2 = -50
+    const svgEl = minimap.querySelector("svg");
+    const parts = svgEl?.getAttribute("viewBox")?.split(" ") ?? [];
+    const vbX = parseFloat(parts[0] ?? "0");
+    // mapX is negative because the container AR is wider than the SVG AR
+    expect(vbX).toBeLessThan(0);
+  });
+
+  it("fitAllSteps animates the canvas to show all step viewport-rects over ~2s", () => {
+    vi.useFakeTimers();
     const ref = createRef<EditingCanvasHandle>();
     render(
       <EditingCanvas
@@ -181,9 +261,14 @@ describe("EditingCanvas", () => {
     const el = screen.getByTestId("editing-canvas");
     const widthBefore = overlayViewBoxWidth(el);
     act(() => { ref.current?.fitAllSteps([STEP, STEP2]); });
-    // The viewBox should update (canvas re-positioned to show all rects)
-    expect(overlayViewBoxWidth(el)).toBeGreaterThan(0);
-    expect(overlayViewBoxWidth(el)).not.toBe(widthBefore);
+    act(() => { vi.advanceTimersByTime(1000); });
+    const widthMid = overlayViewBoxWidth(el);
+    act(() => { vi.advanceTimersByTime(1100); });
+    const widthAfter = overlayViewBoxWidth(el);
+    expect(widthAfter).toBeGreaterThan(0);
+    expect(widthAfter).not.toBe(widthBefore);
+    expect(widthAfter).not.toBe(widthMid);
+    vi.useRealTimers();
   });
 
   it("fitAllSteps is a no-op when steps array is empty", () => {
