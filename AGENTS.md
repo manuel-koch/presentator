@@ -10,4 +10,7 @@ Interactive / dynamic presentation app built from SVG input files, running on ma
 ## Development Guideline
 
 * Features have dedicated tests to verify the functionality
-* [docs/todo.md](docs/todo.md) is the living task tracker — read it at the start of each session to understand current state, check off completed tasks, and remove sections once all their tasks are done
+* [docs/todo.md](docs/todo.md) is the living task tracker.
+  * Read it at the start of each session to understand current state.
+  * Check off completed tasks.
+  * Merge done tasks to [docs/features.md](docs/features.md) on explicit user demand!
