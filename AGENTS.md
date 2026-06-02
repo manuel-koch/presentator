@@ -14,3 +14,20 @@ Interactive / dynamic presentation app built from SVG input files, running on ma
   * Read it at the start of each session to understand current state.
   * Check off completed tasks.
   * Merge done tasks to [docs/features.md](docs/features.md) on explicit user demand!
+
+### Guidelines for Implementation, Testing and Bugfixing
+
+- Avoid Code Smells
+- KISS Principle
+- SOLID Principles
+- SSOT (Single Source of Truth)
+- YAGNI (You Aren’t Gonna Need It)
+- Clean Architecture
+- Minimum Viable Product (MVP)
+- Five Whys (Ohno)
+- Chain of Thought (CoT)
+- Occam’s Razor
+- TDD, Chicago School
+- Test Double: Mock (Meszaros)
+- Test Double: Spy (Meszaros)
+- Test Double: Stub (Meszaros)
