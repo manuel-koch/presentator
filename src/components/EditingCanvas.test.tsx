@@ -402,6 +402,104 @@ describe("EditingCanvas", () => {
     vi.useRealTimers();
   });
 
+  it("applies display:none CSS via <style> in content SVG for hidden elements", () => {
+    render(canvas({ hidden: ["bg"] }));
+    const contentSvg = screen.getByTestId("content-svg");
+    expect(contentSvg.innerHTML).toContain("<style>");
+    expect(contentSvg.innerHTML).toContain("#bg{display:none}");
+  });
+
+  it("does not inject a <style> tag when hidden array is empty", () => {
+    render(canvas({ hidden: [] }));
+    const contentSvg = screen.getByTestId("content-svg");
+    expect(contentSvg.innerHTML).not.toContain("<style>");
+  });
+
+  it("shows element-highlight when hoveredElementId matches a visible element with a bounding box", () => {
+    const spy = vi.spyOn(SVGElement.prototype, "getBoundingClientRect").mockReturnValue({
+      left: 100, top: 100, right: 300, bottom: 200, width: 200, height: 100,
+      x: 100, y: 100, toJSON: () => ({}),
+    } as DOMRect);
+    render(canvas({ hoveredElementId: "bg" }));
+    expect(screen.getByTestId("element-highlight")).toBeInTheDocument();
+    spy.mockRestore();
+  });
+
+  it("shows element-highlight for a hovered hidden element (shown as transparent)", () => {
+    const spy = vi.spyOn(SVGElement.prototype, "getBoundingClientRect").mockReturnValue({
+      left: 100, top: 100, right: 300, bottom: 200, width: 200, height: 100,
+      x: 100, y: 100, toJSON: () => ({}),
+    } as DOMRect);
+    render(canvas({ hoveredElementId: "bg", hidden: ["bg"] }));
+    expect(screen.getByTestId("element-highlight")).toBeInTheDocument();
+    spy.mockRestore();
+  });
+
+  it("applies opacity:0.15 to the hovered hidden element instead of display:none", () => {
+    render(canvas({ hoveredElementId: "bg", hidden: ["bg"] }));
+    const contentSvg = screen.getByTestId("content-svg");
+    expect(contentSvg.innerHTML).toContain("#bg{opacity:0.15}");
+    expect(contentSvg.innerHTML).not.toContain("display:none");
+  });
+
+  it("shows element-hover-arrow when element center is outside the visible canvas area", () => {
+    const spy = vi.spyOn(SVGElement.prototype, "getBoundingClientRect").mockReturnValue({
+      left: -500, top: -500, right: -400, bottom: -400, width: 100, height: 100,
+      x: -500, y: -500, toJSON: () => ({}),
+    } as DOMRect);
+    render(canvas({ hoveredElementId: "bg" }));
+    expect(screen.getByTestId("element-hover-arrow")).toBeInTheDocument();
+    spy.mockRestore();
+  });
+
+  it("goToElement animates the canvas to center on the element's bounding box", () => {
+    vi.useFakeTimers();
+    const spy = vi.spyOn(SVGElement.prototype, "getBoundingClientRect").mockReturnValue({
+      left: 200, top: 100, right: 600, bottom: 400, width: 400, height: 300,
+      x: 200, y: 100, toJSON: () => ({}),
+    } as DOMRect);
+    const ref = createRef<EditingCanvasHandle>();
+    render(
+      <EditingCanvas
+        ref={ref}
+        svgContent={SVG_CONTENT}
+        viewBox={VB}
+        steps={[]}
+        selectedStepIndex={null}
+        aspectRatio="16:9"
+        backgroundColor="#000000"
+        onViewportChange={() => {}}
+      />
+    );
+    const el = screen.getByTestId("editing-canvas");
+    const widthBefore = overlayViewBoxWidth(el);
+    act(() => { ref.current?.goToElement("bg"); });
+    act(() => { vi.advanceTimersByTime(2100); });
+    expect(overlayViewBoxWidth(el)).not.toBe(widthBefore);
+    spy.mockRestore();
+    vi.useRealTimers();
+  });
+
+  it("goToElement is a no-op when the element has no bounding box (e.g. display:none)", () => {
+    const ref = createRef<EditingCanvasHandle>();
+    render(
+      <EditingCanvas
+        ref={ref}
+        svgContent={SVG_CONTENT}
+        viewBox={VB}
+        steps={[]}
+        selectedStepIndex={null}
+        aspectRatio="16:9"
+        backgroundColor="#000000"
+        onViewportChange={() => {}}
+      />
+    );
+    const el = screen.getByTestId("editing-canvas");
+    const widthBefore = overlayViewBoxWidth(el);
+    act(() => { ref.current?.goToElement("bg"); }); // getBoundingClientRect returns 0 in jsdom
+    expect(overlayViewBoxWidth(el)).toBe(widthBefore);
+  });
+
   it("calls onViewportChange when an edge hit zone is dragged", () => {
     const onViewportChange = vi.fn();
     render(canvas({ steps: [STEP], selectedStepIndex: 0, onViewportChange }));

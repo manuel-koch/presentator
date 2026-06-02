@@ -1,4 +1,4 @@
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Step, Viewport } from "../types/config";
 import type { ViewBox } from "../utils/svgViewBox";
 import { parseAspectRatio } from "../utils/svgViewBox";
@@ -12,10 +12,13 @@ interface Props {
   aspectRatio: string;
   backgroundColor: string;
   onViewportChange: (viewport: Viewport) => void;
+  hidden?: string[];
+  hoveredElementId?: string | null;
 }
 
 export interface EditingCanvasHandle {
   goToStep: (step: Step) => void;
+  goToElement: (id: string) => void;
   getCanvasViewport: () => { left: number; top: number; width: number; height: number } | null;
   fitAllSteps: (steps: Step[]) => void;
 }
@@ -223,7 +226,7 @@ interface DragState {
 }
 
 export const EditingCanvas = forwardRef<EditingCanvasHandle, Props>(function EditingCanvas(
-  { svgContent, viewBox: vb, steps, selectedStepIndex, hoveredStepIndex = null, aspectRatio, backgroundColor, onViewportChange },
+  { svgContent, viewBox: vb, steps, selectedStepIndex, hoveredStepIndex = null, aspectRatio, backgroundColor, onViewportChange, hidden, hoveredElementId = null },
   ref
 ) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -247,6 +250,13 @@ export const EditingCanvas = forwardRef<EditingCanvasHandle, Props>(function Edi
 
   // Track container pixel size so we can compute the SVG viewBox.
   const [containerSize, setContainerSize] = useState({ w: 0, h: 0 });
+
+  // Hovered element bounding box in SVG coordinates (null when no valid bbox available).
+  // Computed in useLayoutEffect so the DOM reflects the current CSS (incl. opacity override)
+  // before we call getBoundingClientRect.
+  const [elementSvgBbox, setElementSvgBbox] = useState<{
+    x: number; y: number; w: number; h: number; cx: number; cy: number;
+  } | null>(null);
 
   function cancelAnimation() {
     if (animationIdRef.current !== null) {
@@ -325,6 +335,29 @@ export const EditingCanvas = forwardRef<EditingCanvasHandle, Props>(function Edi
     return () => ro.disconnect();
   }, []);
 
+  // Measure the hovered element's bbox in SVG coordinates after each DOM commit so the CSS
+  // (including the opacity:0.15 override for hidden-but-hovered elements) is already applied.
+  useLayoutEffect(() => {
+    if (!hoveredElementId || !containerRef.current) { setElementSvgBbox(null); return; }
+    const domEl = containerRef.current.querySelector<Element>(`#${CSS.escape(hoveredElementId)}`);
+    if (!domEl) { setElementSvgBbox(null); return; }
+    const elRect = domEl.getBoundingClientRect();
+    if (elRect.width === 0 && elRect.height === 0) { setElementSvgBbox(null); return; }
+    const containerRect = containerRef.current.getBoundingClientRect();
+    const { zoom: z, panX: px, panY: py } = transformRef.current;
+    const x1 = (elRect.left   - containerRect.left - px) / z + vbRef.current.x;
+    const y1 = (elRect.top    - containerRect.top  - py) / z + vbRef.current.y;
+    const x2 = (elRect.right  - containerRect.left - px) / z + vbRef.current.x;
+    const y2 = (elRect.bottom - containerRect.top  - py) / z + vbRef.current.y;
+    setElementSvgBbox({
+      x: Math.min(x1, x2), y: Math.min(y1, y2),
+      w: Math.abs(x2 - x1), h: Math.abs(y2 - y1),
+      cx: (x1 + x2) / 2, cy: (y1 + y2) / 2,
+    });
+  // Re-run whenever the hovered element, its visibility, or the rendered SVG content changes.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hoveredElementId, hidden, containerSize.w, containerSize.h, svgInner]);
+
   // Debounce user-initiated viewport changes (~1s) into a navigable history (max 100 entries).
   // Changes produced by an ongoing animation are skipped entirely.
   // After history navigation the animation lands exactly on an existing entry — skip that too.
@@ -387,6 +420,35 @@ export const EditingCanvas = forwardRef<EditingCanvasHandle, Props>(function Edi
         zoom: newZoom,
         panX: cw / 2 - (geom.cx - vbRef.current.x) * newZoom,
         panY: ch / 2 - (geom.cy - vbRef.current.y) * newZoom,
+      });
+    },
+    goToElement(id: string) {
+      const el = containerRef.current;
+      if (!el) return;
+      const cw = el.clientWidth;
+      const ch = el.clientHeight;
+      if (!cw || !ch) return;
+      const domEl = el.querySelector<Element>(`#${CSS.escape(id)}`);
+      if (!domEl) return;
+      const elRect = domEl.getBoundingClientRect();
+      const containerRect = el.getBoundingClientRect();
+      const { zoom: z, panX: px, panY: py } = transformRef.current;
+      const x1 = (elRect.left   - containerRect.left - px) / z + vbRef.current.x;
+      const y1 = (elRect.top    - containerRect.top  - py) / z + vbRef.current.y;
+      const x2 = (elRect.right  - containerRect.left - px) / z + vbRef.current.x;
+      const y2 = (elRect.bottom - containerRect.top  - py) / z + vbRef.current.y;
+      const bboxW = Math.abs(x2 - x1);
+      const bboxH = Math.abs(y2 - y1);
+      if (bboxW === 0 && bboxH === 0) return;
+      const bboxCx = (x1 + x2) / 2;
+      const bboxCy = (y1 + y2) / 2;
+      const fitW = bboxW > 0 ? cw / bboxW : Infinity;
+      const fitH = bboxH > 0 ? ch / bboxH : Infinity;
+      const newZoom = clamp(Math.min(fitW, fitH) * 0.85, MIN_ZOOM, MAX_ZOOM);
+      animateTo({
+        zoom: newZoom,
+        panX: cw / 2 - (bboxCx - vbRef.current.x) * newZoom,
+        panY: ch / 2 - (bboxCy - vbRef.current.y) * newZoom,
       });
     },
     getCanvasViewport() {
@@ -822,6 +884,72 @@ export const EditingCanvas = forwardRef<EditingCanvasHandle, Props>(function Edi
     }
   }
 
+  // Element hover highlight — driven by elementSvgBbox stored in useLayoutEffect above.
+  let elementHighlightEl: React.ReactNode = null;
+  let elementHoverArrowEl: React.ReactNode = null;
+  if (elementSvgBbox) {
+    const { x, y, w, h, cx: bboxCx, cy: bboxCy } = elementSvgBbox;
+    elementHighlightEl = (
+      <rect
+        x={x} y={y} width={w} height={h}
+        fill={HOVER_RECT_FILL}
+        stroke={HOVER_RECT_STROKE}
+        strokeWidth={2 / zoom}
+        style={{ pointerEvents: "none" } as React.CSSProperties}
+        data-testid="element-highlight"
+      />
+    );
+    const elemCenterVisible =
+      bboxCx >= visibleLeft && bboxCx <= visibleLeft + visibleW &&
+      bboxCy >= visibleTop  && bboxCy <= visibleTop  + visibleH;
+    if (!elemCenterVisible) {
+      const visCx = visibleLeft + visibleW / 2;
+      const visCy = visibleTop  + visibleH / 2;
+      const dx = bboxCx - visCx;
+      const dy = bboxCy - visCy;
+      const len = Math.hypot(dx, dy);
+      if (len > 0) {
+        const ux = dx / len;
+        const uy = dy / len;
+        const edge = rayToRectEdge(visCx, visCy, ux, uy, visibleLeft, visibleTop, visibleLeft + visibleW, visibleTop + visibleH);
+        const margin    = 22 / zoom;
+        const arrowLen  = 48 / zoom;
+        const arrowHead = 15 / zoom;
+        const strokeW   =  5 / zoom;
+        const wobble    = 10 / zoom;
+        const tipX = edge.x - ux * margin;
+        const tipY = edge.y - uy * margin;
+        const angleDeg = Math.atan2(uy, ux) * 180 / Math.PI;
+        elementHoverArrowEl = (
+          <g
+            transform={`translate(${tipX},${tipY}) rotate(${angleDeg})`}
+            style={{ pointerEvents: "none" } as React.CSSProperties}
+            data-testid="element-hover-arrow"
+          >
+            <g>
+              <animateTransform
+                attributeName="transform"
+                type="translate"
+                values={`0 0; ${wobble} 0; 0 0; ${-wobble * 0.25} 0; 0 0`}
+                keyTimes="0; 0.35; 0.6; 0.8; 1"
+                dur="0.85s"
+                repeatCount="indefinite"
+              />
+              <line
+                x1={-arrowLen} y1={0} x2={-arrowHead * 0.8} y2={0}
+                stroke={HOVER_RECT_STROKE} strokeWidth={strokeW} strokeLinecap="round"
+              />
+              <polygon
+                points={`0,0 ${-arrowHead},${-arrowHead * 0.5} ${-arrowHead},${arrowHead * 0.5}`}
+                fill={HOVER_RECT_STROKE}
+              />
+            </g>
+          </g>
+        );
+      }
+    }
+  }
+
   return (
     <div
       ref={containerRef}
@@ -840,6 +968,7 @@ export const EditingCanvas = forwardRef<EditingCanvasHandle, Props>(function Edi
               tiles — filter/rasterisation buffers stay bounded to tile size, not full SVG extent. */}
           <div style={{ position: "absolute", top: 0, left: 0, width: cw, height: ch, overflow: "hidden" }}>
             <svg
+              data-testid="content-svg"
               style={{
                 position: "absolute",
                 top: 0,
@@ -850,7 +979,13 @@ export const EditingCanvas = forwardRef<EditingCanvasHandle, Props>(function Edi
               width={vb.width * zoom}
               height={vb.height * zoom}
               viewBox={`${vb.x} ${vb.y} ${vb.width} ${vb.height}`}
-              dangerouslySetInnerHTML={{ __html: svgInner }}
+              dangerouslySetInnerHTML={{
+                __html: hidden && hidden.length > 0
+                  ? `<style>${hidden.map(id =>
+                      `#${CSS.escape(id)}{${id === hoveredElementId ? "opacity:0.15" : "display:none"}}`
+                    ).join("")}</style>${svgInner}`
+                  : svgInner,
+              }}
             />
           </div>
           {/* Overlay SVG: always container-sized; viewBox maps SVG coords → screen coords.
@@ -872,6 +1007,8 @@ export const EditingCanvas = forwardRef<EditingCanvasHandle, Props>(function Edi
               {otherRects}
               {selectedRectEl}
               {hoverArrowEl}
+              {elementHighlightEl}
+              {elementHoverArrowEl}
             </g>
           </svg>
           {/* Mini-map: rendered after overlay SVG so it sits on top in stacking order. */}

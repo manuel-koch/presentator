@@ -26,6 +26,7 @@ function App() {
   const [showReloadNotification, setShowReloadNotification] = useState(false);
   const [selectedStepIndex, setSelectedStepIndex] = useState<number | null>(null);
   const [hoveredStepIndex, setHoveredStepIndex] = useState<number | null>(null);
+  const [hoveredElementId, setHoveredElementId] = useState<string | null>(null);
   const canvasRef = useRef<EditingCanvasHandle>(null);
 
   const viewBox = useMemo(
@@ -261,6 +262,8 @@ function App() {
                     elements={namedElements}
                     hidden={selectedStep.hidden}
                     onChange={handleHiddenChange}
+                    onHoverElement={setHoveredElementId}
+                    onGoToElement={(id) => canvasRef.current?.goToElement(id)}
                   />
                 )}
                 <ConfigControls config={config} onChange={updateConfig} />
@@ -279,6 +282,8 @@ function App() {
                 aspectRatio={config?.aspect_ratio ?? "16:9"}
                 backgroundColor={config?.background_color ?? "#000000"}
                 onViewportChange={handleViewportChange}
+                hidden={selectedStep?.hidden ?? []}
+                hoveredElementId={hoveredElementId}
               />
             ) : (
               <div className="svg-viewport" data-testid="svg-viewport">
