@@ -22,6 +22,13 @@ removing the finished tasks from the todo in favor of updated feature descriptio
 - If no feature matches, introduce a new feature from the task content.
 - Create new feature sections, if task doesn't belong to any existing section.
 
+## Edit Mode
+
+- [ ] Checkmark / unmark elements from the list doesn't seem to have any effect.
+- [ ] Hovering over an element in the elements-list should highlight that element in the
+      viewport like the step-viewport highlighting works ( green box, arrow pointing in
+      direction when element is out of current viewport )
+
 ## Presentation Mode
 
 - [ ] Step navigation UI (next / previous)
