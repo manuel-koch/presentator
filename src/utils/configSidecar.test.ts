@@ -96,6 +96,21 @@ steps:
     expect(parseConfig("")).toEqual(defaultConfig());
     expect(parseConfig("---")).toEqual(defaultConfig());
   });
+
+  it("parses exclude_id_pattern when present", () => {
+    const config = parseConfig(`
+aspect_ratio: "16:9"
+background_color: "#000000"
+exclude_id_pattern: "^(bg|helper[-_]).*"
+steps: []
+`);
+    expect(config.exclude_id_pattern).toBe("^(bg|helper[-_]).*");
+  });
+
+  it("omits exclude_id_pattern when not present", () => {
+    const config = parseConfig("steps: []");
+    expect(config).not.toHaveProperty("exclude_id_pattern");
+  });
 });
 
 describe("serializeConfig / parseConfig roundtrip", () => {

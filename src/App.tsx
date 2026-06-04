@@ -34,8 +34,8 @@ function App() {
     [svgFile]
   );
   const namedElements = useMemo(
-    () => (svgFile ? extractNamedElements(svgFile.content) : []),
-    [svgFile]
+    () => (svgFile ? extractNamedElements(svgFile.content, config?.exclude_id_pattern) : []),
+    [svgFile, config?.exclude_id_pattern]
   );
 
   // Reset to editing mode and clear selection whenever a new file is opened.

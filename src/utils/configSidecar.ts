@@ -15,6 +15,7 @@ export function parseConfig(yamlContent: string): PresentationConfig {
     aspect_ratio: (raw.aspect_ratio as string) ?? "16:9",
     background_color: (raw.background_color as string) ?? "#000000",
     transition: raw.transition as TransitionConfig | undefined,
+    ...(raw.exclude_id_pattern !== undefined && { exclude_id_pattern: raw.exclude_id_pattern as string }),
     steps: ((raw.steps as RawStep[]) ?? []).map((s) => ({
       name: s.name as string,
       viewport: s.viewport as Step["viewport"],

@@ -31,15 +31,22 @@ removing the finished tasks from the todo in favor of updated feature descriptio
       transparency, arrow pointing in direction when element is out of current viewport )
 - [x] Action button (right aligned) for each item in the element list to
       "go to viewport", like in steps list.
-- [ ] Filter non-visual elements from the elements list: update `extractNamedElements` to skip
+- [x] Filter non-visual elements from the elements list: update `extractNamedElements` to skip
       elements inside `<defs>`, the root `<svg>` element itself, and elements whose tag name
       contains a namespace prefix (e.g. `sodipodi:namedview`, `inkscape:perspective`) — these
       are structural or metadata elements that are not user-selectable visual content.
-- [ ] Show the elements list as an indented tree mirroring the SVG parent-child hierarchy:
+  - Filter predicate: `el.tagName === "svg"` → skip; `el.closest("defs")` → skip; `el.tagName.includes(":")` → skip
+  - [x] Add optional `exclude_id_pattern` regexp string to top-level YAML config (not UI); applied
+    after structural filtering to let users exclude project-convention IDs (e.g. `"^(bg|helper[-_]).*"`)
+- [x] Show the elements list as an indented tree mirroring the SVG parent-child hierarchy:
       change `extractNamedElements` to return a tree structure instead of a flat list, and
       update `ElementPicker` to render it with visual indentation so parent-child relationships
       (e.g. text → tspan, group → path) are immediately visible.
-
+  - Return type: `SVGElementNode[]` where each node has `{ id: string; depth: number; children: SVGElementNode[] }`
+  - Use `depth` for flat render loop (`paddingLeft: depth * 12px`) — avoids recursive JSX, keeps
+    existing checkbox/hover/goto wiring intact
+  - Replace `querySelectorAll("[id]")` with a recursive DOM tree walk preserving parent-child order
+  - Groups with many children render collapsed by default; toggle chevron expands/collapses subtree
 ## Presentation Mode
 
 - [ ] BUG: Background is not using the color that is configured

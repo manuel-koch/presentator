@@ -1,13 +1,13 @@
 import { useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
-import { extractNamedElements } from "../utils/svgElements";
+import { extractNamedElements, SVGElementNode } from "../utils/svgElements";
 import { hashString } from "../utils/hash";
 
 export interface SvgFile {
   path: string;
   content: string;
-  namedElements: string[];
+  namedElements: SVGElementNode[];
 }
 
 export function useSvgFile() {

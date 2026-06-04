@@ -33,7 +33,7 @@ describe("useSvgFile", () => {
     expect(result.current.svgFile).toMatchObject({
       path: "/path/to/diagram.svg",
       content: SAMPLE_SVG,
-      namedElements: ["box"],
+      namedElements: [{ id: "box", children: [] }],
     });
     expect(result.current.error).toBeNull();
   });
@@ -84,7 +84,7 @@ describe("useSvgFile — reloadFile", () => {
     await act(() => result.current.reloadFile());
 
     expect(result.current.svgFile?.content).toBe(UPDATED_SVG);
-    expect(result.current.svgFile?.namedElements).toEqual(["updated"]);
+    expect(result.current.svgFile?.namedElements).toEqual([{ id: "updated", children: [] }]);
   });
 
   it("skips state update when content hash is unchanged", async () => {
