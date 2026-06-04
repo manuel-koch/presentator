@@ -52,15 +52,14 @@ removing the finished tasks from the todo in favor of updated feature descriptio
 
 ## Tooling
 
-- [ ] add `Makefile` with utility targets
-  - [ ] make target "run-dev" to run debug app: `npm run tauri dev`
-  - [ ] make target "install-deps" to install dependencies: `npm install`
-  - [ ] make target "show-outdated-deps" to show outdated dependencies: `???`
-    - [ ] How to see outdated tauri deps ?
-  - [ ] make target "build-release" to build release app: `npm run tauri build`
-  - [ ] make target "test" to run tests: `npm test`
-    - [ ] there are more commands in the readme related to tests - do we need a
-          make target for all of them ? 
+- [x] add `Makefile` with utility targets
+  - [x] make target "run-dev" to run debug app: `npm run tauri dev`
+  - [x] make target "install-deps" to install dependencies: `npm install`
+  - [x] make target "show-outdated-deps" to show outdated dependencies: `npm outdated` + `cargo outdated`
+    - [x] How to see outdated tauri deps ? — no dedicated tauri CLI command; use `cargo outdated` for Rust deps
+  - [x] make target "build-release" to build release app: `npm run tauri build`
+  - [x] make target "test" to run tests: combines `npm test` and `npm run test:e2e`
+    - [x] decided: no separate targets for test:watch (interactive) or test:coverage
 
 ## Packaging
 
