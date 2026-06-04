@@ -24,7 +24,7 @@ test("renders SVG viewport after file is picked", async ({ page }) => {
 
   await page.getByRole("button", { name: "Open SVG file" }).click();
 
-  await expect(page.getByTestId("svg-viewport")).toBeVisible();
+  await expect(page.getByTestId("editing-canvas")).toBeVisible();
   await expect(page.locator("#background")).toBeAttached();
 });
 
