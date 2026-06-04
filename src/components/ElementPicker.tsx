@@ -82,11 +82,13 @@ export function ElementPicker({ elements, hidden, onChange, onHoverElement, onGo
     }
   }
 
-  // Make this element the only visible one, or restore all if it's already soloed.
   function shiftToggle(id: string) {
     const others = allIds.filter((e) => e !== id);
-    const isAlreadySoloed = !hidden.includes(id) && others.every((e) => hidden.includes(e));
-    onChange(isAlreadySoloed ? [] : others);
+    if (hidden.includes(id)) {
+      onChange(others);
+    } else {
+      onChange([id]);
+    }
   }
 
   function toggleCollapse(id: string) {

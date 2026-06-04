@@ -37,8 +37,8 @@ removing the finished tasks from the todo in favor of updated feature descriptio
   - When window is tall there is more space than steps-list needs, providing more space to
     the elemnt-list of current step
   - Allow steps-list to grow to max 50% of window height and elements-list to use remaining height.
-- [ ] Shift click on an selected element should deselect it and select all other elements.
-- [ ] Shift click on an de-selected element should select it and deselect all other elements.
+- [x] Shift click on an selected element should deselect it and select all other elements.
+- [x] Shift click on an de-selected element should select it and deselect all other elements.
 
 ## Presentation Mode
 

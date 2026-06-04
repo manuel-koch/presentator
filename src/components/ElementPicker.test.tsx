@@ -58,17 +58,17 @@ describe("ElementPicker", () => {
 
   // userEvent.click(el, { shiftKey: true }) does not forward shiftKey to events.
   // The correct v14 API for modifier keys is userEvent.setup() + keyboard hold.
-  it("shift-click on a visible element solos it (hides all others)", async () => {
+  it("shift-click on a visible element hides it and shows all others", async () => {
     const user = userEvent.setup();
     const onChange = vi.fn();
     render(<ElementPicker elements={ELEMENTS} hidden={[]} onChange={onChange} />);
     await user.keyboard("[ShiftLeft>]");
     await user.click(screen.getByRole("checkbox", { name: "slide-1" }));
     await user.keyboard("[/ShiftLeft]");
-    expect(onChange).toHaveBeenCalledWith(["background", "dot"]);
+    expect(onChange).toHaveBeenCalledWith(["slide-1"]);
   });
 
-  it("shift-click on a hidden element solos it (shows only that element)", async () => {
+  it("shift-click on a hidden element shows it and hides all others", async () => {
     const user = userEvent.setup();
     const onChange = vi.fn();
     render(<ElementPicker elements={ELEMENTS} hidden={["background", "dot"]} onChange={onChange} />);
@@ -112,14 +112,14 @@ describe("ElementPicker", () => {
     expect(onHoverElement).toHaveBeenLastCalledWith(null);
   });
 
-  it("shift-click on an already-soloed element restores all", async () => {
+  it("shift-click on a visible element hides it even when all others are already hidden", async () => {
     const user = userEvent.setup();
     const onChange = vi.fn();
     render(<ElementPicker elements={ELEMENTS} hidden={["background", "dot"]} onChange={onChange} />);
     await user.keyboard("[ShiftLeft>]");
     await user.click(screen.getByRole("checkbox", { name: "slide-1" }));
     await user.keyboard("[/ShiftLeft]");
-    expect(onChange).toHaveBeenCalledWith([]);
+    expect(onChange).toHaveBeenCalledWith(["slide-1"]);
   });
 
   describe("tree / collapse behaviour", () => {
@@ -146,15 +146,15 @@ describe("ElementPicker", () => {
       expect(screen.queryByRole("button", { name: /Expand background|Collapse background/ })).not.toBeInTheDocument();
     });
 
-    it("shift-click solos including collapsed children", async () => {
+    it("shift-click on a visible element includes collapsed children in the hidden set", async () => {
       const user = userEvent.setup();
       const onChange = vi.fn();
-      // slide-1 is collapsed so dot is not visible, but shiftToggle must still include it in "others"
+      // slide-1 is collapsed so dot is not visible, but shiftToggle must still include all ids
       render(<ElementPicker elements={ELEMENTS_TREE} hidden={[]} onChange={onChange} />);
       await user.keyboard("[ShiftLeft>]");
       await user.click(screen.getByRole("checkbox", { name: "background" }));
       await user.keyboard("[/ShiftLeft]");
-      expect(onChange).toHaveBeenCalledWith(["slide-1", "dot"]);
+      expect(onChange).toHaveBeenCalledWith(["background"]);
     });
   });
 });
