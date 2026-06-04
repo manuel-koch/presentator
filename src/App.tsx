@@ -314,7 +314,7 @@ function App() {
           </div>
         </div>
       ) : (
-        <div className="editor-layout presentation-layout">
+        <div className="editor-layout presentation-layout" style={{ backgroundColor: config?.background_color ?? "#000000" }}>
           <div className="svg-viewport" data-testid="svg-viewport">
             <div dangerouslySetInnerHTML={{ __html: svgFile.content }} />
           </div>

@@ -42,7 +42,8 @@ removing the finished tasks from the todo in favor of updated feature descriptio
 
 ## Presentation Mode
 
-- [ ] BUG: Background is not using the color that is configured
+- [x] BUG: Background is not using the color that is configured
+
 - [ ] Step navigation UI (next / previous)
 - [ ] Viewport zoom transform per step (D3)
 - [ ] Viewport rotate transform per step (D3)
