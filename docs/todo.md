@@ -47,6 +47,13 @@ removing the finished tasks from the todo in favor of updated feature descriptio
     existing checkbox/hover/goto wiring intact
   - Replace `querySelectorAll("[id]")` with a recursive DOM tree walk preserving parent-child order
   - Groups with many children render collapsed by default; toggle chevron expands/collapses subtree
+- [x] Add step navigation buttons next to the viewport history buttons so that user can move to prev/next step if applicable.
+  - [x] Layout buttons top-centered like: [prev-history] [prev-step] "current-step-title" [next-step] [next-history]
+  - [x] Disable buttons when action is not applicable
+  - [x] Create a new icon for the prev-step / next-step buttons (vertical bar + chevron, media-player skip style)
+  - [x] Using the prev-step / next-step buttons activates that step and shows full step-viewport like
+        the jump-to-viewport button in the step list
+  
 ## Presentation Mode
 
 - [ ] BUG: Background is not using the color that is configured

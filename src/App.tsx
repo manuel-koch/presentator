@@ -282,6 +282,10 @@ function App() {
                 aspectRatio={config?.aspect_ratio ?? "16:9"}
                 backgroundColor={config?.background_color ?? "#000000"}
                 onViewportChange={handleViewportChange}
+                onSelectStep={(index) => {
+                  setSelectedStepIndex(index);
+                  if (config) canvasRef.current?.goToStep(config.steps[index]);
+                }}
                 hidden={selectedStep?.hidden ?? []}
                 hoveredElementId={hoveredElementId}
               />

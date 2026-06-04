@@ -500,6 +500,69 @@ describe("EditingCanvas", () => {
     expect(overlayViewBoxWidth(el)).toBe(widthBefore);
   });
 
+  describe("step navigation buttons", () => {
+    it("renders prev-step and next-step buttons", () => {
+      render(canvas({ steps: [STEP, STEP2], selectedStepIndex: 0 }));
+      expect(screen.getByRole("button", { name: "Go to previous step" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Go to next step" })).toBeInTheDocument();
+    });
+
+    it("both step buttons disabled when no step is selected", () => {
+      render(canvas({ steps: [STEP, STEP2], selectedStepIndex: null }));
+      expect(screen.getByRole("button", { name: "Go to previous step" })).toBeDisabled();
+      expect(screen.getByRole("button", { name: "Go to next step" })).toBeDisabled();
+    });
+
+    it("prev-step disabled and next-step enabled when on first step", () => {
+      render(canvas({ steps: [STEP, STEP2], selectedStepIndex: 0 }));
+      expect(screen.getByRole("button", { name: "Go to previous step" })).toBeDisabled();
+      expect(screen.getByRole("button", { name: "Go to next step" })).not.toBeDisabled();
+    });
+
+    it("prev-step enabled and next-step disabled when on last step", () => {
+      render(canvas({ steps: [STEP, STEP2], selectedStepIndex: 1 }));
+      expect(screen.getByRole("button", { name: "Go to previous step" })).not.toBeDisabled();
+      expect(screen.getByRole("button", { name: "Go to next step" })).toBeDisabled();
+    });
+
+    it("clicking next-step calls onSelectStep with incremented index", () => {
+      const onSelectStep = vi.fn();
+      render(canvas({ steps: [STEP, STEP2], selectedStepIndex: 0, onSelectStep }));
+      fireEvent.click(screen.getByRole("button", { name: "Go to next step" }));
+      expect(onSelectStep).toHaveBeenCalledWith(1);
+    });
+
+    it("clicking prev-step calls onSelectStep with decremented index", () => {
+      const onSelectStep = vi.fn();
+      render(canvas({ steps: [STEP, STEP2], selectedStepIndex: 1, onSelectStep }));
+      fireEvent.click(screen.getByRole("button", { name: "Go to previous step" }));
+      expect(onSelectStep).toHaveBeenCalledWith(0);
+    });
+
+    it("both step buttons disabled when only one step exists", () => {
+      render(canvas({ steps: [STEP], selectedStepIndex: 0 }));
+      expect(screen.getByRole("button", { name: "Go to previous step" })).toBeDisabled();
+      expect(screen.getByRole("button", { name: "Go to next step" })).toBeDisabled();
+    });
+
+    it("shows the current step name in the title label", () => {
+      render(canvas({ steps: [STEP, STEP2], selectedStepIndex: 1 }));
+      expect(screen.getByLabelText("Current step")).toHaveTextContent("Detail");
+    });
+
+    it("shows a dash in the title label when no step is selected", () => {
+      render(canvas({ steps: [STEP, STEP2], selectedStepIndex: null }));
+      expect(screen.getByLabelText("Current step")).toHaveTextContent("—");
+    });
+
+    it("title label updates when selected step changes", () => {
+      const { rerender } = render(canvas({ steps: [STEP, STEP2], selectedStepIndex: 0 }));
+      expect(screen.getByLabelText("Current step")).toHaveTextContent("Overview");
+      rerender(canvas({ steps: [STEP, STEP2], selectedStepIndex: 1 }));
+      expect(screen.getByLabelText("Current step")).toHaveTextContent("Detail");
+    });
+  });
+
   it("calls onViewportChange when an edge hit zone is dragged", () => {
     const onViewportChange = vi.fn();
     render(canvas({ steps: [STEP], selectedStepIndex: 0, onViewportChange }));

@@ -12,6 +12,7 @@ interface Props {
   aspectRatio: string;
   backgroundColor: string;
   onViewportChange: (viewport: Viewport) => void;
+  onSelectStep?: (index: number) => void;
   hidden?: string[];
   hoveredElementId?: string | null;
 }
@@ -52,6 +53,19 @@ const ChevronLeftIcon = (
 const ChevronRightIcon = (
   <svg width="10" height="14" viewBox="0 0 10 14" fill="none" aria-hidden="true">
     <path d="M3 1L8 7L3 13" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+);
+// Step-navigation icons: vertical bar + chevron, visually distinct from the plain history chevrons.
+const StepBackIcon = (
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+    <path d="M2 1v12" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+    <path d="M12 2L6 7l6 5" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+);
+const StepForwardIcon = (
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+    <path d="M12 1v12" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+    <path d="M2 2l6 5-6 5" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
   </svg>
 );
 
@@ -226,7 +240,7 @@ interface DragState {
 }
 
 export const EditingCanvas = forwardRef<EditingCanvasHandle, Props>(function EditingCanvas(
-  { svgContent, viewBox: vb, steps, selectedStepIndex, hoveredStepIndex = null, aspectRatio, backgroundColor, onViewportChange, hidden, hoveredElementId = null },
+  { svgContent, viewBox: vb, steps, selectedStepIndex, hoveredStepIndex = null, aspectRatio, backgroundColor, onViewportChange, onSelectStep, hidden, hoveredElementId = null },
   ref
 ) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -1030,25 +1044,59 @@ export const EditingCanvas = forwardRef<EditingCanvasHandle, Props>(function Edi
               }}
             />
           )}
-          {/* Viewport history prev/next buttons — centred at top edge of canvas. */}
-          <div style={{ position: "absolute", top: 10, left: "50%", transform: "translateX(-50%)", display: "flex", gap: 4 }}>
-            <button
-              disabled={!historyState.canBack}
-              onClick={historyBack}
-              title="Go to previous position"
-              aria-label="Go to previous position"
-              onMouseDown={(e) => e.stopPropagation()}
-              style={navBtnStyle(!historyState.canBack)}
-            >{ChevronLeftIcon}</button>
-            <button
-              disabled={!historyState.canForward}
-              onClick={historyForward}
-              title="Go to next position"
-              aria-label="Go to next position"
-              onMouseDown={(e) => e.stopPropagation()}
-              style={navBtnStyle(!historyState.canForward)}
-            >{ChevronRightIcon}</button>
-          </div>
+          {/* Navigation bar centred at top edge: [prev-history] [prev-step] title [next-step] [next-history] */}
+          {(() => {
+            const canPrevStep = selectedStepIndex !== null && selectedStepIndex > 0;
+            const canNextStep = selectedStepIndex !== null && selectedStepIndex < steps.length - 1;
+            const stepTitle = selectedStepIndex !== null ? (steps[selectedStepIndex]?.name ?? "") : "";
+            return (
+              <div style={{ position: "absolute", top: 10, left: "50%", transform: "translateX(-50%)", display: "flex", gap: 4, alignItems: "center" }}>
+                <button
+                  disabled={!historyState.canBack}
+                  onClick={historyBack}
+                  title="Go to previous position"
+                  aria-label="Go to previous position"
+                  onMouseDown={(e) => e.stopPropagation()}
+                  style={navBtnStyle(!historyState.canBack)}
+                >{ChevronLeftIcon}</button>
+                <button
+                  disabled={!canPrevStep}
+                  onClick={() => canPrevStep && onSelectStep?.(selectedStepIndex! - 1)}
+                  title="Go to previous step"
+                  aria-label="Go to previous step"
+                  onMouseDown={(e) => e.stopPropagation()}
+                  style={navBtnStyle(!canPrevStep)}
+                >{StepBackIcon}</button>
+                <span
+                  aria-label="Current step"
+                  style={{
+                    fontSize: 12, color: stepTitle ? "#ccc" : "transparent",
+                    background: "rgba(40,40,40,0.85)", border: "1px solid rgba(160,160,160,0.6)",
+                    borderRadius: 4, padding: "2px 10px", height: 26, boxSizing: "border-box",
+                    display: "flex", alignItems: "center", whiteSpace: "nowrap",
+                    maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis",
+                    boxShadow: "0 1px 4px rgba(0,0,0,0.5)",
+                  }}
+                >{stepTitle || "—"}</span>
+                <button
+                  disabled={!canNextStep}
+                  onClick={() => canNextStep && onSelectStep?.(selectedStepIndex! + 1)}
+                  title="Go to next step"
+                  aria-label="Go to next step"
+                  onMouseDown={(e) => e.stopPropagation()}
+                  style={navBtnStyle(!canNextStep)}
+                >{StepForwardIcon}</button>
+                <button
+                  disabled={!historyState.canForward}
+                  onClick={historyForward}
+                  title="Go to next position"
+                  aria-label="Go to next position"
+                  onMouseDown={(e) => e.stopPropagation()}
+                  style={navBtnStyle(!historyState.canForward)}
+                >{ChevronRightIcon}</button>
+              </div>
+            );
+          })()}
         </>
       )}
     </div>
