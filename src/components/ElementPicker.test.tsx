@@ -2,8 +2,20 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { vi, describe, it, expect } from "vitest";
 import { ElementPicker } from "./ElementPicker";
+import { SVGElementNode } from "../utils/svgElements";
 
-const ELEMENTS = ["background", "slide-1", "dot"];
+// Flat elements — no collapse behaviour, all items visible by default.
+const ELEMENTS: SVGElementNode[] = [
+  { id: "background", children: [] },
+  { id: "slide-1", children: [] },
+  { id: "dot", children: [] },
+];
+
+// Tree elements — slide-1 has children and starts collapsed.
+const ELEMENTS_TREE: SVGElementNode[] = [
+  { id: "background", children: [] },
+  { id: "slide-1", children: [{ id: "dot", children: [] }] },
+];
 
 describe("ElementPicker", () => {
   it("renders nothing when elements list is empty", () => {
@@ -11,7 +23,7 @@ describe("ElementPicker", () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it("renders a checkbox for each element", () => {
+  it("renders a checkbox for each visible element", () => {
     render(<ElementPicker elements={ELEMENTS} hidden={[]} onChange={() => {}} />);
     expect(screen.getAllByRole("checkbox")).toHaveLength(3);
   });
@@ -108,5 +120,41 @@ describe("ElementPicker", () => {
     await user.click(screen.getByRole("checkbox", { name: "slide-1" }));
     await user.keyboard("[/ShiftLeft]");
     expect(onChange).toHaveBeenCalledWith([]);
+  });
+
+  describe("tree / collapse behaviour", () => {
+    it("hides children of a collapsed node by default", () => {
+      render(<ElementPicker elements={ELEMENTS_TREE} hidden={[]} onChange={() => {}} />);
+      expect(screen.queryByRole("checkbox", { name: "dot" })).not.toBeInTheDocument();
+    });
+
+    it("shows children after expanding a collapsed node", async () => {
+      render(<ElementPicker elements={ELEMENTS_TREE} hidden={[]} onChange={() => {}} />);
+      await userEvent.click(screen.getByRole("button", { name: "Expand slide-1" }));
+      expect(screen.getByRole("checkbox", { name: "dot" })).toBeInTheDocument();
+    });
+
+    it("hides children again after collapsing an expanded node", async () => {
+      render(<ElementPicker elements={ELEMENTS_TREE} hidden={[]} onChange={() => {}} />);
+      await userEvent.click(screen.getByRole("button", { name: "Expand slide-1" }));
+      await userEvent.click(screen.getByRole("button", { name: "Collapse slide-1" }));
+      expect(screen.queryByRole("checkbox", { name: "dot" })).not.toBeInTheDocument();
+    });
+
+    it("renders no collapse button for leaf nodes", () => {
+      render(<ElementPicker elements={ELEMENTS_TREE} hidden={[]} onChange={() => {}} />);
+      expect(screen.queryByRole("button", { name: /Expand background|Collapse background/ })).not.toBeInTheDocument();
+    });
+
+    it("shift-click solos including collapsed children", async () => {
+      const user = userEvent.setup();
+      const onChange = vi.fn();
+      // slide-1 is collapsed so dot is not visible, but shiftToggle must still include it in "others"
+      render(<ElementPicker elements={ELEMENTS_TREE} hidden={[]} onChange={onChange} />);
+      await user.keyboard("[ShiftLeft>]");
+      await user.click(screen.getByRole("checkbox", { name: "background" }));
+      await user.keyboard("[/ShiftLeft]");
+      expect(onChange).toHaveBeenCalledWith(["slide-1", "dot"]);
+    });
   });
 });

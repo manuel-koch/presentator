@@ -325,6 +325,28 @@ button:active {
   cursor: pointer;
 }
 
+.element-item-collapse-btn,
+.element-item-collapse-spacer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+.element-item-collapse-btn {
+  padding: 0;
+  background: transparent;
+  border-color: transparent;
+  color: #666;
+  cursor: pointer;
+}
+
+.element-item:hover .element-item-collapse-btn {
+  color: #999;
+}
+
 .element-item-goto-btn {
   display: flex;
   align-items: center;
