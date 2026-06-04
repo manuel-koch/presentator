@@ -127,7 +127,7 @@ button:active {
   flex-shrink: 0;
   background: var(--surface-panel);
   border-right: 1px solid var(--border-divider);
-  overflow-y: auto;
+  overflow: hidden;
 }
 
 .editor-main {
@@ -163,7 +163,8 @@ button:active {
   position: relative;
   display: flex;
   flex-direction: column;
-  flex: 1;
+  flex: 0 1 auto;
+  max-height: 50vh;
   min-height: 0;
 }
 
@@ -403,7 +404,11 @@ button:active {
 /* Element picker */
 .element-picker {
   border-top: 1px solid var(--border-divider);
-  padding: 0.5rem 0;
+  padding-top: 0.5rem;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .element-picker-title {
@@ -416,7 +421,8 @@ button:active {
 
 .element-picker ul {
   list-style: none;
-  max-height: 160px;
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
   background:
     linear-gradient(to bottom, var(--surface-panel), transparent) top    / 100% 24px no-repeat local,
@@ -502,6 +508,7 @@ button:active {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+  flex-shrink: 0;
 }
 
 .config-field {

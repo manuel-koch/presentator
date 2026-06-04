@@ -33,7 +33,7 @@ removing the finished tasks from the todo in favor of updated feature descriptio
 - [x] Add a button to every step to clone current element-hide list to another step.
   - [x] Provide a popup to select the target step onto which the element-hide should be applied.
   - [x] Create an icon for that element-hide-clone functionality to be used on the button
-- [ ] Allow elements-list of current step to resize to the avail height.
+- [x] Allow elements-list of current step to resize to the avail height.
   - When window is tall there is more space than steps-list needs, providing more space to
     the elemnt-list of current step
   - Allow steps-list to grow to max 50% of window height and elements-list to use remaining height.
