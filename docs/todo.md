@@ -51,6 +51,13 @@ removing the finished tasks from the todo in favor of updated feature descriptio
 - [ ] Enforce fixed aspect ratio; scale viewport to fill screen
 - [ ] Animated transitions between steps
 
+- [ ] What about presentation notes per step ?
+  - Where should we display them ? The main screen is fully dedicated to the presentation.
+    Maybe a 2nd window
+    - Show button to control presentation flow
+    - A text section to show notes
+    - The title of prev / current / next step
+  
 ## Export
 
 - [ ] At a main menu entry to create a standalone html file that provides
