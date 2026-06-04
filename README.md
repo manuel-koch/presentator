@@ -40,16 +40,31 @@ which npm ; npm --version
 
 ## Development
 
-Install dependencies after cloning:
+A `Makefile` provides shortcuts for all common tasks:
+
+| Target | What it does |
+|---|---|
+| `make install-deps` | Install Node and Cargo dependencies |
+| `make run-dev` | Start the app in development mode |
+| `make build-release` | Build a production `.app` bundle |
+| `make test` | Run unit, component, and e2e tests |
+| `make show-outdated-deps` | List outdated npm and Cargo packages |
+| `make upgrade-deps` | Upgrade npm and Cargo packages in-place |
+
+The sections below document the underlying commands for cases where more control is needed.
+
+### Install dependencies
 
 ```sh
-npm install
+make install-deps
+# or: npm install
 ```
 
 ### Run the app (development)
 
 ```sh
-npm run tauri dev
+make run-dev
+# or: npm run tauri dev
 ```
 
 Starts the Vite dev server and launches the Tauri desktop window. The UI hot-reloads on every file save; Rust changes trigger a Tauri rebuild automatically.
@@ -57,12 +72,19 @@ Starts the Vite dev server and launches the Tauri desktop window. The UI hot-rel
 ### Build for production
 
 ```sh
-npm run tauri build
+make build-release
+# or: npm run tauri build
 ```
 
 Compiles the React frontend and the Rust backend, then bundles both into a self-contained macOS `.app` in `src-tauri/target/release/bundle/macos/`.
 
 ## Testing
+
+Run the full test suite (unit + component + e2e) with:
+
+```sh
+make test
+```
 
 ### Unit and component tests
 

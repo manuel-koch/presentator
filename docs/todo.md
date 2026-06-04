@@ -74,6 +74,7 @@ removing the finished tasks from the todo in favor of updated feature descriptio
   - [x] make target "build-release" to build release app: `npm run tauri build`
   - [x] make target "test" to run tests: combines `npm test` and `npm run test:e2e`
     - [x] decided: no separate targets for test:watch (interactive) or test:coverage
+- [x] Update Readme with tooling hints
 - [x] Fix warning when building app:
   - Error Found version mismatched Tauri packages. Make sure the NPM package and
     Rust crate versions are on the same major/minor releases:
