@@ -9,6 +9,55 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+
+  /* --- Surfaces (deep → light) --- */
+  --surface-deep:    #111;       /* canvas, inputs */
+  --surface-app:     #1a1a1a;    /* app root background */
+  --surface-popover: #1e1e1e;    /* floating panels / popups */
+  --surface-hover:   #2a2a2a;    /* hover state */
+  --surface-panel:   #2c2c2c;    /* sidebar and scrollable lists */
+
+  /* --- Borders (subtle → strong) --- */
+  --border-divider:  #333;       /* section separators and panel edges */
+  --border-control:  #444;       /* input and icon-button borders */
+  --border-muted:    #555;       /* secondary button borders */
+  --border-strong:   #666;       /* prominent popover border / faint icons */
+
+  /* --- Text (high → low contrast) --- */
+  --text-emphasis:   #fff;       /* active / selected / headings */
+  --text-body:       #ccc;       /* primary body text */
+  --text-secondary:  #aaa;       /* secondary labels */
+  --text-muted:      #888;       /* muted labels and icons */
+
+  /* --- Accent: blue (selection, active state, navigation) --- */
+  --blue:            #3b82f6;
+  --blue-bg:         #2a3a5c;
+  --blue-bg-active:  #1a2a3a;
+  --blue-border:     #2a4a6a;
+  --blue-light:      #60a5fa;
+
+  /* --- Accent: green (go-to actions, viewports) --- */
+  --green:           #4ade80;
+  --green-bg-active: #1a3a1a;
+  --green-border:    #2a5a2a;
+
+  /* --- Accent: red (destructive actions) --- */
+  --red:             #f87171;
+  --red-bg-active:   #3a2020;
+  --red-border:      #5a3030;
+
+  /* --- Utilities --- */
+  --scroll-glow:     rgba(255, 255, 255, 0.10);
+  --overlay-bg:      rgba(30, 30, 30, 0.92);
+  --shadow-popover:  0 4px 12px rgba(0, 0, 0, 0.6);
+
+  /* --- Primary CTA button --- */
+  --btn-bg:          #396cd8;
+  --btn-bg-hover:    #2a56b8;
+  --btn-bg-active:   #1e3f8a;
+
+  /* --- Error --- */
+  --error:           #ff6b6b;
 }
 
 * {
@@ -33,7 +82,7 @@
 }
 
 .empty-state h1 {
-  color: #f6f6f6;
+  color: var(--text-emphasis);
   font-size: 2rem;
 }
 
@@ -44,22 +93,22 @@ button {
   font-size: 1em;
   font-weight: 500;
   font-family: inherit;
-  color: #ffffff;
-  background-color: #396cd8;
+  color: var(--text-emphasis);
+  background-color: var(--btn-bg);
   cursor: pointer;
   transition: background-color 0.2s, border-color 0.2s;
 }
 
 button:hover {
-  background-color: #2a56b8;
+  background-color: var(--btn-bg-hover);
 }
 
 button:active {
-  background-color: #1e3f8a;
+  background-color: var(--btn-bg-active);
 }
 
 .error {
-  color: #ff6b6b;
+  color: var(--error);
   font-size: 0.9rem;
 }
 
@@ -76,8 +125,8 @@ button:active {
   width: 220px;
   min-width: 180px;
   flex-shrink: 0;
-  background: #2c2c2c;
-  border-right: 1px solid #3a3a3a;
+  background: var(--surface-panel);
+  border-right: 1px solid var(--border-divider);
   overflow-y: auto;
 }
 
@@ -94,7 +143,7 @@ button:active {
   height: 100%;
   position: relative;
   overflow: hidden;
-  background: #111;
+  background: var(--surface-deep);
   cursor: grab;
   outline: none;
 }
@@ -111,6 +160,7 @@ button:active {
 
 /* Step list */
 .step-list {
+  position: relative;
   display: flex;
   flex-direction: column;
   flex: 1;
@@ -122,12 +172,12 @@ button:active {
   align-items: center;
   justify-content: space-between;
   padding: 0.4rem 0.75rem 0.4rem 0.75rem;
-  border-bottom: 1px solid #2a2a2a;
+  border-bottom: 1px solid var(--border-divider);
 }
 
 .step-list-title {
   font-size: 0.75rem;
-  color: #888;
+  color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
@@ -147,19 +197,19 @@ button:active {
   height: 22px;
   padding: 0;
   background: transparent;
-  border-color: #444;
-  color: #888;
+  border-color: var(--border-control);
+  color: var(--text-muted);
 }
 
 .step-list-add-btn:hover {
-  background: #2a2a2a;
-  color: #fff;
+  background: var(--surface-hover);
+  color: var(--text-emphasis);
 }
 
 .step-list-fit-all-btn:hover {
-  background: #1a3a1a;
-  border-color: #2a5a2a;
-  color: #4ade80;
+  background: var(--green-bg-active);
+  border-color: var(--green-border);
+  color: var(--green);
 }
 
 .step-list ul {
@@ -169,11 +219,11 @@ button:active {
   /* Scroll-shadow: local cover gradients hide the fixed light-glow bands at the edges
      when the list is already scrolled to that edge. */
   background:
-    linear-gradient(to bottom, #2c2c2c, transparent) top    / 100% 32px no-repeat local,
-    linear-gradient(to top,    #2c2c2c, transparent) bottom / 100% 32px no-repeat local,
-    linear-gradient(to bottom, rgba(255,255,255,0.10), transparent) top    / 100% 22px no-repeat scroll,
-    linear-gradient(to top,    rgba(255,255,255,0.10), transparent) bottom / 100% 22px no-repeat scroll;
-  background-color: #2c2c2c;
+    linear-gradient(to bottom, var(--surface-panel), transparent) top    / 100% 32px no-repeat local,
+    linear-gradient(to top,    var(--surface-panel), transparent) bottom / 100% 32px no-repeat local,
+    linear-gradient(to bottom, var(--scroll-glow),   transparent) top    / 100% 22px no-repeat scroll,
+    linear-gradient(to top,    var(--scroll-glow),   transparent) bottom / 100% 22px no-repeat scroll;
+  background-color: var(--surface-panel);
 }
 
 .step-item {
@@ -181,7 +231,7 @@ button:active {
   align-items: center;
   padding: 0.45rem 0.5rem 0.45rem 0.75rem;
   cursor: pointer;
-  color: #ccc;
+  color: var(--text-body);
   font-size: 0.875rem;
   user-select: none;
   border-left: 3px solid transparent;
@@ -189,13 +239,13 @@ button:active {
 }
 
 .step-item:hover {
-  background: #2a2a2a;
+  background: var(--surface-hover);
 }
 
 .step-item.selected {
-  background: #2a3a5c;
-  border-left-color: #3b82f6;
-  color: #fff;
+  background: var(--blue-bg);
+  border-left-color: var(--blue);
+  color: var(--text-emphasis);
 }
 
 .step-item.dragging {
@@ -204,11 +254,11 @@ button:active {
 }
 
 .step-item.drop-above {
-  border-top: 2px solid #3b82f6;
+  border-top: 2px solid var(--blue);
 }
 
 .step-item.drop-below {
-  border-bottom: 2px solid #3b82f6;
+  border-bottom: 2px solid var(--blue);
 }
 
 .step-item-name {
@@ -221,9 +271,9 @@ button:active {
 
 .step-item input {
   flex: 1;
-  background: #111;
-  border: 1px solid #3b82f6;
-  color: #fff;
+  background: var(--surface-deep);
+  border: 1px solid var(--blue);
+  color: var(--text-emphasis);
   padding: 0.15em 0.35em;
   font-size: 0.875rem;
   border-radius: 3px;
@@ -241,7 +291,7 @@ button:active {
   padding: 0;
   background: transparent;
   border-color: transparent;
-  color: #888;
+  color: var(--text-muted);
   flex-shrink: 0;
   opacity: 0;
   transition: opacity 0.1s;
@@ -259,33 +309,106 @@ button:active {
 }
 
 .step-item-goto-btn:hover {
-  background: #1a3a1a;
-  border-color: #2a5a2a;
-  color: #4ade80;
+  background: var(--green-bg-active);
+  border-color: var(--green-border);
+  color: var(--green);
 }
 
 .step-item-fit-btn:hover,
 .step-item-duplicate-btn:hover {
-  background: #1a2a3a;
-  border-color: #2a4a6a;
-  color: #60a5fa;
+  background: var(--blue-bg-active);
+  border-color: var(--blue-border);
+  color: var(--blue-light);
 }
 
 .step-item-remove-btn:hover {
-  background: #3a2020;
-  border-color: #5a3030;
-  color: #f87171;
+  background: var(--red-bg-active);
+  border-color: var(--red-border);
+  color: var(--red);
+}
+
+.step-item-clone-hidden-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  background: transparent;
+  border-color: transparent;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+
+.step-item:hover .step-item-clone-hidden-btn,
+.step-item.selected .step-item-clone-hidden-btn {
+  opacity: 1;
+}
+
+.step-item-clone-hidden-btn:hover {
+  background: var(--blue-bg-active);
+  border-color: var(--blue-border);
+  color: var(--blue-light);
+}
+
+.step-clone-popup {
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  outline: 1px solid var(--surface-app);
+  z-index: 100;
+  box-shadow: var(--shadow-popover);
+  padding: 2px 0;
+  max-height: 180px;
+  overflow-y: auto;
+  background:
+    linear-gradient(to bottom, var(--surface-popover), transparent) top    / 100% 24px no-repeat local,
+    linear-gradient(to top,    var(--surface-popover), transparent) bottom / 100% 24px no-repeat local,
+    linear-gradient(to bottom, var(--scroll-glow),     transparent) top    / 100% 16px no-repeat scroll,
+    linear-gradient(to top,    var(--scroll-glow),     transparent) bottom / 100% 16px no-repeat scroll;
+  background-color: var(--surface-popover);
+}
+
+.step-clone-popup-title {
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  padding: 4px 10px 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid var(--border-divider);
+  margin-bottom: 2px;
+}
+
+.step-clone-popup-item {
+  display: block;
+  width: 100%;
+  padding: 5px 10px;
+  text-align: left;
+  background: transparent;
+  border: none;
+  color: var(--text-body);
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.step-clone-popup-item:hover {
+  background: var(--blue-bg);
+  color: var(--text-emphasis);
 }
 
 /* Element picker */
 .element-picker {
-  border-top: 1px solid #333;
+  border-top: 1px solid var(--border-divider);
   padding: 0.5rem 0;
 }
 
 .element-picker-title {
   font-size: 0.75rem;
-  color: #888;
+  color: var(--text-muted);
   padding: 0 0.75rem 0.25rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -296,11 +419,11 @@ button:active {
   max-height: 160px;
   overflow-y: auto;
   background:
-    linear-gradient(to bottom, #2c2c2c, transparent) top    / 100% 24px no-repeat local,
-    linear-gradient(to top,    #2c2c2c, transparent) bottom / 100% 24px no-repeat local,
-    linear-gradient(to bottom, rgba(255,255,255,0.10), transparent) top    / 100% 16px no-repeat scroll,
-    linear-gradient(to top,    rgba(255,255,255,0.10), transparent) bottom / 100% 16px no-repeat scroll;
-  background-color: #2c2c2c;
+    linear-gradient(to bottom, var(--surface-panel), transparent) top    / 100% 24px no-repeat local,
+    linear-gradient(to top,    var(--surface-panel), transparent) bottom / 100% 24px no-repeat local,
+    linear-gradient(to bottom, var(--scroll-glow),   transparent) top    / 100% 16px no-repeat scroll,
+    linear-gradient(to top,    var(--scroll-glow),   transparent) bottom / 100% 16px no-repeat scroll;
+  background-color: var(--surface-panel);
 }
 
 .element-picker li.element-item {
@@ -310,7 +433,7 @@ button:active {
 }
 
 .element-picker li.element-item:hover {
-  background: #2a2a2a;
+  background: var(--surface-hover);
 }
 
 .element-picker li label {
@@ -321,7 +444,7 @@ button:active {
   gap: 0.4rem;
   padding: 0.25rem 0.5rem 0.25rem 0.75rem;
   font-size: 0.8rem;
-  color: #ccc;
+  color: var(--text-body);
   cursor: pointer;
 }
 
@@ -339,12 +462,12 @@ button:active {
   padding: 0;
   background: transparent;
   border-color: transparent;
-  color: #666;
+  color: var(--border-strong);
   cursor: pointer;
 }
 
 .element-item:hover .element-item-collapse-btn {
-  color: #999;
+  color: var(--text-secondary);
 }
 
 .element-item-goto-btn {
@@ -356,7 +479,7 @@ button:active {
   padding: 0;
   background: transparent;
   border-color: transparent;
-  color: #888;
+  color: var(--text-muted);
   flex-shrink: 0;
   opacity: 0;
   transition: opacity 0.1s;
@@ -367,14 +490,14 @@ button:active {
 }
 
 .element-item-goto-btn:hover {
-  background: #1a3a1a;
-  border-color: #2a5a2a;
-  color: #4ade80;
+  background: var(--green-bg-active);
+  border-color: var(--green-border);
+  color: var(--green);
 }
 
 /* Config controls */
 .config-controls {
-  border-top: 1px solid #333;
+  border-top: 1px solid var(--border-divider);
   padding: 0.5rem 0.75rem;
   display: flex;
   flex-direction: column;
@@ -386,13 +509,13 @@ button:active {
   flex-direction: column;
   gap: 0.2rem;
   font-size: 0.8rem;
-  color: #888;
+  color: var(--text-muted);
 }
 
 .config-field input[type="text"] {
-  background: #111;
-  border: 1px solid #444;
-  color: #ccc;
+  background: var(--surface-deep);
+  border: 1px solid var(--border-control);
+  color: var(--text-body);
   padding: 0.2em 0.4em;
   font-size: 0.8rem;
   border-radius: 3px;
@@ -403,8 +526,8 @@ button:active {
   width: 100%;
   height: 28px;
   padding: 2px;
-  background: #111;
-  border: 1px solid #444;
+  background: var(--surface-deep);
+  border: 1px solid var(--border-control);
   border-radius: 3px;
   cursor: pointer;
 }
@@ -434,10 +557,10 @@ button:active {
   align-items: center;
   gap: 0.75rem;
   padding: 0.5rem 1rem;
-  background: rgba(30, 30, 30, 0.92);
-  color: #f6f6f6;
+  background: var(--overlay-bg);
+  color: var(--text-emphasis);
   font-size: 0.875rem;
-  border-bottom: 1px solid #444;
+  border-bottom: 1px solid var(--border-control);
 }
 
 .pending-reload-indicator span {
@@ -451,8 +574,8 @@ button:active {
 
 .pending-reload-indicator button[aria-label="Dismiss"] {
   background: transparent;
-  color: #aaa;
-  border-color: #555;
+  color: var(--text-secondary);
+  border-color: var(--border-muted);
   min-width: 2rem;
 }
 
@@ -465,17 +588,17 @@ button:active {
   align-items: center;
   gap: 0.5rem;
   padding: 0.5rem 0.75rem;
-  background: rgba(30, 30, 30, 0.92);
-  color: #f6f6f6;
+  background: var(--overlay-bg);
+  color: var(--text-emphasis);
   font-size: 0.875rem;
   border-radius: 6px;
-  border: 1px solid #444;
+  border: 1px solid var(--border-control);
 }
 
 .reload-notification button {
   background: transparent;
-  color: #aaa;
-  border-color: #555;
+  color: var(--text-secondary);
+  border-color: var(--border-muted);
   padding: 0.1em 0.4em;
   font-size: 0.875rem;
 }

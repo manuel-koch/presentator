@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Step } from "../types/config";
 
 interface Props {
@@ -14,6 +14,7 @@ interface Props {
   onFitToViewport: (index: number) => void;
   onFitAllToView: () => void;
   onHoverChange: (index: number | null) => void;
+  onCloneHidden: (fromIndex: number, toIndex: number) => void;
 }
 
 function PlusIcon() {
@@ -58,16 +59,54 @@ function FitViewportIcon() {
   );
 }
 
-export function StepList({ steps, selectedIndex, onSelect, onRename, onReorder, onAdd, onRemove, onDuplicate, onGoToViewport, onFitToViewport, onFitAllToView, onHoverChange }: Props) {
+function CopyHiddenIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" aria-hidden>
+      <path d="M1 3h5M1 5.5h5M1 8h5"/>
+      <path d="M8 5.5h3.5M9.5 4l2 1.5-2 1.5"/>
+    </svg>
+  );
+}
+
+export function StepList({ steps, selectedIndex, onSelect, onRename, onReorder, onAdd, onRemove, onDuplicate, onGoToViewport, onFitToViewport, onFitAllToView, onHoverChange, onCloneHidden }: Props) {
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editingName, setEditingName] = useState("");
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
   const [dropPos, setDropPos] = useState<number | null>(null);
+  const [clonePopup, setClonePopup] = useState<{ fromIndex: number; top: number } | null>(null);
   const listRef = useRef<HTMLUListElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const clonePopupRef = useRef<HTMLDivElement>(null);
   const onReorderRef = useRef(onReorder);
   onReorderRef.current = onReorder;
   // Set to true while drag is in progress so the subsequent click event is suppressed.
   const suppressNextClickRef = useRef(false);
+
+  useEffect(() => {
+    if (!clonePopup) return;
+    function onDown(e: MouseEvent) {
+      if (clonePopupRef.current && !clonePopupRef.current.contains(e.target as Node)) {
+        setClonePopup(null);
+      }
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setClonePopup(null);
+    }
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [clonePopup]);
+
+  function openClonePopup(fromIndex: number, e: React.MouseEvent) {
+    e.stopPropagation();
+    if (!containerRef.current) return;
+    const containerRect = containerRef.current.getBoundingClientRect();
+    const btnRect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    setClonePopup({ fromIndex, top: btnRect.bottom - containerRect.top + 2 });
+  }
 
   function getDropPos(clientY: number): number {
     if (!listRef.current) return 0;
@@ -128,7 +167,7 @@ export function StepList({ steps, selectedIndex, onSelect, onRename, onReorder, 
   }
 
   return (
-    <div className="step-list">
+    <div className="step-list" ref={containerRef}>
       <div className="step-list-header">
         <span className="step-list-title">Steps</span>
         <div className="step-list-header-actions">
@@ -210,6 +249,16 @@ export function StepList({ steps, selectedIndex, onSelect, onRename, onReorder, 
               >
                 <DuplicateIcon />
               </button>
+              {steps.length > 1 && (
+                <button
+                  className="step-item-clone-hidden-btn"
+                  aria-label={`Copy visibility list of ${step.name} to another step`}
+                  title="Copy visibility to another step"
+                  onClick={(e) => openClonePopup(index, e)}
+                >
+                  <CopyHiddenIcon />
+                </button>
+              )}
               <button
                 className="step-item-remove-btn"
                 aria-label={`Remove ${step.name}`}
@@ -222,6 +271,22 @@ export function StepList({ steps, selectedIndex, onSelect, onRename, onReorder, 
           );
         })}
       </ul>
+      {clonePopup !== null && (
+        <div ref={clonePopupRef} className="step-clone-popup" style={{ top: clonePopup.top }}>
+          <div className="step-clone-popup-title">Copy visibility to:</div>
+          {steps.map((step, i) =>
+            i === clonePopup.fromIndex ? null : (
+              <button
+                key={i}
+                className="step-clone-popup-item"
+                onClick={() => { onCloneHidden(clonePopup.fromIndex, i); setClonePopup(null); }}
+              >
+                {step.name}
+              </button>
+            )
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -219,6 +219,14 @@ function App() {
     updateConfig({ ...config, steps });
   }
 
+  function handleCloneHidden(fromIndex: number, toIndex: number) {
+    if (!config) return;
+    const steps = config.steps.map((s, i) =>
+      i === toIndex ? { ...s, hidden: [...config.steps[fromIndex].hidden] } : s
+    );
+    updateConfig({ ...config, steps });
+  }
+
   function handleHiddenChange(hidden: string[]) {
     if (!config || selectedStepIndex === null) return;
     const steps = config.steps.map((s, i) =>
@@ -264,6 +272,7 @@ function App() {
                   onGoToViewport={(index) => canvasRef.current?.goToStep(config.steps[index])}
                   onFitToViewport={handleFitToViewport}
                   onFitAllToView={() => canvasRef.current?.fitAllSteps(config.steps)}
+                  onCloneHidden={handleCloneHidden}
                 />
                 {selectedStep && (
                   <ElementPicker
