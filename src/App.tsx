@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useSvgFile } from "./hooks/useSvgFile";
 import { useSidecarConfig } from "./hooks/useSidecarConfig";
 import { useFileWatcher } from "./hooks/useFileWatcher";
@@ -42,6 +43,13 @@ function App() {
   useEffect(() => {
     setMode("editing");
     setSelectedStepIndex(null);
+  }, [svgFile?.path]);
+
+  // Reflect the open file in the native window title.
+  useEffect(() => {
+    const name = svgFile ? svgFile.path.split("/").pop() ?? svgFile.path : null;
+    const title = name ? `Presentator — ${name}` : "Presentator";
+    getCurrentWindow().setTitle(title).catch(() => {});
   }, [svgFile?.path]);
 
   // Keep the Reload menu item enabled only when a file is open.

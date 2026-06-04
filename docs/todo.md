@@ -21,10 +21,11 @@ removing the finished tasks from the todo in favor of updated feature descriptio
 - If a feature matches almost, rephrase the feature to include original and task content.
 - If no feature matches, introduce a new feature from the task content.
 - Create new feature sections, if task doesn't belong to any existing section.
+- Check if other documentation files need to be updated too to stay in-sync and consistent
 
 ## UI
 
-- [ ] Show the current loaded SVG path in the app title
+- [x] Show the current loaded SVG path in the app title
       ( i.e. in the native app title not in a headline in the viewport )
 
 ## Presentation Mode
@@ -33,7 +34,7 @@ removing the finished tasks from the todo in favor of updated feature descriptio
 - [ ] Step navigation UI (next / previous)
 - [ ] Viewport zoom transform per step (D3)
 - [ ] Viewport rotate transform per step (D3)
-- [ ] Show/hide SVG elements per step
+- [ ] Show/hide SVG elements per step according to the hide-list
 - [ ] Enforce fixed aspect ratio; scale viewport to fill screen
 - [ ] Animated transitions between steps
 
