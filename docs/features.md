@@ -11,7 +11,7 @@
 
 * SVG files can be loaded via a native file picker dialog (using the Tauri API)
 * Loaded SVG files are rendered in the main viewport
-* All named SVG elements (identified by their `id` attribute) are parsed and extracted for use in step configuration
+* All visual named SVG elements (identified by their `id` attribute) are parsed and extracted for use in step configuration; structural and metadata elements are automatically excluded (root `<svg>`, elements inside `<defs>`, and namespace-prefixed elements such as `sodipodi:namedview`)
 * SVG files can be loaded from the splash screen on startup or via the main menu
 
 ## Configuration
@@ -21,6 +21,16 @@
 * Config changes are automatically saved back to the sidecar file
 * Configuration includes presentation steps, viewport settings, and show/hide elements per step
 * TypeScript data models define the structure for presentation config and steps (see [config-schema.md](config-schema.md))
+
+## Tooling
+
+* a `Makefile` at the project root provides shortcuts for common development tasks:
+  * `make run-dev` — start the app in development mode (`npm run tauri dev`)
+  * `make install-deps` — install Node and Cargo dependencies (`npm install`)
+  * `make build-release` — compile and bundle a production `.app` (`npm run tauri build`)
+  * `make test` — run the full test suite (unit, component, and e2e tests combined)
+  * `make show-outdated-deps` — list outdated packages from npm and Cargo
+  * `make upgrade-deps` — upgrade npm and Cargo packages in-place
 
 ## Mode Switching
 
@@ -52,8 +62,11 @@
   * each step has a duplicate button (two-rectangles icon, blue hover) that creates a copy of the step inserted directly below the original, with " (Clone)" appended to its name
   * each step has a remove button (trash-can icon, red hover) on the right side for deletion
   * an add button (plus icon) at the top of the list appends a new step with a placeholder name
-* presentation step configuration regarding show/hide of SVG elements can be edited interactively
-  * elements to be shown/hidden can be checked in a per-step configurable list that displays all named SVG elements (name comes from the element `id` attribute); Shift-clicking a checkbox toggles only that element while selecting/deselecting all others
+* presentation step configuration regarding show/hide of SVG elements can be edited interactively via the element picker panel
+  * the picker lists all visual named SVG elements in an indented tree mirroring the SVG parent-child hierarchy; groups with children are collapsed by default and expand/collapse via a chevron button
+  * checking or unchecking an element hides or shows it in the current step's viewport; Shift-clicking a checkbox toggles only that element while selecting/deselecting all others
+  * hovering an element in the list highlights its bounding box on the editing canvas with a semitransparent green overlay; when the element's centre is outside the visible canvas area, an animated green arrow points toward it (same visual as the step-hover arrow)
+  * each element row has a "go to element" button (frame icon, right-aligned) that animates the editing canvas to centre on that element, matching the jump-to-viewport behaviour of the step list
   
 * the viewport used within current step can be modified interactively
   * the editing canvas can be freely zoomed and panned to get an overview of the whole SVG scene
@@ -61,7 +74,7 @@
     * pan by clicking and dragging the canvas (moves the scene like sliding a piece of paper)
     * pan via arrow keys; Shift+arrow uses a larger step size
     * the editing canvas maintains a non-persisted history of viewport positions; a new entry is recorded ~1s after movement stops, skipping entries produced by animations and ignoring changes too small to be perceptible (less than 2% zoom change or less than 20 screen pixels of pan)
-    * two chevron buttons centred at the top edge of the canvas navigate backward and forward through the history with a 2-second ease-in-out animation; each button is disabled when there is no entry available in that direction
+    * a navigation bar centred at the top edge of the canvas contains five controls in order: [prev-history] [prev-step] current-step-title [next-step] [next-history]; the two outer chevron buttons navigate the viewport position history with a 2-second ease-in-out animation; the two inner skip buttons (vertical-bar + chevron, media-player style) move to the previous or next step, activating it and animating the canvas to that step's viewport rectangle; the current step's name is shown as a label between the skip buttons; all buttons are disabled when the corresponding action is not applicable
     * a minimap shows where the current viewport is within the full SVG scene; it uses the editing canvas container's aspect ratio, so it resizes correctly when the window is resized
   * the current step's viewport is visualized as a rectangle overlaid on the editing canvas
     * the rectangle has a customizable border and semitransparent background, with z-index above the SVG content
@@ -90,6 +103,7 @@
   * a main menu entry allows unconditional manual reload of SVG and sidecar on demand
 
 * `aspect_ratio` and `background_color` can be configured via the app UI (stored in the sidecar config)
+* `exclude_id_pattern` can be set in the sidecar YAML (not editable via UI) as a regexp string; IDs matching the pattern are excluded from the element picker — useful for project-convention IDs such as guide layers (e.g. `"^(bg|helper[-_]).*"`); matching IDs can still appear in a step's `hidden` list
 
 ## Future features (not yet decided, for future releases)
 
