@@ -50,9 +50,17 @@ removing the finished tasks from the todo in favor of updated feature descriptio
 - [ ] Show/hide SVG elements per step according to the hide-list
 - [ ] Enforce fixed aspect ratio; scale viewport to fill screen
 - [ ] Animated transitions between steps
+  - [ ] Need UI elements in edit-mode to configure properties of the transition
+    - Should we have a "transition" element between steps or properties of a step are used
+      for the transition between "this" and the "following" step ( would imply that the "last" step has no such transition properties in UI ) ?
+    - [ ] duration
+    - [ ] timing-function ( e.g. linear, ease-in, ease-out, ease-in-out, etc. )
 
 - [ ] What about presentation notes per step ?
-  - Where should we display them ? The main screen is fully dedicated to the presentation.
+  - Where should they be edited ?
+  - Do we need markdown to allow easy format/style of the notes ?
+  - Where should we display them in presentation-mode ?
+    The main screen is fully dedicated to the presentation.
     Maybe a 2nd window
     - Show button to control presentation flow
     - A text section to show notes
