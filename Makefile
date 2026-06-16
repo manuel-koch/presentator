@@ -1,4 +1,4 @@
-.PHONY: run-dev install-deps show-outdated-deps upgrade-deps build-release bundle-macos bundle-macos-dmg test
+.PHONY: run-dev install-deps show-outdated-deps upgrade-deps build-release bundle-macos bundle-macos-dmg generate-icons preview-icon test
 
 run-dev:
 	npm run tauri dev
@@ -16,6 +16,16 @@ upgrade-deps:
 
 build-release:
 	npm run tauri build
+
+generate-icons:
+	npx tauri icon src-tauri/icons/icon-source.svg -o src-tauri/icons
+	cp src-tauri/icons/icon-source.svg public/app-icon.svg
+	# remove platform assets not needed for macOS
+	rm -rf src-tauri/icons/ios src-tauri/icons/android
+	rm -f src-tauri/icons/Square*.png src-tauri/icons/StoreLogo.png
+
+preview-icon: generate-icons
+	qlmanage -p src-tauri/icons/icon.icns
 
 bundle-macos:
 	$(if $(SIGNING_IDENTITY),APPLE_SIGNING_IDENTITY="$(SIGNING_IDENTITY)" )npm run tauri build -- --bundles app

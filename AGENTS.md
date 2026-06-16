@@ -6,6 +6,7 @@ Interactive / dynamic presentation app built from SVG input files, running on ma
 * Architecture decisions: [docs/architecture.md](docs/architecture.md)
 * Config file schema: [docs/config-schema.md](docs/config-schema.md)
 * Implementation tasks: [docs/todo.md](docs/todo.md)
+* App icon design: [docs/app-icon.md](docs/app-icon.md)
 
 ## Development Guideline
 

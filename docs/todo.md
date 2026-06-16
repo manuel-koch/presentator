@@ -30,13 +30,20 @@ removing the finished tasks from the todo in favor of updated feature descriptio
 - [ ] Viewport rotate transform per step (D3)
 - [ ] Show/hide SVG elements per step according to the hide-list
 - [ ] Enforce fixed aspect ratio; scale viewport to fill screen
-- [ ] Animated transitions between steps
+- [ ] Animated zoom/rotation/blend transitions between steps
   - [ ] This does not affect the (fixed) transisiton between steps in edit-mode!
   - [ ] Need UI elements in edit-mode to configure properties of the transition
     - Should we have a "transition" element between steps or properties of a step are used
       for the transition between "this" and the "following" step ( would imply that the "last" step has no such transition properties in UI ) ?
+      But how to get the transition when moving backwards ?
+      If we have a distinct "transition" element between "steps" then going forward/backward
+      from one step to another would simply select the direction in which the configured
+      transitions have to be applied, the config would be the same regardless of direction.
     - [ ] duration
     - [ ] timing-function ( e.g. linear, ease-in, ease-out, ease-in-out, etc. )
+    - [ ] blending-function ( e.g. no blending, linear, ease-in, ease-out, ease-in-out, etc. )
+      - [ ] fade-out elements that are not shown prev/next step
+      - [ ] blend-in elements that are shown in prev/next step
 
 ### Notes
 
@@ -45,10 +52,12 @@ removing the finished tasks from the todo in favor of updated feature descriptio
   - Do we need markdown to allow easy format/style of the notes ?
   - Where should we display them in presentation-mode ?
     The main screen is fully dedicated to the presentation.
-    Maybe a 2nd window
-    - Show button to control presentation flow
-    - A text section to show notes
-    - The title of prev / current / next step
+    Maybe a 2nd window, showing
+    - button to control presentation flow
+    - text section to show notes of current step
+    - title of prev / current / next step
+    - tiny preview of prev / current / next steps viewport
+      ( final state of step, all applicable elements hidden )
 
 ## Export
 
@@ -61,4 +70,12 @@ removing the finished tasks from the todo in favor of updated feature descriptio
 
 ## Packaging
 
-- [ ] App icon and metadata
+- [x] App icon and metadata
+  - [x] Custom SVG icon designed (`src-tauri/icons/icon-source.svg`)
+  - [x] All raster/platform assets generated via `npx tauri icon`
+
+- [ ] Add an about-dialog that shows build related info
+  - [ ] dialog can be started via the standard main menu entry
+  - [ ] app version
+  - [ ] commit hash
+  - [ ] utc build timestamp ( YYY-MM-DD HH:MM UTC )

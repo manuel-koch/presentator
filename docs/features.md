@@ -118,6 +118,8 @@
 * Official Apple notarization (which silences Gatekeeper warnings for all users) requires a paid Apple Developer ID ($99/year) — deliberately not adopted
   * Users bypass Gatekeeper via right-click → Open, or `xattr -rd com.apple.quarantine /path/to/Presentator.app`
 * The DMG uses `create-dmg` in preference to Tauri's built-in DMG bundler for a polished Finder window layout
+* The app icon is a custom SVG design (`src-tauri/icons/icon-source.svg`); all raster sizes and platform formats are generated from it via `make generate-icons`
+* Bundle metadata: category `Productivity`, short description set in `tauri.conf.json`
 
 ## Future features (not yet decided, for future releases)
 

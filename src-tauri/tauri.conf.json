@@ -24,6 +24,8 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "category": "Productivity",
+    "shortDescription": "Step-by-step presentation tool driven by SVG files",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

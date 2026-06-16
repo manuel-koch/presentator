@@ -250,6 +250,7 @@ function App() {
       )}
       {!svgFile ? (
         <div className="empty-state">
+          <img src="/app-icon.svg" alt="Presentator" className="empty-state-icon" />
           <h1>Presentator</h1>
           <button onClick={pickFile}>Open SVG file</button>
           {error && <p className="error">{error}</p>}
