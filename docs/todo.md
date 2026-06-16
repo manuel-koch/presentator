@@ -77,5 +77,15 @@ removing the finished tasks from the todo in favor of updated feature descriptio
 
 ## Packaging
 
-- [ ] macOS app bundle via Tauri
+- [x] macOS app bundle via Tauri
+  - [x] make target `bundle-macos` builds the `.app` bundle
+  - [x] make target `bundle-macos-dmg` wraps it in a polished DMG via `create-dmg`
+        (custom volume icon, sized window, drag-to-Applications layout —
+        preferred over Tauri's plain built-in DMG)
+- [x] Notarization: decided against Apple Developer ID ($99/year); use self-signed key for integrity
+  - [x] make target `bundle-macos` accepts optional `SIGNING_IDENTITY=` to code-sign with any Keychain cert
+  - [x] Fingerprint printed after signed builds for out-of-band verification by users
+
+---
+
 - [ ] App icon and metadata

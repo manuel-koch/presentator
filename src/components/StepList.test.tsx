@@ -36,7 +36,7 @@ function mockItemRects() {
   return vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
     if (this.tagName === "LI") {
       const lis = Array.from(document.querySelectorAll("li"));
-      const i = lis.indexOf(this);
+      const i = lis.findIndex(li => li === this);
       if (i >= 0) {
         const y = i * 50;
         return { top: y, bottom: y + 50, height: 50, left: 0, right: 200, width: 200, x: 0, y, toJSON: () => ({}) } as DOMRect;

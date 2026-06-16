@@ -9,11 +9,10 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 
 type EventHandler = () => void;
-type UnlistenFn = () => void;
 
 function setupListenMock() {
   let handler: EventHandler | null = null;
-  const unlisten = vi.fn<[], void>();
+  const unlisten = vi.fn<() => void>();
 
   vi.mocked(listen).mockImplementation(async (_event, h) => {
     handler = h as EventHandler;
