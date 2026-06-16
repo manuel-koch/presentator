@@ -15,6 +15,7 @@ import { ElementPicker } from "./components/ElementPicker";
 import { ConfigControls } from "./components/ConfigControls";
 import { PendingReloadIndicator } from "./components/PendingReloadIndicator";
 import { ReloadNotification } from "./components/ReloadNotification";
+import { AboutDialog } from "./components/AboutDialog";
 import type { AppMode } from "./types/mode";
 import type { Step, Viewport } from "./types/config";
 import "./App.css";
@@ -25,6 +26,7 @@ function App() {
   const [mode, setMode] = useState<AppMode>("editing");
   const [pendingReload, setPendingReload] = useState(false);
   const [showReloadNotification, setShowReloadNotification] = useState(false);
+  const [showAbout, setShowAbout] = useState(false);
   const [selectedStepIndex, setSelectedStepIndex] = useState<number | null>(null);
   const [hoveredStepIndex, setHoveredStepIndex] = useState<number | null>(null);
   const [hoveredElementId, setHoveredElementId] = useState<string | null>(null);
@@ -67,6 +69,12 @@ function App() {
     const unlisten = listen<string>("menu-set-mode", (event) => {
       setMode(event.payload as AppMode);
     });
+    return () => { unlisten.then((fn) => fn()); };
+  }, []);
+
+  // Handle "About Presentator…" from the app menu.
+  useEffect(() => {
+    const unlisten = listen("menu-about", () => { setShowAbout(true); });
     return () => { unlisten.then((fn) => fn()); };
   }, []);
 
@@ -239,6 +247,7 @@ function App() {
 
   return (
     <main className="app">
+      {showAbout && <AboutDialog onClose={() => setShowAbout(false)} />}
       {showReloadNotification && (
         <ReloadNotification onDismiss={() => setShowReloadNotification(false)} />
       )}

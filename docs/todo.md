@@ -74,8 +74,8 @@ removing the finished tasks from the todo in favor of updated feature descriptio
   - [x] Custom SVG icon designed (`src-tauri/icons/icon-source.svg`)
   - [x] All raster/platform assets generated via `npx tauri icon`
 
-- [ ] Add an about-dialog that shows build related info
-  - [ ] dialog can be started via the standard main menu entry
-  - [ ] app version
-  - [ ] commit hash
-  - [ ] utc build timestamp ( YYY-MM-DD HH:MM UTC )
+- [x] Add an about-dialog that shows build related info
+  - [x] dialog can be started via the standard main menu entry
+  - [x] app version
+  - [x] commit hash
+  - [x] utc build timestamp ( YYY-MM-DD HH:MM UTC )

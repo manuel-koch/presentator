@@ -88,6 +88,9 @@ pub fn run() {
         .setup(|app| {
             use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
 
+            let about = MenuItem::with_id(app, "about", "About Presentator…", true, None::<&str>)?;
+            let app_menu = Submenu::with_items(app, "Presentator", true, &[&about])?;
+
             let open_svg = MenuItem::with_id(
                 app,
                 "open-svg",
@@ -129,7 +132,7 @@ pub fn run() {
             let view_menu =
                 Submenu::with_items(app, "View", true, &[&editing, &presentation])?;
 
-            let menu = Menu::with_items(app, &[&file_menu, &view_menu])?;
+            let menu = Menu::with_items(app, &[&app_menu, &file_menu, &view_menu])?;
             app.set_menu(menu)?;
 
             *app.state::<ModeMenuState>().lock().unwrap() =
@@ -137,6 +140,9 @@ pub fn run() {
 
             app.on_menu_event(|app, event| {
                 match event.id().0.as_str() {
+                    "about" => {
+                        let _ = app.emit("menu-about", ());
+                    }
                     "open-svg" => {
                         let _ = app.emit("menu-open-svg", ());
                     }
