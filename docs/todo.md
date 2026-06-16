@@ -23,26 +23,7 @@ removing the finished tasks from the todo in favor of updated feature descriptio
 - Create new feature sections, if task doesn't belong to any existing section.
 - Check if other documentation files need to be updated too to stay in-sync and consistent
 
-## UI
-
-- [x] Show the current loaded SVG path in the app title
-      ( i.e. in the native app title not in a headline in the viewport )
-
-## Edit Mode
-
-- [x] Add a button to every step to clone current element-hide list to another step.
-  - [x] Provide a popup to select the target step onto which the element-hide should be applied.
-  - [x] Create an icon for that element-hide-clone functionality to be used on the button
-- [x] Allow elements-list of current step to resize to the avail height.
-  - When window is tall there is more space than steps-list needs, providing more space to
-    the elemnt-list of current step
-  - Allow steps-list to grow to max 50% of window height and elements-list to use remaining height.
-- [x] Shift click on an selected element should deselect it and select all other elements.
-- [x] Shift click on an de-selected element should select it and deselect all other elements.
-
 ## Presentation Mode
-
-- [x] BUG: Background is not using the color that is configured
 
 - [ ] Step navigation UI (next / previous)
 - [ ] Viewport zoom transform per step (D3)
@@ -50,11 +31,14 @@ removing the finished tasks from the todo in favor of updated feature descriptio
 - [ ] Show/hide SVG elements per step according to the hide-list
 - [ ] Enforce fixed aspect ratio; scale viewport to fill screen
 - [ ] Animated transitions between steps
+  - [ ] This does not affect the (fixed) transisiton between steps in edit-mode!
   - [ ] Need UI elements in edit-mode to configure properties of the transition
     - Should we have a "transition" element between steps or properties of a step are used
       for the transition between "this" and the "following" step ( would imply that the "last" step has no such transition properties in UI ) ?
     - [ ] duration
     - [ ] timing-function ( e.g. linear, ease-in, ease-out, ease-in-out, etc. )
+
+### Notes
 
 - [ ] What about presentation notes per step ?
   - Where should they be edited ?
@@ -65,7 +49,7 @@ removing the finished tasks from the todo in favor of updated feature descriptio
     - Show button to control presentation flow
     - A text section to show notes
     - The title of prev / current / next step
-  
+
 ## Export
 
 - [ ] At a main menu entry to create a standalone html file that provides
@@ -76,16 +60,5 @@ removing the finished tasks from the todo in favor of updated feature descriptio
   - what basic feature should we pick for the first working export results ?
 
 ## Packaging
-
-- [x] macOS app bundle via Tauri
-  - [x] make target `bundle-macos` builds the `.app` bundle
-  - [x] make target `bundle-macos-dmg` wraps it in a polished DMG via `create-dmg`
-        (custom volume icon, sized window, drag-to-Applications layout —
-        preferred over Tauri's plain built-in DMG)
-- [x] Notarization: decided against Apple Developer ID ($99/year); use self-signed key for integrity
-  - [x] make target `bundle-macos` accepts optional `SIGNING_IDENTITY=` to code-sign with any Keychain cert
-  - [x] Fingerprint printed after signed builds for out-of-band verification by users
-
----
 
 - [ ] App icon and metadata

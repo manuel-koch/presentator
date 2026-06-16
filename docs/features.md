@@ -13,6 +13,7 @@
 * Loaded SVG files are rendered in the main viewport
 * All visual named SVG elements (identified by their `id` attribute) are parsed and extracted for use in step configuration; structural and metadata elements are automatically excluded (root `<svg>`, elements inside `<defs>`, and namespace-prefixed elements such as `sodipodi:namedview`)
 * SVG files can be loaded from the splash screen on startup or via the main menu
+* The native application window title reflects the path of the currently loaded SVG file
 
 ## Configuration
 
@@ -29,6 +30,8 @@
   * `make install-deps` — install Node and Cargo dependencies (`npm install`)
   * `make build-release` — compile and bundle a production `.app` (`npm run tauri build`)
   * `make test` — run the full test suite (unit, component, and e2e tests combined)
+  * `make bundle-macos` — build the macOS `.app` bundle; pass `SIGNING_IDENTITY=<keychain-cert-name>` to code-sign with any Keychain certificate and print the SHA256 fingerprint
+  * `make bundle-macos-dmg` — run `bundle-macos` then wrap the `.app` in a distributable DMG via `create-dmg` (custom volume icon, Finder window with drag-to-Applications shortcut)
   * `make show-outdated-deps` — list outdated packages from npm and Cargo
   * `make upgrade-deps` — upgrade npm and Cargo packages in-place
 
@@ -61,6 +64,7 @@
   * drag'n'drop of presentation step in the list can be used to re-order steps
   * each step has a duplicate button (two-rectangles icon, blue hover) that creates a copy of the step inserted directly below the original, with " (Clone)" appended to its name
   * each step has a remove button (trash-can icon, red hover) on the right side for deletion
+  * each step has a clone-hide-list button that copies the current step's element-hide list to a chosen target step; clicking it opens a popup step picker to select the target step
   * an add button (plus icon) at the top of the list appends a new step with a placeholder name
 * presentation step configuration regarding show/hide of SVG elements can be edited interactively via the element picker panel
   * the picker lists all visual named SVG elements in an indented tree mirroring the SVG parent-child hierarchy; groups with children are collapsed by default and expand/collapse via a chevron button
@@ -104,6 +108,16 @@
 
 * `aspect_ratio` and `background_color` can be configured via the app UI (stored in the sidecar config)
 * `exclude_id_pattern` can be set in the sidecar YAML (not editable via UI) as a regexp string; IDs matching the pattern are excluded from the element picker — useful for project-convention IDs such as guide layers (e.g. `"^(bg|helper[-_]).*"`); matching IDs can still appear in a step's `hidden` list
+
+## Distribution
+
+* macOS distributable assets are produced via `make bundle-macos` (`.app`) and `make bundle-macos-dmg` (`.dmg`)
+* Code-signing with any macOS Keychain certificate is supported by passing `SIGNING_IDENTITY=<cert-name>` to the make targets; no Apple Developer ID required
+  * Self-signed key provides cryptographic integrity: any post-signing tampering of the bundle is detectable via `codesign -v`
+  * The certificate SHA256 fingerprint is printed after a signed build for publication alongside releases, enabling out-of-band verification by users
+* Official Apple notarization (which silences Gatekeeper warnings for all users) requires a paid Apple Developer ID ($99/year) — deliberately not adopted
+  * Users bypass Gatekeeper via right-click → Open, or `xattr -rd com.apple.quarantine /path/to/Presentator.app`
+* The DMG uses `create-dmg` in preference to Tauri's built-in DMG bundler for a polished Finder window layout
 
 ## Future features (not yet decided, for future releases)
 
