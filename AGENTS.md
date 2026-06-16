@@ -20,15 +20,13 @@ Interactive / dynamic presentation app built from SVG input files, running on ma
 Every code change must complete this cycle before the task is considered done:
 
 1. **Implement** — make the change; touch only what the task requires (YAGNI, KISS)
-2. **Run unit tests** — `npm test`; fix every failure before continuing
-3. **Run e2e tests** — `npm run test:e2e`; fix every failure before continuing
-4. **Mark done** — only after all tests are green
+2. **Test** — type-check, unit tests, e2e tests; use `make test`; fix every failure before continuing
+3. **Mark done** — only after all checks are green
 
 **When a test fails after a change:**
 - Check whether the failure is in the *code* or the *test*. Both are bugs.
 - If a component’s `data-testid`, prop type, or public interface changed, update all tests and
   fixtures that reference it — do not leave stale test expectations.
-- Use `make test` to run unit + e2e in one shot before declaring a task complete.
 
 **Lesson learned:** renaming or replacing a component without updating e2e selectors leaves tests
 silently broken. Always grep for `data-testid` values and prop names when refactoring.
