@@ -23,29 +23,36 @@ removing the finished tasks from the todo in favor of updated feature descriptio
 - Create new feature sections, if task doesn't belong to any existing section.
 - Check if other documentation files need to be updated too to stay in-sync and consistent
 
-## Presentation Mode
+## Presentation Mode (basic)
 
 - [ ] Step navigation UI (next / previous)
-- [ ] Viewport zoom transform per step (D3)
-- [ ] Viewport rotate transform per step (D3)
+  - [ ] Keyboard: arrow keys / spacebar advance; Escape exits to editing mode
+  - [ ] Minimal HUD: prev/next buttons at screen edges, auto-hides after a few seconds of inactivity
+- [ ] Viewport zoom + rotate transform per step
+  - CSS-transform approach; same math as the editing canvas (`computeViewportRectGeom`)
+  - No D3 dependency needed
 - [ ] Show/hide SVG elements per step according to the hide-list
-- [ ] Enforce fixed aspect ratio; scale viewport to fill screen
-- [ ] Animated zoom/rotation/blend transitions between steps
-  - [ ] This does not affect the (fixed) transisiton between steps in edit-mode!
-  - [ ] Need UI elements in edit-mode to configure properties of the transition
-    - Should we have a "transition" element between steps or properties of a step are used
-      for the transition between "this" and the "following" step ( would imply that the "last" step has no such transition properties in UI ) ?
-      But how to get the transition when moving backwards ?
-      If we have a distinct "transition" element between "steps" then going forward/backward
-      from one step to another would simply select the direction in which the configured
-      transitions have to be applied, the config would be the same regardless of direction.
-    - [ ] duration
-    - [ ] timing-function ( e.g. linear, ease-in, ease-out, ease-in-out, etc. )
-    - [ ] blending-function ( e.g. no blending, linear, ease-in, ease-out, ease-in-out, etc. )
-      - [ ] fade-out elements that are not shown prev/next step
-      - [ ] blend-in elements that are shown in prev/next step
+  - Inject `<style>` with `display: none` rules for each ID in `step.hidden`
+- [ ] Enforce fixed aspect ratio; scale viewport to fill screen (letterbox / pillarbox as needed)
+- [ ] Animated transitions between steps
+  - Does not affect the (fixed) pan/zoom animation between steps in edit-mode
+  - [ ] Config schema: move transition config off `Step` onto a separate array in `PresentationConfig`
+    - `PresentationConfig.transitions: TransitionConfig[]` with length `steps.length - 1`
+    - `transitions[i]` governs the transition between step `i` and step `i+1`
+    - Forward A→B uses `transitions[A]`; backward B→A uses the same config in reverse
+    - `PresentationConfig.transition` remains as the global default fallback
+    - `Step.transition` is removed; sync the `transitions` array when steps are added, removed, or reordered
+  - [ ] Animation: interpolate viewport center, zoom, rotation in a `requestAnimationFrame` loop
+  - [ ] Edit-mode UI to configure each inter-step transition
+    - Natural place: between step items in the step list, or as a property panel when the gap is selected
+    - [ ] duration (ms)
+    - [ ] timing-function (linear, ease-in, ease-out, ease-in-out)
+  - [ ] Optional element blending (default: instant show/hide, no blending)
+    - When enabled: elements entering or leaving visibility cross-fade during the transition
+    - Driven by the same animation loop as the viewport interpolation (dynamic `<style>` per frame)
+    - [ ] blend easing (linear, ease-in, ease-out, ease-in-out)
 
-### Notes
+## Presentation Mode (notes)
 
 - [ ] What about presentation notes per step ?
   - Where should they be edited ?
