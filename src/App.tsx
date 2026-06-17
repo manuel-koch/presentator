@@ -16,6 +16,7 @@ import { ConfigControls } from "./components/ConfigControls";
 import { PendingReloadIndicator } from "./components/PendingReloadIndicator";
 import { ReloadNotification } from "./components/ReloadNotification";
 import { AboutDialog } from "./components/AboutDialog";
+import { PresentationCanvas } from "./components/PresentationCanvas";
 import type { AppMode } from "./types/mode";
 import type { Step, Viewport } from "./types/config";
 import "./App.css";
@@ -27,6 +28,7 @@ function App() {
   const [pendingReload, setPendingReload] = useState(false);
   const [showReloadNotification, setShowReloadNotification] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
+  const [fullscreenOnPresentation, setFullscreenOnPresentation] = useState(true);
   const [selectedStepIndex, setSelectedStepIndex] = useState<number | null>(null);
   const [hoveredStepIndex, setHoveredStepIndex] = useState<number | null>(null);
   const [hoveredElementId, setHoveredElementId] = useState<string | null>(null);
@@ -72,11 +74,66 @@ function App() {
     return () => { unlisten.then((fn) => fn()); };
   }, []);
 
+  // Ensure a valid step is selected when entering presentation mode.
+  useEffect(() => {
+    if (mode === "presentation" && selectedStepIndex === null && config?.steps.length) {
+      setSelectedStepIndex(0);
+    }
+  }, [mode, selectedStepIndex, config]);
+
+  // Keyboard navigation in presentation mode.
+  // Use a ref so the handler always sees the current index without re-registering on every step change.
+  const selectedStepIndexRef = useRef(selectedStepIndex);
+  selectedStepIndexRef.current = selectedStepIndex;
+
+  useEffect(() => {
+    if (mode !== "presentation") return;
+    const stepCount = config?.steps.length ?? 0;
+    if (!stepCount) return;
+
+    function onKeyDown(e: KeyboardEvent) {
+      const cur = selectedStepIndexRef.current ?? 0;
+      if (e.key === "ArrowRight" || e.key === "ArrowDown" || e.key === " ") {
+        e.preventDefault();
+        setSelectedStepIndex(Math.min(cur + 1, stepCount - 1));
+      } else if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
+        e.preventDefault();
+        setSelectedStepIndex(Math.max(cur - 1, 0));
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        setMode("editing");
+      }
+    }
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [mode, config]);
+
   // Handle "About Presentator…" from the app menu.
   useEffect(() => {
     const unlisten = listen("menu-about", () => { setShowAbout(true); });
     return () => { unlisten.then((fn) => fn()); };
   }, []);
+
+  // Load and sync the "Fullscreen on Presentation" app preference.
+  useEffect(() => {
+    invoke<boolean>("get_fullscreen_on_presentation")
+      .then(setFullscreenOnPresentation)
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const unlisten = listen<boolean>("fullscreen-pref-changed", (e) => {
+      setFullscreenOnPresentation(e.payload);
+    });
+    return () => { unlisten.then((fn) => fn()); };
+  }, []);
+
+  // Enter/exit fullscreen when switching to/from presentation mode.
+  useEffect(() => {
+    if (!fullscreenOnPresentation) return;
+    getCurrentWindow().setFullscreen(mode === "presentation").catch(() => {});
+  }, [mode, fullscreenOnPresentation]);
 
   // Handle "Open SVG…" from the File menu (Cmd+O).
   useEffect(() => {
@@ -323,11 +380,20 @@ function App() {
             )}
           </div>
         </div>
+      ) : viewBox && config?.steps.length ? (
+        <PresentationCanvas
+          svgContent={svgFile.content}
+          viewBox={viewBox}
+          step={config.steps[Math.min(selectedStepIndex ?? 0, config.steps.length - 1)]}
+          aspectRatio={config.aspect_ratio}
+          backgroundColor={config.background_color}
+        />
       ) : (
-        <div className="editor-layout presentation-layout" style={{ backgroundColor: config?.background_color ?? "#000000" }}>
-          <div className="svg-viewport" data-testid="svg-viewport">
-            <div dangerouslySetInnerHTML={{ __html: svgFile.content }} />
-          </div>
+        <div
+          className="presentation-container"
+          style={{ backgroundColor: config?.background_color ?? "#000000" }}
+        >
+          <div dangerouslySetInnerHTML={{ __html: svgFile.content }} />
         </div>
       )}
     </main>

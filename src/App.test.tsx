@@ -7,7 +7,10 @@ vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn() }));
 vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn() }));
 vi.mock("@tauri-apps/api/window", () => ({
-  getCurrentWindow: vi.fn(() => ({ setTitle: vi.fn().mockResolvedValue(undefined) })),
+  getCurrentWindow: vi.fn(() => ({
+    setTitle: vi.fn().mockResolvedValue(undefined),
+    setFullscreen: vi.fn().mockResolvedValue(undefined),
+  })),
 }));
 
 import { invoke } from "@tauri-apps/api/core";

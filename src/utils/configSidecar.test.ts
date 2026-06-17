@@ -24,6 +24,9 @@ background_color: "#ffffff"
 transition:
   duration_ms: 300
   easing: ease-in
+transitions:
+  - duration_ms: 800
+    easing: ease-out
 steps:
   - name: Overview
     viewport:
@@ -38,18 +41,16 @@ steps:
       rotation: 15
     hidden:
       - bg-layer
-    transition:
-      duration_ms: 800
-      easing: ease-out
 `;
     const config = parseConfig(yaml);
     expect(config.aspect_ratio).toBe("16:9");
     expect(config.background_color).toBe("#ffffff");
     expect(config.transition).toEqual({ duration_ms: 300, easing: "ease-in" });
+    expect(config.transitions).toEqual([{ duration_ms: 800, easing: "ease-out" }]);
     expect(config.steps).toHaveLength(2);
     expect(config.steps[0].name).toBe("Overview");
     expect(config.steps[1].hidden).toEqual(["bg-layer"]);
-    expect(config.steps[1].transition).toEqual({ duration_ms: 800, easing: "ease-out" });
+    expect(config.steps[1]).not.toHaveProperty("transition");
   });
 
   it("applies defaults for missing top-level fields", () => {
@@ -127,6 +128,6 @@ describe("serializeConfig / parseConfig roundtrip", () => {
       ],
     };
     const roundtripped = parseConfig(serializeConfig(original));
-    expect(roundtripped).toEqual({ ...original, transition: undefined });
+    expect(roundtripped).toEqual(original);
   });
 });

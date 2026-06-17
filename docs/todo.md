@@ -26,17 +26,17 @@ removing the finished tasks from the todo in favor of updated feature descriptio
 ## Presentation Mode (basic)
 
 - [ ] Step navigation UI (next / previous)
-  - [ ] Keyboard: arrow keys / spacebar advance; Escape exits to editing mode
+  - [x] Keyboard: arrow keys / spacebar advance; Escape exits to editing mode
   - [ ] Minimal HUD: prev/next buttons at screen edges, auto-hides after a few seconds of inactivity
-- [ ] Viewport zoom + rotate transform per step
+- [x] Viewport zoom + rotate transform per step
   - CSS-transform approach; same math as the editing canvas (`computeViewportRectGeom`)
   - No D3 dependency needed
-- [ ] Show/hide SVG elements per step according to the hide-list
+- [x] Show/hide SVG elements per step according to the hide-list
   - Inject `<style>` with `display: none` rules for each ID in `step.hidden`
-- [ ] Enforce fixed aspect ratio; scale viewport to fill screen (letterbox / pillarbox as needed)
+- [x] Enforce fixed aspect ratio; scale viewport to fill screen (letterbox / pillarbox as needed)
 - [ ] Animated transitions between steps
   - Does not affect the (fixed) pan/zoom animation between steps in edit-mode
-  - [ ] Config schema: move transition config off `Step` onto a separate array in `PresentationConfig`
+  - [x] Config schema: move transition config off `Step` onto a separate array in `PresentationConfig`
     - `PresentationConfig.transitions: TransitionConfig[]` with length `steps.length - 1`
     - `transitions[i]` governs the transition between step `i` and step `i+1`
     - Forward A→B uses `transitions[A]`; backward B→A uses the same config in reverse
@@ -52,6 +52,14 @@ removing the finished tasks from the todo in favor of updated feature descriptio
     - Driven by the same animation loop as the viewport interpolation (dynamic `<style>` per frame)
     - [ ] blend easing (linear, ease-in, ease-out, ease-in-out)
 
+## Presentation Mode (pointer)
+
+- [ ] a click in presentation-mode show a click-indicator at the clicked position that has
+      a simple animation ( maybe a small animated circle ? )
+- [ ] drag'n'drop in presentation mode draws an draw-indicator along the moved mouse positions
+      like a pen that write across the presentation-slide ( animated / smooth line drawing )
+- [ ] click-indicator and draw-indicator fade out after a short period
+
 ## Presentation Mode (notes)
 
 - [ ] What about presentation notes per step ?
@@ -65,6 +73,14 @@ removing the finished tasks from the todo in favor of updated feature descriptio
     - title of prev / current / next step
     - tiny preview of prev / current / next steps viewport
       ( final state of step, all applicable elements hidden )
+
+## Application Settings
+
+- [x] "Fullscreen on Presentation" preference
+  - Native checkbox menu item: `View → Fullscreen on Presentation`
+  - Default: enabled
+  - Persisted to `{app_config_dir}/config.json`
+  - When enabled: entering presentation mode → fullscreen; exiting → windowed
 
 ## Export
 

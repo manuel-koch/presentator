@@ -1,4 +1,5 @@
 use std::sync::Mutex;
+use std::path::PathBuf;
 
 use notify::{EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use tauri::{AppHandle, Emitter, Manager, State};
@@ -13,6 +14,49 @@ struct ModeMenuItems {
     presentation: CheckMenuItem<tauri::Wry>,
 }
 type ModeMenuState = Mutex<Option<ModeMenuItems>>;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone)]
+struct AppConfig {
+    #[serde(default = "default_true")]
+    fullscreen_on_presentation: bool,
+}
+
+fn default_true() -> bool { true }
+
+impl Default for AppConfig {
+    fn default() -> Self {
+        Self { fullscreen_on_presentation: true }
+    }
+}
+
+type AppConfigState = Mutex<AppConfig>;
+type FullscreenPrefState = Mutex<Option<CheckMenuItem<tauri::Wry>>>;
+
+fn app_config_path(app: &AppHandle) -> Option<PathBuf> {
+    app.path().app_config_dir().ok().map(|d| d.join("config.json"))
+}
+
+fn load_app_config(app: &AppHandle) -> AppConfig {
+    if let Some(path) = app_config_path(app) {
+        if let Ok(content) = std::fs::read_to_string(&path) {
+            if let Ok(cfg) = serde_json::from_str(&content) {
+                return cfg;
+            }
+        }
+    }
+    AppConfig::default()
+}
+
+fn save_app_config(app: &AppHandle, cfg: &AppConfig) {
+    if let Some(path) = app_config_path(app) {
+        if let Some(dir) = path.parent() {
+            let _ = std::fs::create_dir_all(dir);
+        }
+        if let Ok(content) = serde_json::to_string(cfg) {
+            let _ = std::fs::write(path, content);
+        }
+    }
+}
 
 #[tauri::command]
 fn read_text_file(path: String) -> Result<String, String> {
@@ -77,6 +121,11 @@ fn update_mode_menu(mode: String, state: State<ModeMenuState>) -> Result<(), Str
     Ok(())
 }
 
+#[tauri::command]
+fn get_fullscreen_on_presentation(state: State<AppConfigState>) -> bool {
+    state.lock().unwrap().fullscreen_on_presentation
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -85,8 +134,14 @@ pub fn run() {
         .manage(Mutex::<Option<RecommendedWatcher>>::new(None))
         .manage(ReloadMenuState::new(None))
         .manage(ModeMenuState::new(None))
+        .manage(AppConfigState::new(AppConfig::default()))
+        .manage(FullscreenPrefState::new(None))
         .setup(|app| {
             use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
+
+            // Load persisted app config and replace the default-initialised state.
+            let loaded_config = load_app_config(app.handle());
+            *app.state::<AppConfigState>().lock().unwrap() = loaded_config.clone();
 
             let about = MenuItem::with_id(app, "about", "About Presentator…", true, None::<&str>)?;
             let app_menu = Submenu::with_items(app, "Presentator", true, &[&about])?;
@@ -116,7 +171,7 @@ pub fn run() {
             let editing = CheckMenuItem::with_id(
                 app,
                 "mode-editing",
-                "Editing",
+                "Editing Mode",
                 true,
                 true,
                 None::<&str>,
@@ -129,14 +184,28 @@ pub fn run() {
                 false,
                 Some("CmdOrCtrl+P"),
             )?;
-            let view_menu =
-                Submenu::with_items(app, "View", true, &[&editing, &presentation])?;
+            let view_separator = PredefinedMenuItem::separator(app)?;
+            let fullscreen_pref = CheckMenuItem::with_id(
+                app,
+                "fullscreen-on-presentation",
+                "Fullscreen on Presentation",
+                true,
+                loaded_config.fullscreen_on_presentation,
+                None::<&str>,
+            )?;
+            let view_menu = Submenu::with_items(
+                app,
+                "View",
+                true,
+                &[&editing, &presentation, &view_separator, &fullscreen_pref],
+            )?;
 
             let menu = Menu::with_items(app, &[&app_menu, &file_menu, &view_menu])?;
             app.set_menu(menu)?;
 
             *app.state::<ModeMenuState>().lock().unwrap() =
                 Some(ModeMenuItems { editing, presentation });
+            *app.state::<FullscreenPrefState>().lock().unwrap() = Some(fullscreen_pref);
 
             app.on_menu_event(|app, event| {
                 match event.id().0.as_str() {
@@ -170,6 +239,23 @@ pub fn run() {
                             let _ = app.emit("menu-set-mode", mode);
                         }
                     }
+                    "fullscreen-on-presentation" => {
+                        let pref_state = app.state::<FullscreenPrefState>();
+                        let enabled = pref_state
+                            .lock().unwrap()
+                            .as_ref()
+                            .and_then(|item| item.is_checked().ok())
+                            .unwrap_or(true);
+                        {
+                            let cfg_state = app.state::<AppConfigState>();
+                            let mut cfg = cfg_state.lock().unwrap();
+                            cfg.fullscreen_on_presentation = enabled;
+                        }
+                        let cfg_state = app.state::<AppConfigState>();
+                        let cfg_snapshot = cfg_state.lock().unwrap().clone();
+                        save_app_config(app, &cfg_snapshot);
+                        let _ = app.emit("fullscreen-pref-changed", enabled);
+                    }
                     _ => {}
                 }
             });
@@ -182,7 +268,8 @@ pub fn run() {
             start_watching,
             stop_watching,
             set_reload_enabled,
-            update_mode_menu
+            update_mode_menu,
+            get_fullscreen_on_presentation
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

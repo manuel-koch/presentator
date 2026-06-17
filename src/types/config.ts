@@ -13,13 +13,13 @@ export interface Step {
   name: string;
   viewport: Viewport;
   hidden: string[];
-  transition?: TransitionConfig;
 }
 
 export interface PresentationConfig {
   aspect_ratio: string;
   background_color: string;
   transition?: TransitionConfig;
+  transitions?: TransitionConfig[];
   exclude_id_pattern?: string;
   steps: Step[];
 }
