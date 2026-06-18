@@ -18,7 +18,7 @@ import { ReloadNotification } from "./components/ReloadNotification";
 import { AboutDialog } from "./components/AboutDialog";
 import { PresentationCanvas } from "./components/PresentationCanvas";
 import type { AppMode } from "./types/mode";
-import type { Step, Viewport } from "./types/config";
+import type { Step, TransitionConfig, Viewport } from "./types/config";
 import "./App.css";
 
 function App() {
@@ -33,6 +33,8 @@ function App() {
   const [hoveredStepIndex, setHoveredStepIndex] = useState<number | null>(null);
   const [hoveredElementId, setHoveredElementId] = useState<string | null>(null);
   const canvasRef = useRef<EditingCanvasHandle>(null);
+  // Tracks the previous presentation step index so we can look up the applicable TransitionConfig.
+  const prevPresentationStepIndexRef = useRef<number | null>(null);
 
   const viewBox = useMemo(
     () => (svgFile ? parseSvgViewBox(svgFile.content) : null),
@@ -300,6 +302,27 @@ function App() {
     updateConfig({ ...config, steps });
   }
 
+  // Compute which TransitionConfig applies for the most-recent step navigation.
+  // Read prevPresentationStepIndexRef.current here (before the useEffect updates it) so we
+  // see the previous index during this render cycle.
+  const presentationTransition = useMemo<TransitionConfig | undefined>(() => {
+    if (mode !== "presentation") return undefined;
+    const cur = selectedStepIndex;
+    const prev = prevPresentationStepIndexRef.current;
+    if (cur === null || prev === null || cur === prev) return config?.transition;
+    const ti = Math.min(prev, cur);
+    return config?.transitions?.[ti] ?? config?.transition;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedStepIndex, mode, config]);
+
+  // Keep prevPresentationStepIndexRef in sync (runs after each render so the memo above
+  // always reads the previous index, not the current one).
+  useEffect(() => {
+    if (mode === "presentation") {
+      prevPresentationStepIndexRef.current = selectedStepIndex;
+    }
+  }, [selectedStepIndex, mode]);
+
   const selectedStep = config && selectedStepIndex !== null ? config.steps[selectedStepIndex] ?? null : null;
 
   return (
@@ -385,6 +408,7 @@ function App() {
           svgContent={svgFile.content}
           viewBox={viewBox}
           step={config.steps[Math.min(selectedStepIndex ?? 0, config.steps.length - 1)]}
+          transition={presentationTransition}
           aspectRatio={config.aspect_ratio}
           backgroundColor={config.background_color}
         />

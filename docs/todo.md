@@ -27,14 +27,15 @@ removing the finished tasks from the todo in favor of updated feature descriptio
 
 - [ ] Step navigation UI (next / previous)
   - [x] Keyboard: arrow keys / spacebar advance; Escape exits to editing mode
-  - [ ] Minimal HUD: prev/next buttons at screen edges, auto-hides after a few seconds of inactivity
+  - No HUD for now: need to investigate how to show a sidecar window that acts as
+    remote-control for the presentation.
 - [x] Viewport zoom + rotate transform per step
   - CSS-transform approach; same math as the editing canvas (`computeViewportRectGeom`)
   - No D3 dependency needed
 - [x] Show/hide SVG elements per step according to the hide-list
   - Inject `<style>` with `display: none` rules for each ID in `step.hidden`
 - [x] Enforce fixed aspect ratio; scale viewport to fill screen (letterbox / pillarbox as needed)
-- [ ] Animated transitions between steps
+- [x] Animated transitions between steps
   - Does not affect the (fixed) pan/zoom animation between steps in edit-mode
   - [x] Config schema: move transition config off `Step` onto a separate array in `PresentationConfig`
     - `PresentationConfig.transitions: TransitionConfig[]` with length `steps.length - 1`
@@ -42,7 +43,10 @@ removing the finished tasks from the todo in favor of updated feature descriptio
     - Forward A→B uses `transitions[A]`; backward B→A uses the same config in reverse
     - `PresentationConfig.transition` remains as the global default fallback
     - `Step.transition` is removed; sync the `transitions` array when steps are added, removed, or reordered
-  - [ ] Animation: interpolate viewport center, zoom, rotation in a `requestAnimationFrame` loop
+  - [x] Animation: interpolate viewport center, zoom, rotation in a `requestAnimationFrame` loop
+    - Zoom interpolated in log-space (constant multiplicative rate); center compensated so the
+      destination center moves in a straight line on screen, eliminating the "swinging" artifact
+      that arises with naive linear lerp across large zoom changes
   - [ ] Edit-mode UI to configure each inter-step transition
     - Natural place: between step items in the step list, or as a property panel when the gap is selected
     - [ ] duration (ms)
