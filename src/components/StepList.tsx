@@ -1,9 +1,14 @@
 import { useEffect, useRef, useState } from "react";
-import type { Step } from "../types/config";
+import type { Step, TransitionConfig } from "../types/config";
+import { DEFAULT_TRANSITION } from "../types/config";
+
+const EASING_OPTIONS = ["linear", "ease-in", "ease-out", "ease-in-out"] as const;
 
 interface Props {
   steps: Step[];
   selectedIndex: number | null;
+  transitions?: TransitionConfig[];
+  defaultTransition?: TransitionConfig;
   onSelect: (index: number | null) => void;
   onRename: (index: number, name: string) => void;
   onReorder: (fromIndex: number, toIndex: number) => void;
@@ -15,6 +20,7 @@ interface Props {
   onFitAllToView: () => void;
   onHoverChange: (index: number | null) => void;
   onCloneHidden: (fromIndex: number, toIndex: number) => void;
+  onTransitionChange?: (gapIndex: number, tc: TransitionConfig) => void;
 }
 
 function PlusIcon() {
@@ -68,7 +74,7 @@ function CopyHiddenIcon() {
   );
 }
 
-export function StepList({ steps, selectedIndex, onSelect, onRename, onReorder, onAdd, onRemove, onDuplicate, onGoToViewport, onFitToViewport, onFitAllToView, onHoverChange, onCloneHidden }: Props) {
+export function StepList({ steps, selectedIndex, transitions, defaultTransition, onSelect, onRename, onReorder, onAdd, onRemove, onDuplicate, onGoToViewport, onFitToViewport, onFitAllToView, onHoverChange, onCloneHidden, onTransitionChange }: Props) {
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editingName, setEditingName] = useState("");
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
@@ -110,7 +116,8 @@ export function StepList({ steps, selectedIndex, onSelect, onRename, onReorder, 
 
   function getDropPos(clientY: number): number {
     if (!listRef.current) return 0;
-    const items = Array.from(listRef.current.querySelectorAll<HTMLElement>("li"));
+    // Query only step items (not transition rows) so drop indices map to step indices.
+    const items = Array.from(listRef.current.querySelectorAll<HTMLElement>("li.step-item"));
     for (let i = 0; i < items.length; i++) {
       const r = items[i].getBoundingClientRect();
       if (clientY < r.top + r.height / 2) return i;
@@ -182,7 +189,7 @@ export function StepList({ steps, selectedIndex, onSelect, onRename, onReorder, 
         </div>
       </div>
       <ul role="list" aria-label="Steps" ref={listRef}>
-        {steps.map((step, index) => {
+        {steps.flatMap((step, index) => {
           const isDropAbove = draggingIndex !== null && dropPos === index && draggingIndex !== index;
           const isDropBelow = draggingIndex !== null && dropPos === steps.length && index === steps.length - 1;
           const classes = [
@@ -193,9 +200,9 @@ export function StepList({ steps, selectedIndex, onSelect, onRename, onReorder, 
             isDropBelow ? "drop-below" : "",
           ].filter(Boolean).join(" ");
 
-          return (
+          const stepItem = (
             <li
-              key={index}
+              key={`step-${index}`}
               className={classes}
               onMouseEnter={() => onHoverChange(index)}
               onMouseLeave={() => onHoverChange(null)}
@@ -269,6 +276,68 @@ export function StepList({ steps, selectedIndex, onSelect, onRename, onReorder, 
               </button>
             </li>
           );
+
+          // Transition row between this step and the next.
+          if (index < steps.length - 1) {
+            const tc: TransitionConfig = transitions?.[index] ?? defaultTransition ?? DEFAULT_TRANSITION;
+            const update = (patch: Partial<TransitionConfig>) =>
+              onTransitionChange?.(index, { ...tc, ...patch });
+
+            const transitionRow = (
+              <li key={`tr-${index}`} className="transition-item">
+                <div className="transition-item-row">
+                  <span className="transition-item-icon" aria-hidden>↓</span>
+                  <input
+                    type="number"
+                    min={0}
+                    max={60}
+                    step={0.1}
+                    value={tc.duration_ms / 1000}
+                    aria-label={`Transition duration between step ${index + 1} and ${index + 2} in seconds`}
+                    onChange={(e) => {
+                      const v = parseFloat(e.target.value);
+                      if (!isNaN(v) && v >= 0) update({ duration_ms: Math.round(v * 1000) });
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                  <span>s</span>
+                  <select
+                    value={tc.easing}
+                    aria-label={`Transition easing between step ${index + 1} and ${index + 2}`}
+                    onChange={(e) => update({ easing: e.target.value })}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {EASING_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+                  </select>
+                </div>
+                <div className="transition-item-row transition-blend-row">
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={tc.blend ?? false}
+                      onChange={(e) => update({ blend: e.target.checked })}
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                    blend
+                  </label>
+                  {tc.blend && (
+                    <select
+                      value={tc.blend_easing ?? "linear"}
+                      aria-label={`Blend easing between step ${index + 1} and ${index + 2}`}
+                      onChange={(e) => update({ blend_easing: e.target.value })}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {EASING_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+                    </select>
+                  )}
+                </div>
+              </li>
+            );
+
+            return [stepItem, transitionRow];
+          }
+
+          return [stepItem];
         })}
       </ul>
       {clonePopup !== null && (

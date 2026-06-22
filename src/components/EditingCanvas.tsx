@@ -314,8 +314,12 @@ export const EditingCanvas = forwardRef<EditingCanvasHandle, Props>(function Edi
     const openEnd = svgContent.indexOf('>');
     if (openEnd === -1) return '';
     const closeStart = svgContent.lastIndexOf('</svg>');
-    if (closeStart === -1) return svgContent.substring(openEnd + 1);
-    return svgContent.substring(openEnd + 1, closeStart);
+    const raw = closeStart === -1
+      ? svgContent.substring(openEnd + 1)
+      : svgContent.substring(openEnd + 1, closeStart);
+    // Strip display:inline from inline styles — it's the SVG default and Inkscape adds it
+    // everywhere, giving it higher CSS specificity (1,0,0,0) than our #id{display:none} rules.
+    return raw.replace(/display\s*:\s*inline(?![a-z-])\s*;?/gi, '');
   }, [svgContent]);
 
   // Fit SVG to canvas on first render / when viewBox changes.

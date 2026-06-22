@@ -8,6 +8,7 @@ import { useFileWatcher } from "./hooks/useFileWatcher";
 import { sidecarPath } from "./utils/configSidecar";
 import { parseSvgViewBox, parseAspectRatio } from "./utils/svgViewBox";
 import { extractNamedElements } from "./utils/svgElements";
+import { matchesBinding, DEFAULT_KEY_BINDINGS } from "./utils/keyBinding";
 import { EditingCanvas } from "./components/EditingCanvas";
 import type { EditingCanvasHandle } from "./components/EditingCanvas";
 import { StepList } from "./components/StepList";
@@ -16,10 +17,22 @@ import { ConfigControls } from "./components/ConfigControls";
 import { PendingReloadIndicator } from "./components/PendingReloadIndicator";
 import { ReloadNotification } from "./components/ReloadNotification";
 import { AboutDialog } from "./components/AboutDialog";
+import { SettingsDialog } from "./components/SettingsDialog";
+import type { AppSettings } from "./components/SettingsDialog";
 import { PresentationCanvas } from "./components/PresentationCanvas";
 import type { AppMode } from "./types/mode";
 import type { Step, TransitionConfig, Viewport } from "./types/config";
+import { DEFAULT_TRANSITION } from "./types/config";
 import "./App.css";
+
+// Returns the full transitions array for `config`, length = steps.length - 1.
+// Missing entries are filled with the config-level default or DEFAULT_TRANSITION.
+function getTransitions(config: { steps: Step[]; transition?: TransitionConfig; transitions?: TransitionConfig[] }): TransitionConfig[] {
+  const n = Math.max(0, config.steps.length - 1);
+  const fallback = config.transition ?? DEFAULT_TRANSITION;
+  const existing = config.transitions ?? [];
+  return Array.from({ length: n }, (_, i) => existing[i] ?? { ...fallback });
+}
 
 function App() {
   const { svgFile, error, pickFile, reloadFile } = useSvgFile();
@@ -28,7 +41,11 @@ function App() {
   const [pendingReload, setPendingReload] = useState(false);
   const [showReloadNotification, setShowReloadNotification] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
-  const [fullscreenOnPresentation, setFullscreenOnPresentation] = useState(true);
+  const [showSettings, setShowSettings] = useState(false);
+  const [appSettings, setAppSettings] = useState<AppSettings>({
+    fullscreen_on_presentation: true,
+    key_bindings: DEFAULT_KEY_BINDINGS,
+  });
   const [selectedStepIndex, setSelectedStepIndex] = useState<number | null>(null);
   const [hoveredStepIndex, setHoveredStepIndex] = useState<number | null>(null);
   const [hoveredElementId, setHoveredElementId] = useState<string | null>(null);
@@ -87,6 +104,8 @@ function App() {
   // Use a ref so the handler always sees the current index without re-registering on every step change.
   const selectedStepIndexRef = useRef(selectedStepIndex);
   selectedStepIndexRef.current = selectedStepIndex;
+  const appSettingsRef = useRef(appSettings);
+  appSettingsRef.current = appSettings;
 
   useEffect(() => {
     if (mode !== "presentation") return;
@@ -95,10 +114,14 @@ function App() {
 
     function onKeyDown(e: KeyboardEvent) {
       const cur = selectedStepIndexRef.current ?? 0;
-      if (e.key === "ArrowRight" || e.key === "ArrowDown" || e.key === " ") {
+      const bindings = appSettingsRef.current.key_bindings;
+      const nextBindings = bindings["presentation-next-step"] ?? DEFAULT_KEY_BINDINGS["presentation-next-step"];
+      const prevBindings = bindings["presentation-prev-step"] ?? DEFAULT_KEY_BINDINGS["presentation-prev-step"];
+
+      if (nextBindings.some((b) => matchesBinding(e, b))) {
         e.preventDefault();
         setSelectedStepIndex(Math.min(cur + 1, stepCount - 1));
-      } else if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
+      } else if (prevBindings.some((b) => matchesBinding(e, b))) {
         e.preventDefault();
         setSelectedStepIndex(Math.max(cur - 1, 0));
       } else if (e.key === "Escape") {
@@ -117,25 +140,31 @@ function App() {
     return () => { unlisten.then((fn) => fn()); };
   }, []);
 
-  // Load and sync the "Fullscreen on Presentation" app preference.
+  // Handle "Settings…" from the app menu.
   useEffect(() => {
-    invoke<boolean>("get_fullscreen_on_presentation")
-      .then(setFullscreenOnPresentation)
+    const unlisten = listen("menu-settings", () => { setShowSettings(true); });
+    return () => { unlisten.then((fn) => fn()); };
+  }, []);
+
+  // Load app settings on mount and keep them in sync with backend pushes.
+  useEffect(() => {
+    invoke<AppSettings>("get_app_settings")
+      .then((s) => { if (s) setAppSettings(s); })
       .catch(() => {});
   }, []);
 
   useEffect(() => {
-    const unlisten = listen<boolean>("fullscreen-pref-changed", (e) => {
-      setFullscreenOnPresentation(e.payload);
+    const unlisten = listen<AppSettings>("app-settings-changed", (e) => {
+      if (e.payload) setAppSettings(e.payload);
     });
     return () => { unlisten.then((fn) => fn()); };
   }, []);
 
   // Enter/exit fullscreen when switching to/from presentation mode.
   useEffect(() => {
-    if (!fullscreenOnPresentation) return;
+    if (!appSettings.fullscreen_on_presentation) return;
     getCurrentWindow().setFullscreen(mode === "presentation").catch(() => {});
-  }, [mode, fullscreenOnPresentation]);
+  }, [mode, appSettings.fullscreen_on_presentation]);
 
   // Handle "Open SVG…" from the File menu (Cmd+O).
   useEffect(() => {
@@ -176,6 +205,12 @@ function App() {
     setPendingReload(false);
   }
 
+  function handleSaveSettings(newSettings: AppSettings) {
+    invoke("set_app_settings", { settings: newSettings }).catch(() => {});
+    setAppSettings(newSettings);
+    setShowSettings(false);
+  }
+
   // --- Step editing handlers ---
   function handleAddStep() {
     if (!config || !viewBox) return;
@@ -204,7 +239,9 @@ function App() {
       viewport,
       hidden: [],
     };
-    updateConfig({ ...config, steps: [...config.steps, newStep] });
+    const transitions = getTransitions(config);
+    if (config.steps.length > 0) transitions.push({ ...(config.transition ?? DEFAULT_TRANSITION) });
+    updateConfig({ ...config, steps: [...config.steps, newStep], transitions });
     setSelectedStepIndex(config.steps.length);
   }
 
@@ -217,7 +254,11 @@ function App() {
   function handleRemoveStep(index: number) {
     if (!config) return;
     const steps = config.steps.filter((_, i) => i !== index);
-    updateConfig({ ...config, steps });
+    const transitions = getTransitions(config);
+    // Remove the transition that governed the gap around the deleted step.
+    // For step i with N steps: remove transitions[min(i, N-2)] so the array shrinks by 1.
+    if (transitions.length > 0) transitions.splice(Math.min(index, transitions.length - 1), 1);
+    updateConfig({ ...config, steps, transitions });
     if (selectedStepIndex === index) {
       setSelectedStepIndex(steps.length > 0 ? Math.min(index, steps.length - 1) : null);
     } else if (selectedStepIndex !== null && selectedStepIndex > index) {
@@ -230,7 +271,13 @@ function App() {
     const steps = [...config.steps];
     const [moved] = steps.splice(from, 1);
     steps.splice(to, 0, moved);
-    updateConfig({ ...config, steps });
+    const transitions = getTransitions(config);
+    if (transitions.length > 0) {
+      const fromT = Math.min(from, transitions.length - 1);
+      const [movedT] = transitions.splice(fromT, 1);
+      transitions.splice(Math.min(to, transitions.length), 0, movedT);
+    }
+    updateConfig({ ...config, steps, transitions });
     if (selectedStepIndex === from) {
       setSelectedStepIndex(to);
     } else if (selectedStepIndex !== null) {
@@ -260,7 +307,11 @@ function App() {
     };
     const steps = [...config.steps];
     steps.splice(index + 1, 0, clone);
-    updateConfig({ ...config, steps });
+    const transitions = getTransitions(config);
+    // Insert a copy of the transition following the duplicated step (or the default).
+    const template = transitions[index] ?? config.transition ?? DEFAULT_TRANSITION;
+    transitions.splice(index, 0, { ...template });
+    updateConfig({ ...config, steps, transitions });
     setSelectedStepIndex(index + 1);
   }
 
@@ -302,6 +353,13 @@ function App() {
     updateConfig({ ...config, steps });
   }
 
+  function handleTransitionChange(gapIndex: number, tc: TransitionConfig) {
+    if (!config) return;
+    const transitions = getTransitions(config);
+    transitions[gapIndex] = tc;
+    updateConfig({ ...config, transitions });
+  }
+
   // Compute which TransitionConfig applies for the most-recent step navigation.
   // Read prevPresentationStepIndexRef.current here (before the useEffect updates it) so we
   // see the previous index during this render cycle.
@@ -328,6 +386,13 @@ function App() {
   return (
     <main className="app">
       {showAbout && <AboutDialog onClose={() => setShowAbout(false)} />}
+      {showSettings && (
+        <SettingsDialog
+          settings={appSettings}
+          onSave={handleSaveSettings}
+          onCancel={() => setShowSettings(false)}
+        />
+      )}
       {showReloadNotification && (
         <ReloadNotification onDismiss={() => setShowReloadNotification(false)} />
       )}
@@ -352,6 +417,8 @@ function App() {
                 <StepList
                   steps={config.steps}
                   selectedIndex={selectedStepIndex}
+                  transitions={config.transitions}
+                  defaultTransition={config.transition}
                   onSelect={setSelectedStepIndex}
                   onRename={handleRenameStep}
                   onReorder={handleReorderSteps}
@@ -363,6 +430,7 @@ function App() {
                   onFitToViewport={handleFitToViewport}
                   onFitAllToView={() => canvasRef.current?.fitAllSteps(config.steps)}
                   onCloneHidden={handleCloneHidden}
+                  onTransitionChange={handleTransitionChange}
                 />
                 {selectedStep && (
                   <ElementPicker

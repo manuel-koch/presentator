@@ -62,7 +62,8 @@ describe("StepList", () => {
 
   it("marks the selected step with 'selected' class", () => {
     render(<StepList {...mkProps({ selectedIndex: 1 })} />);
-    const items = screen.getAllByRole("listitem");
+    // Filter to step items only — transition rows are also listitems but sit between steps.
+    const items = screen.getAllByRole("listitem").filter((el) => el.classList.contains("step-item"));
     expect(items[1]).toHaveClass("selected");
     expect(items[0]).not.toHaveClass("selected");
     expect(items[2]).not.toHaveClass("selected");
@@ -232,22 +233,26 @@ describe("StepList", () => {
   });
 
   it("calls onReorder with correct indices on drag-and-drop", () => {
-    // Item rects: 0→y0-50, 1→y50-100, 2→y100-150 (midpoints: 25, 75, 125)
+    // mockItemRects assigns y positions by DOM order across all li elements (step items + transition rows).
+    // With 3 steps there are 2 transition rows interleaved, so step items land at:
+    //   step[0]→y0-50, step[1]→y100-150, step[2]→y200-250  (midpoints: 25, 125, 225)
+    // getDropPos queries only li.step-item, so dropPos is computed from those midpoints.
+    // Drag step 0 past the midpoint of step 2 (clientY=240 > 225 → dropPos=3 → to=2).
     mockItemRects();
     const onReorder = vi.fn();
     render(<StepList {...mkProps({ onReorder })} />);
     const items = screen.getAllByRole("listitem");
-    // Drag item 0 to the lower half of item 2 (clientY=140 > midpoint 125 → dropPos=3 → to=2)
     fireEvent.mouseDown(items[0], { button: 0, clientY: 25 });
-    fireEvent.mouseMove(window, { clientY: 140 });
-    fireEvent.mouseUp(window, { clientY: 140 });
+    fireEvent.mouseMove(window, { clientY: 240 });
+    fireEvent.mouseUp(window, { clientY: 240 });
     expect(onReorder).toHaveBeenCalledWith(0, 2);
   });
 
   it("calls onHoverChange with index on mouseenter and null on mouseleave", async () => {
     const onHoverChange = vi.fn();
     render(<StepList {...mkProps({ onHoverChange })} />);
-    const items = screen.getAllByRole("listitem");
+    // Filter to step items only — transition rows sit between steps and have no hover handler.
+    const items = screen.getAllByRole("listitem").filter((el) => el.classList.contains("step-item"));
     await userEvent.hover(items[1]);
     expect(onHoverChange).toHaveBeenCalledWith(1);
     await userEvent.unhover(items[1]);

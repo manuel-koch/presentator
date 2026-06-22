@@ -1,7 +1,11 @@
 export interface TransitionConfig {
   duration_ms: number;
   easing: string;
+  blend?: boolean;
+  blend_easing?: string;
 }
+
+export const DEFAULT_TRANSITION: TransitionConfig = { duration_ms: 800, easing: "ease-in-out" };
 
 export interface Viewport {
   center: [number, number];

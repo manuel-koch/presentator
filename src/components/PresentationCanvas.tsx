@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Step, TransitionConfig, Viewport } from "../types/config";
+import { DEFAULT_TRANSITION } from "../types/config";
 import type { ViewBox } from "../utils/svgViewBox";
 import { parseAspectRatio } from "../utils/svgViewBox";
-
-const DEFAULT_TRANSITION: TransitionConfig = { duration_ms: 600, easing: "ease-in-out" };
 
 function applyEasing(easing: string, t: number): number {
   switch (easing) {
@@ -20,6 +19,56 @@ function applyEasing(easing: string, t: number): number {
 function shortestRotDelta(from: number, to: number): number {
   const delta = ((to - from) % 360 + 360) % 360;
   return delta > 180 ? delta - 360 : delta;
+}
+
+function buildStaticHiddenStyle(hidden: string[]): string {
+  if (hidden.length === 0) return "";
+  return `<style>${hidden.map((id) => `#${CSS.escape(id)}{display:none}`).join("")}</style>`;
+}
+
+// Compute which element IDs cross visibility during a blend transition.
+// entering: were hidden in the from-step, become visible in the to-step → fade in (opacity 0→1)
+// leaving:  were visible in the from-step, become hidden in the to-step → fade out (opacity 1→0)
+export function computeBlendSets(fromHidden: string[], toHidden: string[]): { entering: string[]; leaving: string[] } {
+  const fromSet = new Set(fromHidden);
+  const toSet = new Set(toHidden);
+  return {
+    entering: fromHidden.filter((id) => !toSet.has(id)),
+    leaving: toHidden.filter((id) => !fromSet.has(id)),
+  };
+}
+
+// Build a per-frame style during a blend transition.
+// entering: IDs becoming visible (were hidden in from-step, visible in to-step) → opacity 0→1
+// leaving:  IDs becoming hidden  (were visible in from-step, hidden in to-step) → opacity 1→0
+// t: linear progress 0→1 (blend has its own easing applied here)
+export function buildBlendStyle(
+  toHidden: string[],
+  entering: string[],
+  leaving: string[],
+  blendEasing: string,
+  t: number,
+): string {
+  const be = applyEasing(blendEasing, t);
+  const enteringSet = new Set(entering);
+  const leavingSet = new Set(leaving);
+  const parts: string[] = [];
+
+  // Permanently hidden: in toHidden but NOT entering/leaving mid-blend.
+  for (const id of toHidden) {
+    if (!enteringSet.has(id) && !leavingSet.has(id)) {
+      parts.push(`#${CSS.escape(id)}{display:none}`);
+    }
+  }
+  // Leaving elements: fade out.
+  for (const id of leaving) {
+    parts.push(`#${CSS.escape(id)}{opacity:${(1 - be).toFixed(4)}}`);
+  }
+  // Entering elements: fade in.
+  for (const id of entering) {
+    parts.push(`#${CSS.escape(id)}{opacity:${be.toFixed(4)}}`);
+  }
+  return parts.length > 0 ? `<style>${parts.join("")}</style>` : "";
 }
 
 interface Props {
@@ -49,23 +98,38 @@ export function PresentationCanvas({ svgContent, viewBox: vb, step, transition, 
     const openEnd = svgContent.indexOf(">");
     if (openEnd === -1) return "";
     const closeStart = svgContent.lastIndexOf("</svg>");
-    if (closeStart === -1) return svgContent.substring(openEnd + 1);
-    return svgContent.substring(openEnd + 1, closeStart);
+    const raw = closeStart === -1
+      ? svgContent.substring(openEnd + 1)
+      : svgContent.substring(openEnd + 1, closeStart);
+    // Strip display:inline from inline styles — it's the SVG default and Inkscape adds it
+    // everywhere, giving it higher CSS specificity (1,0,0,0) than our #id{display:none} rules.
+    return raw.replace(/display\s*:\s*inline(?![a-z-])\s*;?/gi, "");
   }, [svgContent]);
 
-  // Animated viewport: interpolates between step viewports in a rAF loop.
-  // Hidden-element visibility switches instantly on step change; only the viewport is animated.
+  // Viewport animation state.
   const [liveViewport, setLiveViewport] = useState<Viewport>(() => step.viewport);
   const liveViewportRef = useRef<Viewport>(step.viewport);
   const rafRef = useRef<number | null>(null);
-  // Last step.viewport we processed — used to detect real value changes vs. reference changes.
+  // Last step.viewport processed — guards against spurious re-runs when object identity changes.
   const prevTargetRef = useRef<Viewport | null>(null);
 
+  // Hidden-style animation state (updated per frame during blend transitions).
+  const [liveHiddenStyle, setLiveHiddenStyle] = useState<string>(() =>
+    buildStaticHiddenStyle(step.hidden)
+  );
+  // Previous step's hidden list — needed to compute entering/leaving sets for blend.
+  // Always updated first (before viewport guard), so it stays in sync on every render.
+  const prevHiddenRef = useRef<string[]>(step.hidden);
+
   useEffect(() => {
+    const fromHidden = prevHiddenRef.current;
+    const toHidden = step.hidden;
+    prevHiddenRef.current = toHidden;
+
     const target = step.viewport;
     const prev = prevTargetRef.current;
 
-    // Guard against spurious re-runs caused by object identity changes with identical values.
+    // Guard: skip if viewport values haven't actually changed.
     if (
       prev &&
       prev.center[0] === target.center[0] &&
@@ -73,19 +137,24 @@ export function PresentationCanvas({ svgContent, viewBox: vb, step, transition, 
       prev.zoom === target.zoom &&
       prev.rotation === target.rotation
     ) {
+      // Viewport unchanged — but hidden list may have changed (e.g. cloned step with one element toggled).
+      const hiddenSame =
+        fromHidden.length === toHidden.length && fromHidden.every((id, i) => id === toHidden[i]);
+      if (!hiddenSame) setLiveHiddenStyle(buildStaticHiddenStyle(toHidden));
       return;
     }
 
     prevTargetRef.current = target;
 
-    // First display: snap immediately without animation.
+    // First display: snap immediately, no animation.
     if (prev === null) {
       liveViewportRef.current = target;
       setLiveViewport(target);
+      setLiveHiddenStyle(buildStaticHiddenStyle(toHidden));
       return;
     }
 
-    // Cancel any in-progress animation; the next animation starts from wherever we are now.
+    // Cancel any in-progress animation; start from the current animated position.
     if (rafRef.current !== null) {
       cancelAnimationFrame(rafRef.current);
       rafRef.current = null;
@@ -96,17 +165,37 @@ export function PresentationCanvas({ svgContent, viewBox: vb, step, transition, 
     const rotDelta = shortestRotDelta(from.rotation, target.rotation);
     const startTime = performance.now();
 
+    // Determine which elements are crossing visibility during this transition.
+    let entering: string[] = [];
+    let leaving: string[] = [];
+    if (tc.blend) {
+      ({ entering, leaving } = computeBlendSets(fromHidden, toHidden));
+    }
+    const isBlending = entering.length > 0 || leaving.length > 0;
+    const blendEasing = tc.blend_easing ?? "linear";
+
+    // Set initial hidden style before the first frame.
+    if (isBlending) {
+      setLiveHiddenStyle(buildBlendStyle(toHidden, entering, leaving, blendEasing, 0));
+    } else {
+      setLiveHiddenStyle(buildStaticHiddenStyle(toHidden));
+    }
+
     function tick(now: number) {
       const t = Math.min((now - startTime) / tc.duration_ms, 1);
       const e = applyEasing(tc.easing, t);
+
       // Log-space zoom: constant multiplicative speed, no nonlinear surge.
       const interpZoom = from.zoom * Math.pow(target.zoom / from.zoom, e);
-      // Compensated center: keeps the destination center moving in a straight line on screen
-      // toward the screen center, eliminating the "swinging" artifact that arises when naively
-      // interpolating center and zoom independently across a large zoom change.
-      // Derivation: require screen(target.center, t) = lerp(initial_screen_pos, screen_center, e(t))
-      // → center(t) = C1 + (C0−C1)·(1−e)·(Z0/Z1)^e, which reduces to linear lerp when Z0=Z1.
-      const screenFactor = (1 - e) * Math.pow(from.zoom / target.zoom, e);
+      // Compensated center: when zooming in, make the destination center move linearly on screen
+      // (eliminates the "swinging" arc from large zoom changes).
+      // Formula: center(t) = C1 + (C0−C1)·(1−e)·(Z0/Z1)^e
+      // When zooming out (Z0 > Z1), the same formula overshoots and causes a reverse swing;
+      // linear SVG interpolation (1−e) is swing-free in that direction.
+      const screenFactor =
+        from.zoom <= target.zoom
+          ? (1 - e) * Math.pow(from.zoom / target.zoom, e)
+          : 1 - e;
       const vp: Viewport = {
         center: [
           target.center[0] + (from.center[0] - target.center[0]) * screenFactor,
@@ -117,19 +206,24 @@ export function PresentationCanvas({ svgContent, viewBox: vb, step, transition, 
       };
       liveViewportRef.current = vp;
       setLiveViewport(vp);
+
+      if (isBlending) {
+        setLiveHiddenStyle(buildBlendStyle(toHidden, entering, leaving, blendEasing, t));
+      }
+
       if (t < 1) {
         rafRef.current = requestAnimationFrame(tick);
       } else {
         rafRef.current = null;
+        // Snap to final static style so elements use display:none, not opacity:0.
+        if (isBlending) setLiveHiddenStyle(buildStaticHiddenStyle(toHidden));
       }
     }
 
     rafRef.current = requestAnimationFrame(tick);
 
     return () => {
-      if (rafRef.current !== null) {
-        cancelAnimationFrame(rafRef.current);
-      }
+      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, transition]);
@@ -173,11 +267,6 @@ export function PresentationCanvas({ svgContent, viewBox: vb, step, transition, 
   const svgLeft = screenW / 2 - originX;
   const svgTop = screenH / 2 - originY;
 
-  const hiddenStyle =
-    step.hidden.length > 0
-      ? `<style>${step.hidden.map((id) => `#${CSS.escape(id)}{display:none}`).join("")}</style>`
-      : "";
-
   return (
     <div
       ref={containerRef}
@@ -198,7 +287,7 @@ export function PresentationCanvas({ svgContent, viewBox: vb, step, transition, 
           width={svgPixelW}
           height={svgPixelH}
           viewBox={`${vb.x} ${vb.y} ${vb.width} ${vb.height}`}
-          dangerouslySetInnerHTML={{ __html: hiddenStyle + svgInner }}
+          dangerouslySetInnerHTML={{ __html: liveHiddenStyle + svgInner }}
         />
       )}
     </div>
