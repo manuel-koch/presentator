@@ -24,6 +24,15 @@ Every code change must complete this cycle before the task is considered done:
 2. **Test** — type-check, unit tests, e2e tests; use `make test`; fix every failure before continuing
 3. **Mark done** — only after all checks are green
 
+**When delegating to a sub-agent:**
+After a sub-agent returns, explicitly verify its output against this cycle before accepting the result:
+- Did it add tests for every new pure function, utility, or data model it introduced?
+- Do all existing tests still pass (`make test`)?
+- Are there TypeScript or Rust compile errors?
+
+Sub-agents satisfy the checks they are given but are not aware of project-wide guidelines unless
+told. The delegating agent is responsible for the complete cycle, not just the build result.
+
 **When a test fails after a change:**
 - Check whether the failure is in the *code* or the *test*. Both are bugs.
 - If a component’s `data-testid`, prop type, or public interface changed, update all tests and
@@ -39,6 +48,7 @@ silently broken. Always grep for `data-testid` values and prop names when refact
 - SOLID Principles
 - SSOT (Single Source of Truth)
 - YAGNI (You Aren’t Gonna Need It)
+- Clean Code
 - Clean Architecture
 - Minimum Viable Product (MVP)
 - Five Whys (Ohno) — find root cause before fixing
