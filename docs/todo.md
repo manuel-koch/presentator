@@ -95,30 +95,33 @@ removing the finished tasks from the todo in favor of updated feature descriptio
   - Persisted to `{app_config_dir}/config.json`
   - When enabled: entering presentation mode → fullscreen; exiting → windowed
 
-- [ ] Configurable key-bindings for application
-  - [ ] Save key-bindings in `{app_config_dir}/config.json` too
-  - [ ] Use a easy human-readable format to configure a key-binding, like "arrow-left",
+- [x] Configurable key-bindings for application
+  - [x] Save key-bindings in `{app_config_dir}/config.json` too
+  - [x] Use a easy human-readable format to configure a key-binding, like "arrow-left",
         "enter", "shift-n", "esc" ( alias "escape" )
-    - [ ] Possible (optional) modifiers: cmd, ctrl, alt, shift
-    - [ ] Canocical order of modifiers ( if combined ): shift < alt < ctrl < cmd
-    - [ ] hyphen between modifier and key if necessary
-  - [ ] Allow mutliple key-bindings for same action
-  - [ ] The actions to support customizable key-bindings are ( starter for now, may add more later )
-    - [ ] presentation-mode: prev/next step
-  - [ ] A new settings dialog with tabs to adjust application configuration
-    - [ ] Settings dialog can be opened via a main menu entry "Settings"
+    - [x] Possible (optional) modifiers: cmd, ctrl, alt, shift
+    - [x] Canocical order of modifiers ( if combined ): shift < alt < ctrl < cmd
+    - [x] hyphen between modifier and key if necessary
+  - [x] Allow mutliple key-bindings for same action
+  - [x] Actions carry a mode scope: "presentation", "editing", or "global"
+    - [x] Conflicts are only flagged between actions of the same mode, or where either action is "global"
+    - [x] Key-bindings tab groups actions by mode with a section header
+  - [x] The actions to support customizable key-bindings are ( starter for now, may add more later )
+    - [x] presentation-mode: prev/next step
+  - [x] A new settings dialog with tabs to adjust application configuration
+    - [x] Settings dialog can be opened via a main menu entry "Settings"
           ( keyboard shortcut: cmd-comma (non-configurable) ), accessible in
           main menu following macOS convention is "Presentator → Settings… "
-    - [ ] Move the fullscreen-preference menu-entry into a new general-tab
-    - [ ] New key-bindings-tab
-      - [ ] for every action allow configurating one or more key-bindings
-        - [ ] one multi-value field per action
-      - [ ] Add a button to "learn" a key-binding ( reading the next keypress and appending
+    - [x] Move the fullscreen-preference menu-entry into a new general-tab
+    - [x] New key-bindings-tab
+      - [x] for every action allow configurating one or more key-bindings
+        - [x] one multi-value field per action
+      - [x] Add a button to "learn" a key-binding ( reading the next keypress and appending
             it as human-readable to the input-field for current action )
-        - [ ] Re-pressing the "learn" button aborts current learning ( to be able to learn esc key
+        - [x] Re-pressing the "learn" button aborts current learning ( to be able to learn esc key
               for an action )
-      - [ ] Add a reset button for every action to reset to default key-bindings
-      - [ ] Flag conflicting cross-action key-bindings, prevent closing/saving the configuration
+      - [x] Add a reset button for every action to reset to default key-bindings
+      - [x] Flag conflicting cross-action key-bindings, prevent closing/saving the configuration
             with conflicts
 
 ## Export

@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::Mutex;
 use std::path::PathBuf;
 
@@ -15,22 +16,39 @@ struct ModeMenuItems {
 }
 type ModeMenuState = Mutex<Option<ModeMenuItems>>;
 
+fn default_true() -> bool { true }
+
+fn default_key_bindings() -> HashMap<String, Vec<String>> {
+    let mut map = HashMap::new();
+    map.insert(
+        "presentation-next-step".to_string(),
+        vec!["arrow-right".to_string(), "arrow-down".to_string(), "space".to_string()],
+    );
+    map.insert(
+        "presentation-prev-step".to_string(),
+        vec!["arrow-left".to_string(), "arrow-up".to_string()],
+    );
+    map
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
 struct AppConfig {
     #[serde(default = "default_true")]
     fullscreen_on_presentation: bool,
+    #[serde(default = "default_key_bindings")]
+    key_bindings: HashMap<String, Vec<String>>,
 }
-
-fn default_true() -> bool { true }
 
 impl Default for AppConfig {
     fn default() -> Self {
-        Self { fullscreen_on_presentation: true }
+        Self {
+            fullscreen_on_presentation: true,
+            key_bindings: default_key_bindings(),
+        }
     }
 }
 
 type AppConfigState = Mutex<AppConfig>;
-type FullscreenPrefState = Mutex<Option<CheckMenuItem<tauri::Wry>>>;
 
 fn app_config_path(app: &AppHandle) -> Option<PathBuf> {
     app.path().app_config_dir().ok().map(|d| d.join("config.json"))
@@ -122,8 +140,18 @@ fn update_mode_menu(mode: String, state: State<ModeMenuState>) -> Result<(), Str
 }
 
 #[tauri::command]
-fn get_fullscreen_on_presentation(state: State<AppConfigState>) -> bool {
-    state.lock().unwrap().fullscreen_on_presentation
+fn get_app_settings(state: State<AppConfigState>) -> AppConfig {
+    state.lock().unwrap().clone()
+}
+
+#[tauri::command]
+fn set_app_settings(settings: AppConfig, app: AppHandle, state: State<AppConfigState>) {
+    {
+        let mut cfg = state.lock().unwrap();
+        *cfg = settings.clone();
+    }
+    save_app_config(&app, &settings);
+    let _ = app.emit("app-settings-changed", settings);
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -135,7 +163,6 @@ pub fn run() {
         .manage(ReloadMenuState::new(None))
         .manage(ModeMenuState::new(None))
         .manage(AppConfigState::new(AppConfig::default()))
-        .manage(FullscreenPrefState::new(None))
         .setup(|app| {
             use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
 
@@ -144,7 +171,8 @@ pub fn run() {
             *app.state::<AppConfigState>().lock().unwrap() = loaded_config.clone();
 
             let about = MenuItem::with_id(app, "about", "About Presentator…", true, None::<&str>)?;
-            let app_menu = Submenu::with_items(app, "Presentator", true, &[&about])?;
+            let settings = MenuItem::with_id(app, "settings", "Settings…", true, Some("CmdOrCtrl+,"))?;
+            let app_menu = Submenu::with_items(app, "Presentator", true, &[&about, &settings])?;
 
             let open_svg = MenuItem::with_id(
                 app,
@@ -165,9 +193,6 @@ pub fn run() {
             let file_menu = Submenu::with_items(app, "File", true, &[&open_svg, &reload, &separator, &quit])?;
             *app.state::<ReloadMenuState>().lock().unwrap() = Some(reload);
 
-            // Editing is checked by default; Presentation Mode gets the Cmd+P shortcut so that
-            // pressing it always toggles: Tauri auto-toggles the checkbox, and the event
-            // handler reads is_checked() to derive the new mode.
             let editing = CheckMenuItem::with_id(
                 app,
                 "mode-editing",
@@ -184,20 +209,11 @@ pub fn run() {
                 false,
                 Some("CmdOrCtrl+P"),
             )?;
-            let view_separator = PredefinedMenuItem::separator(app)?;
-            let fullscreen_pref = CheckMenuItem::with_id(
-                app,
-                "fullscreen-on-presentation",
-                "Fullscreen on Presentation",
-                true,
-                loaded_config.fullscreen_on_presentation,
-                None::<&str>,
-            )?;
             let view_menu = Submenu::with_items(
                 app,
                 "View",
                 true,
-                &[&editing, &presentation, &view_separator, &fullscreen_pref],
+                &[&editing, &presentation],
             )?;
 
             let menu = Menu::with_items(app, &[&app_menu, &file_menu, &view_menu])?;
@@ -205,12 +221,14 @@ pub fn run() {
 
             *app.state::<ModeMenuState>().lock().unwrap() =
                 Some(ModeMenuItems { editing, presentation });
-            *app.state::<FullscreenPrefState>().lock().unwrap() = Some(fullscreen_pref);
 
             app.on_menu_event(|app, event| {
                 match event.id().0.as_str() {
                     "about" => {
                         let _ = app.emit("menu-about", ());
+                    }
+                    "settings" => {
+                        let _ = app.emit("menu-settings", ());
                     }
                     "open-svg" => {
                         let _ = app.emit("menu-open-svg", ());
@@ -220,7 +238,6 @@ pub fn run() {
                     }
                     "mode-editing" => {
                         if let Some(items) = &*app.state::<ModeMenuState>().lock().unwrap() {
-                            // Re-enforce checked state (user may click while already in editing).
                             let _ = items.editing.set_checked(true);
                             let _ = items.presentation.set_checked(false);
                         }
@@ -228,9 +245,6 @@ pub fn run() {
                     }
                     "mode-presentation" => {
                         if let Some(items) = &*app.state::<ModeMenuState>().lock().unwrap() {
-                            // Tauri auto-toggled the checkbox; read the resulting state to
-                            // decide the new mode. Cmd+P while in presentation → is_checked()
-                            // returns false here → switch back to editing (true toggle).
                             let going_presentation =
                                 items.presentation.is_checked().unwrap_or(false);
                             let _ = items.editing.set_checked(!going_presentation);
@@ -238,23 +252,6 @@ pub fn run() {
                             let mode = if going_presentation { "presentation" } else { "editing" };
                             let _ = app.emit("menu-set-mode", mode);
                         }
-                    }
-                    "fullscreen-on-presentation" => {
-                        let pref_state = app.state::<FullscreenPrefState>();
-                        let enabled = pref_state
-                            .lock().unwrap()
-                            .as_ref()
-                            .and_then(|item| item.is_checked().ok())
-                            .unwrap_or(true);
-                        {
-                            let cfg_state = app.state::<AppConfigState>();
-                            let mut cfg = cfg_state.lock().unwrap();
-                            cfg.fullscreen_on_presentation = enabled;
-                        }
-                        let cfg_state = app.state::<AppConfigState>();
-                        let cfg_snapshot = cfg_state.lock().unwrap().clone();
-                        save_app_config(app, &cfg_snapshot);
-                        let _ = app.emit("fullscreen-pref-changed", enabled);
                     }
                     _ => {}
                 }
@@ -269,8 +266,120 @@ pub fn run() {
             stop_watching,
             set_reload_enabled,
             update_mode_menu,
-            get_fullscreen_on_presentation
+            get_app_settings,
+            set_app_settings
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── AppConfig defaults ────────────────────────────────────────────────────
+
+    #[test]
+    fn default_fullscreen_on_presentation_is_true() {
+        assert!(AppConfig::default().fullscreen_on_presentation);
+    }
+
+    #[test]
+    fn default_key_bindings_contains_expected_actions() {
+        let bindings = default_key_bindings();
+        let next = bindings.get("presentation-next-step").expect("missing next-step");
+        assert!(next.contains(&"arrow-right".to_string()));
+        assert!(next.contains(&"arrow-down".to_string()));
+        assert!(next.contains(&"space".to_string()));
+        let prev = bindings.get("presentation-prev-step").expect("missing prev-step");
+        assert!(prev.contains(&"arrow-left".to_string()));
+        assert!(prev.contains(&"arrow-up".to_string()));
+    }
+
+    #[test]
+    fn next_and_prev_defaults_share_no_bindings() {
+        let bindings = default_key_bindings();
+        let next: std::collections::HashSet<_> = bindings["presentation-next-step"].iter().collect();
+        let prev = &bindings["presentation-prev-step"];
+        assert!(prev.iter().all(|b| !next.contains(b)));
+    }
+
+    // ── Serde round-trip ──────────────────────────────────────────────────────
+
+    #[test]
+    fn round_trip_preserves_all_fields() {
+        let original = AppConfig {
+            fullscreen_on_presentation: false,
+            key_bindings: {
+                let mut m = HashMap::new();
+                m.insert("presentation-next-step".to_string(), vec!["enter".to_string()]);
+                m
+            },
+        };
+        let json = serde_json::to_string(&original).unwrap();
+        let restored: AppConfig = serde_json::from_str(&json).unwrap();
+        assert_eq!(restored.fullscreen_on_presentation, false);
+        assert_eq!(
+            restored.key_bindings.get("presentation-next-step").unwrap(),
+            &vec!["enter".to_string()]
+        );
+    }
+
+    // ── Serde defaults for missing fields (forward compatibility) ─────────────
+
+    #[test]
+    fn empty_json_object_deserializes_with_defaults() {
+        let cfg: AppConfig = serde_json::from_str("{}").unwrap();
+        assert!(cfg.fullscreen_on_presentation);
+        assert!(cfg.key_bindings.contains_key("presentation-next-step"));
+        assert!(cfg.key_bindings.contains_key("presentation-prev-step"));
+    }
+
+    #[test]
+    fn missing_key_bindings_field_fills_defaults() {
+        let cfg: AppConfig = serde_json::from_str(r#"{"fullscreen_on_presentation":false}"#).unwrap();
+        assert!(!cfg.fullscreen_on_presentation);
+        let next = cfg.key_bindings.get("presentation-next-step").unwrap();
+        assert!(next.contains(&"arrow-right".to_string()));
+    }
+
+    #[test]
+    fn missing_fullscreen_field_defaults_to_true() {
+        let cfg: AppConfig = serde_json::from_str(r#"{"key_bindings":{}}"#).unwrap();
+        assert!(cfg.fullscreen_on_presentation);
+    }
+
+    // ── File I/O (serde layer only — AppHandle not available in unit tests) ───
+
+    #[test]
+    fn save_and_load_round_trip_via_temp_file() {
+        let path = std::env::temp_dir().join("presentator_test_config.json");
+        let original = AppConfig {
+            fullscreen_on_presentation: false,
+            key_bindings: {
+                let mut m = HashMap::new();
+                m.insert("presentation-prev-step".to_string(), vec!["shift-arrow-left".to_string()]);
+                m
+            },
+        };
+        std::fs::write(&path, serde_json::to_string(&original).unwrap()).unwrap();
+        let loaded: AppConfig = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        let _ = std::fs::remove_file(&path);
+
+        assert_eq!(loaded.fullscreen_on_presentation, false);
+        assert_eq!(
+            loaded.key_bindings.get("presentation-prev-step").unwrap(),
+            &vec!["shift-arrow-left".to_string()]
+        );
+    }
+
+    #[test]
+    fn corrupt_json_falls_back_to_defaults_as_load_app_config_does() {
+        // load_app_config catches parse errors and returns AppConfig::default()
+        let result: Result<AppConfig, _> = serde_json::from_str("not valid json {{{");
+        assert!(result.is_err());
+        let fallback = AppConfig::default();
+        assert!(fallback.fullscreen_on_presentation);
+        assert!(fallback.key_bindings.contains_key("presentation-next-step"));
+    }
 }
