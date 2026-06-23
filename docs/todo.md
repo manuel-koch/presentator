@@ -25,7 +25,7 @@ removing the finished tasks from the todo in favor of updated feature descriptio
 
 ## Edit Mode
 
-- [ ] Generalize the "copy element-visibility" button into a flexible "copy step aspects" action.
+- [x] Generalize the "copy element-visibility" button into a flexible "copy step aspects" action.
   - **Current state:** the clone-hidden button opens a popup to pick a single target step,
     then blindly overwrites that step's hidden list.
   - **Goal:** the same button opens a popup with two parts:
@@ -43,6 +43,26 @@ removing the finished tasks from the todo in favor of updated feature descriptio
       transition configs are not affected (they belong to inter-step gaps, not steps).
   - Allow selecting multiple target steps (e.g. "apply to steps 3, 5, 7 at once")
     by changing single-click to toggle-selection + an "Apply" confirm button.
+
+## Markdown rendered texts ( just an idea, needs more thinking )
+
+- [ ] For every step I like to add content to be rendered, this might be an additional SVG image
+      or a markdown text that gets rendered.
+  - [ ] Add a button ( with an appropriate icon ) to every step to add content
+    - [ ] Clicking the button shows a drop-down with possible content types: Markdown, SVG
+  - [ ] The new step content will be shown as nested/indented row in the steps list below the step row
+  - [ ] The step-content row has a button with an pen-icon to edit it
+    - [ ] Editing markdown content
+      - [ ] Show a simple split editor dialog to edit markdown text
+      - [ ] Left side shows the plain markdown text ( can be edited in-place )
+      - [ ] Right side shows the rendered markdown text ( read only )
+    - [ ] Editing SVG content
+      - [ ] Show a file-picker to choose an SVG file
+      - [ ] External changes of the SVG file should trigger a debounced reload/rerender
+            of the viewport when in edit-mode
+  - [ ] Selecting a step-content marks the bounds of the rendered content in the viewport
+  - [ ] Allow editing the bounds of the content in viewport like the step-viewport editing
+    - [ ] Allow moving, rotating and scaling the content bounds
 
 ## Presentation Mode (basic)
 

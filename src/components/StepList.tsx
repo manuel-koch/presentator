@@ -4,6 +4,11 @@ import { DEFAULT_TRANSITION } from "../types/config";
 
 const EASING_OPTIONS = ["linear", "ease-in", "ease-out", "ease-in-out"] as const;
 
+export interface CopyAspectsOptions {
+  viewport: boolean;
+  hidden: boolean;
+}
+
 interface Props {
   steps: Step[];
   selectedIndex: number | null;
@@ -19,7 +24,7 @@ interface Props {
   onFitToViewport: (index: number) => void;
   onFitAllToView: () => void;
   onHoverChange: (index: number | null) => void;
-  onCloneHidden: (fromIndex: number, toIndex: number) => void;
+  onCopyAspects: (fromIndex: number, toIndices: number[], opts: CopyAspectsOptions) => void;
   onTransitionChange?: (gapIndex: number, tc: TransitionConfig) => void;
 }
 
@@ -74,12 +79,18 @@ function CopyHiddenIcon() {
   );
 }
 
-export function StepList({ steps, selectedIndex, transitions, defaultTransition, onSelect, onRename, onReorder, onAdd, onRemove, onDuplicate, onGoToViewport, onFitToViewport, onFitAllToView, onHoverChange, onCloneHidden, onTransitionChange }: Props) {
+export function StepList({ steps, selectedIndex, transitions, defaultTransition, onSelect, onRename, onReorder, onAdd, onRemove, onDuplicate, onGoToViewport, onFitToViewport, onFitAllToView, onHoverChange, onCopyAspects, onTransitionChange }: Props) {
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editingName, setEditingName] = useState("");
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
   const [dropPos, setDropPos] = useState<number | null>(null);
-  const [clonePopup, setClonePopup] = useState<{ fromIndex: number; top: number } | null>(null);
+  const [clonePopup, setClonePopup] = useState<{
+    fromIndex: number;
+    top: number;
+    copyHidden: boolean;
+    copyViewport: boolean;
+    selectedTargets: Set<number>;
+  } | null>(null);
   const listRef = useRef<HTMLUListElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const clonePopupRef = useRef<HTMLDivElement>(null);
@@ -111,7 +122,30 @@ export function StepList({ steps, selectedIndex, transitions, defaultTransition,
     if (!containerRef.current) return;
     const containerRect = containerRef.current.getBoundingClientRect();
     const btnRect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    setClonePopup({ fromIndex, top: btnRect.bottom - containerRect.top + 2 });
+    setClonePopup({
+      fromIndex,
+      top: btnRect.bottom - containerRect.top + 2,
+      copyHidden: true,
+      copyViewport: false,
+      selectedTargets: new Set(),
+    });
+  }
+
+  function toggleCloneTarget(index: number) {
+    setClonePopup((prev) => {
+      if (!prev) return prev;
+      const next = new Set(prev.selectedTargets);
+      if (next.has(index)) next.delete(index); else next.add(index);
+      return { ...prev, selectedTargets: next };
+    });
+  }
+
+  function applyClone() {
+    if (!clonePopup) return;
+    const { fromIndex, selectedTargets, copyHidden, copyViewport } = clonePopup;
+    if (selectedTargets.size === 0 || (!copyHidden && !copyViewport)) return;
+    onCopyAspects(fromIndex, [...selectedTargets], { hidden: copyHidden, viewport: copyViewport });
+    setClonePopup(null);
   }
 
   function getDropPos(clientY: number): number {
@@ -259,8 +293,8 @@ export function StepList({ steps, selectedIndex, transitions, defaultTransition,
               {steps.length > 1 && (
                 <button
                   className="step-item-clone-hidden-btn"
-                  aria-label={`Copy visibility list of ${step.name} to another step`}
-                  title="Copy visibility to another step"
+                  aria-label={`Copy aspects of ${step.name} to other steps`}
+                  title="Copy step aspects to other steps"
                   onClick={(e) => openClonePopup(index, e)}
                 >
                   <CopyHiddenIcon />
@@ -342,18 +376,50 @@ export function StepList({ steps, selectedIndex, transitions, defaultTransition,
       </ul>
       {clonePopup !== null && (
         <div ref={clonePopupRef} className="step-clone-popup" style={{ top: clonePopup.top }}>
-          <div className="step-clone-popup-title">Copy visibility to:</div>
-          {steps.map((step, i) =>
-            i === clonePopup.fromIndex ? null : (
-              <button
-                key={i}
-                className="step-clone-popup-item"
-                onClick={() => { onCloneHidden(clonePopup.fromIndex, i); setClonePopup(null); }}
-              >
-                {step.name}
-              </button>
-            )
-          )}
+          <div className="step-clone-popup-title">Copy step aspects</div>
+          <div className="step-clone-popup-section">
+            <label className="step-clone-popup-check-row">
+              <input
+                type="checkbox"
+                checked={clonePopup.copyHidden}
+                onChange={(e) => setClonePopup((p) => p && ({ ...p, copyHidden: e.target.checked }))}
+              />
+              Element visibility
+            </label>
+            <label className="step-clone-popup-check-row">
+              <input
+                type="checkbox"
+                checked={clonePopup.copyViewport}
+                onChange={(e) => setClonePopup((p) => p && ({ ...p, copyViewport: e.target.checked }))}
+              />
+              Viewport
+            </label>
+          </div>
+          <div className="step-clone-popup-divider" />
+          <div className="step-clone-popup-section-label">Copy to:</div>
+          <div className="step-clone-popup-targets">
+            {steps.map((step, i) =>
+              i === clonePopup.fromIndex ? null : (
+                <button
+                  key={i}
+                  className={`step-clone-popup-item${clonePopup.selectedTargets.has(i) ? " step-clone-popup-item--selected" : ""}`}
+                  onClick={() => toggleCloneTarget(i)}
+                >
+                  {step.name}
+                  {clonePopup.selectedTargets.has(i) && <span className="step-clone-popup-check" aria-hidden>✓</span>}
+                </button>
+              )
+            )}
+          </div>
+          <div className="step-clone-popup-footer">
+            <button
+              className="step-clone-popup-apply-btn"
+              disabled={clonePopup.selectedTargets.size === 0 || (!clonePopup.copyHidden && !clonePopup.copyViewport)}
+              onClick={applyClone}
+            >
+              Apply
+            </button>
+          </div>
         </div>
       )}
     </div>

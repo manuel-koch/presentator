@@ -12,6 +12,7 @@ import { matchesBinding, DEFAULT_KEY_BINDINGS } from "./utils/keyBinding";
 import { EditingCanvas } from "./components/EditingCanvas";
 import type { EditingCanvasHandle } from "./components/EditingCanvas";
 import { StepList } from "./components/StepList";
+import type { CopyAspectsOptions } from "./components/StepList";
 import { ElementPicker } from "./components/ElementPicker";
 import { ConfigControls } from "./components/ConfigControls";
 import { PendingReloadIndicator } from "./components/PendingReloadIndicator";
@@ -337,11 +338,17 @@ function App() {
     updateConfig({ ...config, steps });
   }
 
-  function handleCloneHidden(fromIndex: number, toIndex: number) {
+  function handleCopyAspects(fromIndex: number, toIndices: number[], opts: CopyAspectsOptions) {
     if (!config) return;
-    const steps = config.steps.map((s, i) =>
-      i === toIndex ? { ...s, hidden: [...config.steps[fromIndex].hidden] } : s
-    );
+    const source = config.steps[fromIndex];
+    const steps = config.steps.map((s, i) => {
+      if (!toIndices.includes(i)) return s;
+      return {
+        ...s,
+        ...(opts.hidden && { hidden: [...source.hidden] }),
+        ...(opts.viewport && { viewport: { ...source.viewport, center: [...source.viewport.center] as [number, number] } }),
+      };
+    });
     updateConfig({ ...config, steps });
   }
 
@@ -429,7 +436,7 @@ function App() {
                   onGoToViewport={(index) => canvasRef.current?.goToStep(config.steps[index])}
                   onFitToViewport={handleFitToViewport}
                   onFitAllToView={() => canvasRef.current?.fitAllSteps(config.steps)}
-                  onCloneHidden={handleCloneHidden}
+                  onCopyAspects={handleCopyAspects}
                   onTransitionChange={handleTransitionChange}
                 />
                 {selectedStep && (

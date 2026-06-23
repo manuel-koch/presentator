@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { vi, describe, it, expect, afterEach } from "vitest";
 import { StepList } from "./StepList";
 import type { Step } from "../types/config";
+import type { CopyAspectsOptions } from "./StepList";
 
 const STEPS: Step[] = [
   { name: "Overview", viewport: { center: [0.5, 0.5], zoom: 1.0, rotation: 0 }, hidden: [] },
@@ -26,7 +27,7 @@ function mkProps(overrides = {}) {
     onFitToViewport: noop,
     onFitAllToView: noop,
     onHoverChange: noop,
-    onCloneHidden: noop,
+    onCopyAspects: noop,
     ...overrides,
   };
 }
@@ -279,9 +280,9 @@ describe("StepList", () => {
   describe("clone hidden list", () => {
     it("shows a copy-visibility button for each step when there are multiple steps", () => {
       render(<StepList {...mkProps()} />);
-      expect(screen.getByRole("button", { name: "Copy visibility list of Overview to another step" })).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: "Copy visibility list of Detail A to another step" })).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: "Copy visibility list of Close-up to another step" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Copy aspects of Overview to other steps" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Copy aspects of Detail A to other steps" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Copy aspects of Close-up to other steps" })).toBeInTheDocument();
     });
 
     it("does not show copy-visibility button when only one step", () => {
@@ -292,39 +293,101 @@ describe("StepList", () => {
 
     it("opens a popup with all other step names when clone button is clicked", async () => {
       render(<StepList {...mkProps()} />);
-      await userEvent.click(screen.getByRole("button", { name: "Copy visibility list of Overview to another step" }));
+      await userEvent.click(screen.getByRole("button", { name: "Copy aspects of Overview to other steps" }));
       expect(screen.getByRole("button", { name: "Detail A" })).toBeInTheDocument();
       expect(screen.getByRole("button", { name: "Close-up" })).toBeInTheDocument();
     });
 
-    it("popup does not contain the source step", async () => {
+    it("popup does not contain the source step as a target", async () => {
       render(<StepList {...mkProps()} />);
-      await userEvent.click(screen.getByRole("button", { name: "Copy visibility list of Detail A to another step" }));
-      const popupItems = document.querySelectorAll(".step-clone-popup-item");
-      const names = Array.from(popupItems).map((el) => el.textContent);
+      await userEvent.click(screen.getByRole("button", { name: "Copy aspects of Detail A to other steps" }));
+      const targets = document.querySelectorAll(".step-clone-popup-targets .step-clone-popup-item");
+      const names = Array.from(targets).map((el) => el.textContent?.replace("✓", "").trim());
       expect(names).not.toContain("Detail A");
       expect(names).toContain("Overview");
       expect(names).toContain("Close-up");
     });
 
-    it("calls onCloneHidden with correct indices when a target step is chosen", async () => {
-      const onCloneHidden = vi.fn();
-      render(<StepList {...mkProps({ onCloneHidden })} />);
-      await userEvent.click(screen.getByRole("button", { name: "Copy visibility list of Overview to another step" }));
-      await userEvent.click(screen.getByRole("button", { name: "Detail A" }));
-      expect(onCloneHidden).toHaveBeenCalledWith(0, 1);
+    it("element-visibility is checked by default, viewport is unchecked", async () => {
+      render(<StepList {...mkProps()} />);
+      await userEvent.click(screen.getByRole("button", { name: "Copy aspects of Overview to other steps" }));
+      const checkboxes = screen.getAllByRole("checkbox");
+      const hiddenBox = checkboxes.find((cb) => (cb as HTMLInputElement).closest("label")?.textContent?.includes("Element visibility")) as HTMLInputElement;
+      const viewportBox = checkboxes.find((cb) => (cb as HTMLInputElement).closest("label")?.textContent?.includes("Viewport")) as HTMLInputElement;
+      expect(hiddenBox?.checked).toBe(true);
+      expect(viewportBox?.checked).toBe(false);
     });
 
-    it("closes the popup after a target step is chosen", async () => {
+    it("Apply is disabled when no target is selected", async () => {
       render(<StepList {...mkProps()} />);
-      await userEvent.click(screen.getByRole("button", { name: "Copy visibility list of Overview to another step" }));
+      await userEvent.click(screen.getByRole("button", { name: "Copy aspects of Overview to other steps" }));
+      expect(screen.getByRole("button", { name: "Apply" })).toBeDisabled();
+    });
+
+    it("Apply is disabled when no aspect is checked", async () => {
+      render(<StepList {...mkProps()} />);
+      await userEvent.click(screen.getByRole("button", { name: "Copy aspects of Overview to other steps" }));
+      // Uncheck element visibility
+      const hiddenBox = screen.getAllByRole("checkbox").find((cb) =>
+        (cb as HTMLInputElement).closest("label")?.textContent?.includes("Element visibility")
+      )!;
+      await userEvent.click(hiddenBox);
       await userEvent.click(screen.getByRole("button", { name: "Detail A" }));
+      expect(screen.getByRole("button", { name: "Apply" })).toBeDisabled();
+    });
+
+    it("calls onCopyAspects with default opts (hidden only) after selecting target and clicking Apply", async () => {
+      const onCopyAspects = vi.fn<(fromIndex: number, toIndices: number[], opts: CopyAspectsOptions) => void>();
+      render(<StepList {...mkProps({ onCopyAspects })} />);
+      await userEvent.click(screen.getByRole("button", { name: "Copy aspects of Overview to other steps" }));
+      await userEvent.click(screen.getByRole("button", { name: "Detail A" }));
+      await userEvent.click(screen.getByRole("button", { name: "Apply" }));
+      expect(onCopyAspects).toHaveBeenCalledWith(0, [1], { hidden: true, viewport: false });
+    });
+
+    it("calls onCopyAspects with multiple targets", async () => {
+      const onCopyAspects = vi.fn<(fromIndex: number, toIndices: number[], opts: CopyAspectsOptions) => void>();
+      render(<StepList {...mkProps({ onCopyAspects })} />);
+      await userEvent.click(screen.getByRole("button", { name: "Copy aspects of Overview to other steps" }));
+      await userEvent.click(screen.getByRole("button", { name: "Detail A" }));
+      await userEvent.click(screen.getByRole("button", { name: "Close-up" }));
+      await userEvent.click(screen.getByRole("button", { name: "Apply" }));
+      const call = onCopyAspects.mock.calls[0] as [number, number[], CopyAspectsOptions];
+      expect(call[0]).toBe(0);
+      expect([...call[1]].sort()).toEqual([1, 2]);
+    });
+
+    it("calls onCopyAspects with viewport flag when both aspects checked", async () => {
+      const onCopyAspects = vi.fn<(fromIndex: number, toIndices: number[], opts: CopyAspectsOptions) => void>();
+      render(<StepList {...mkProps({ onCopyAspects })} />);
+      await userEvent.click(screen.getByRole("button", { name: "Copy aspects of Overview to other steps" }));
+      const viewportBox = screen.getAllByRole("checkbox").find((cb) =>
+        (cb as HTMLInputElement).closest("label")?.textContent?.includes("Viewport")
+      )!;
+      await userEvent.click(viewportBox);
+      await userEvent.click(screen.getByRole("button", { name: "Detail A" }));
+      await userEvent.click(screen.getByRole("button", { name: "Apply" }));
+      expect(onCopyAspects).toHaveBeenCalledWith(0, [1], { hidden: true, viewport: true });
+    });
+
+    it("closes the popup after Apply", async () => {
+      render(<StepList {...mkProps()} />);
+      await userEvent.click(screen.getByRole("button", { name: "Copy aspects of Overview to other steps" }));
+      await userEvent.click(screen.getByRole("button", { name: "Detail A" }));
+      await userEvent.click(screen.getByRole("button", { name: "Apply" }));
       expect(document.querySelector(".step-clone-popup")).toBeNull();
+    });
+
+    it("does not close the popup when a target is toggled (stays open for multi-select)", async () => {
+      render(<StepList {...mkProps()} />);
+      await userEvent.click(screen.getByRole("button", { name: "Copy aspects of Overview to other steps" }));
+      await userEvent.click(screen.getByRole("button", { name: "Detail A" }));
+      expect(document.querySelector(".step-clone-popup")).not.toBeNull();
     });
 
     it("closes the popup on Escape", async () => {
       render(<StepList {...mkProps()} />);
-      await userEvent.click(screen.getByRole("button", { name: "Copy visibility list of Overview to another step" }));
+      await userEvent.click(screen.getByRole("button", { name: "Copy aspects of Overview to other steps" }));
       await userEvent.keyboard("{Escape}");
       expect(document.querySelector(".step-clone-popup")).toBeNull();
     });
@@ -332,7 +395,7 @@ describe("StepList", () => {
     it("does not call onSelect when the clone button is clicked", async () => {
       const onSelect = vi.fn();
       render(<StepList {...mkProps({ onSelect })} />);
-      await userEvent.click(screen.getByRole("button", { name: "Copy visibility list of Overview to another step" }));
+      await userEvent.click(screen.getByRole("button", { name: "Copy aspects of Overview to other steps" }));
       expect(onSelect).not.toHaveBeenCalled();
     });
   });
