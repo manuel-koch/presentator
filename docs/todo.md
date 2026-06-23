@@ -25,12 +25,24 @@ removing the finished tasks from the todo in favor of updated feature descriptio
 
 ## Edit Mode
 
-- [ ] Refactor the existing functionality ( clone element-selection ) to clone a list of
-      selected features of current step to the target step.
-      Let user select features from a checkmark-list and pick the target step within same popup:
-  - clone viewport
-  - clone element-selection
-  - [ ] keep the current clone button and its icon 
+- [ ] Generalize the "copy element-visibility" button into a flexible "copy step aspects" action.
+  - **Current state:** the clone-hidden button opens a popup to pick a single target step,
+    then blindly overwrites that step's hidden list.
+  - **Goal:** the same button opens a popup with two parts:
+    1. A checklist of aspects to copy (both unchecked by default except element-visibility):
+       - [ ] Viewport (center, zoom, rotation)
+       - [x] Element visibility (hidden list)
+    2. A list of target steps to copy to (all steps except the source, one click = immediate apply)
+  - Selecting a target step applies the checked aspects immediately and closes the popup,
+    matching the current single-click UX.
+  - The button and its icon remain unchanged.
+  - Edge cases:
+    - Disable the button when fewer than 2 steps exist (nothing to copy to).
+    - Disable the "apply" for a target step if no aspect is checked.
+    - Copying the viewport overwrites center, zoom, and rotation of the target step;
+      transition configs are not affected (they belong to inter-step gaps, not steps).
+  - Allow selecting multiple target steps (e.g. "apply to steps 3, 5, 7 at once")
+    by changing single-click to toggle-selection + an "Apply" confirm button.
 
 ## Presentation Mode (basic)
 
