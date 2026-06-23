@@ -51,13 +51,13 @@ impl Default for AppConfig {
 type AppConfigState = Mutex<AppConfig>;
 
 fn app_config_path(app: &AppHandle) -> Option<PathBuf> {
-    app.path().app_config_dir().ok().map(|d| d.join("config.json"))
+    app.path().app_config_dir().ok().map(|d| d.join("config.yaml"))
 }
 
 fn load_app_config(app: &AppHandle) -> AppConfig {
     if let Some(path) = app_config_path(app) {
         if let Ok(content) = std::fs::read_to_string(&path) {
-            if let Ok(cfg) = serde_json::from_str(&content) {
+            if let Ok(cfg) = serde_yaml::from_str(&content) {
                 return cfg;
             }
         }
@@ -70,7 +70,7 @@ fn save_app_config(app: &AppHandle, cfg: &AppConfig) {
         if let Some(dir) = path.parent() {
             let _ = std::fs::create_dir_all(dir);
         }
-        if let Ok(content) = serde_json::to_string(cfg) {
+        if let Ok(content) = serde_yaml::to_string(cfg) {
             let _ = std::fs::write(path, content);
         }
     }
@@ -316,8 +316,8 @@ mod tests {
                 m
             },
         };
-        let json = serde_json::to_string(&original).unwrap();
-        let restored: AppConfig = serde_json::from_str(&json).unwrap();
+        let yaml = serde_yaml::to_string(&original).unwrap();
+        let restored: AppConfig = serde_yaml::from_str(&yaml).unwrap();
         assert_eq!(restored.fullscreen_on_presentation, false);
         assert_eq!(
             restored.key_bindings.get("presentation-next-step").unwrap(),
@@ -328,8 +328,8 @@ mod tests {
     // ── Serde defaults for missing fields (forward compatibility) ─────────────
 
     #[test]
-    fn empty_json_object_deserializes_with_defaults() {
-        let cfg: AppConfig = serde_json::from_str("{}").unwrap();
+    fn empty_yaml_object_deserializes_with_defaults() {
+        let cfg: AppConfig = serde_yaml::from_str("{}").unwrap();
         assert!(cfg.fullscreen_on_presentation);
         assert!(cfg.key_bindings.contains_key("presentation-next-step"));
         assert!(cfg.key_bindings.contains_key("presentation-prev-step"));
@@ -337,7 +337,7 @@ mod tests {
 
     #[test]
     fn missing_key_bindings_field_fills_defaults() {
-        let cfg: AppConfig = serde_json::from_str(r#"{"fullscreen_on_presentation":false}"#).unwrap();
+        let cfg: AppConfig = serde_yaml::from_str("fullscreen_on_presentation: false").unwrap();
         assert!(!cfg.fullscreen_on_presentation);
         let next = cfg.key_bindings.get("presentation-next-step").unwrap();
         assert!(next.contains(&"arrow-right".to_string()));
@@ -345,7 +345,7 @@ mod tests {
 
     #[test]
     fn missing_fullscreen_field_defaults_to_true() {
-        let cfg: AppConfig = serde_json::from_str(r#"{"key_bindings":{}}"#).unwrap();
+        let cfg: AppConfig = serde_yaml::from_str("key_bindings: {}").unwrap();
         assert!(cfg.fullscreen_on_presentation);
     }
 
@@ -353,7 +353,7 @@ mod tests {
 
     #[test]
     fn save_and_load_round_trip_via_temp_file() {
-        let path = std::env::temp_dir().join("presentator_test_config.json");
+        let path = std::env::temp_dir().join("presentator_test_config.yaml");
         let original = AppConfig {
             fullscreen_on_presentation: false,
             key_bindings: {
@@ -362,8 +362,8 @@ mod tests {
                 m
             },
         };
-        std::fs::write(&path, serde_json::to_string(&original).unwrap()).unwrap();
-        let loaded: AppConfig = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        std::fs::write(&path, serde_yaml::to_string(&original).unwrap()).unwrap();
+        let loaded: AppConfig = serde_yaml::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
         let _ = std::fs::remove_file(&path);
 
         assert_eq!(loaded.fullscreen_on_presentation, false);
@@ -374,9 +374,9 @@ mod tests {
     }
 
     #[test]
-    fn corrupt_json_falls_back_to_defaults_as_load_app_config_does() {
+    fn corrupt_yaml_falls_back_to_defaults_as_load_app_config_does() {
         // load_app_config catches parse errors and returns AppConfig::default()
-        let result: Result<AppConfig, _> = serde_json::from_str("not valid json {{{");
+        let result: Result<AppConfig, _> = serde_yaml::from_str("not: valid: yaml: [[[");
         assert!(result.is_err());
         let fallback = AppConfig::default();
         assert!(fallback.fullscreen_on_presentation);

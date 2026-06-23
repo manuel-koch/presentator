@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ACTIONS, DEFAULT_KEY_BINDINGS, normalizeKey } from "../utils/keyBinding";
+import { ACTIONS, DEFAULT_KEY_BINDINGS, normalizeKey, computeInvalidBindings } from "../utils/keyBinding";
 import type { ActionMode } from "../utils/keyBinding";
 
 export interface AppSettings {
@@ -30,7 +30,9 @@ export function SettingsDialog({ settings, onSave, onCancel }: Props) {
   learnRef.current = learningAction;
 
   const conflicts = useMemo(() => computeConflicts(keyBindings), [keyBindings]);
+  const invalidBindings = useMemo(() => computeInvalidBindings(keyBindings), [keyBindings]);
   const hasConflicts = conflicts.size > 0;
+  const hasInvalid = invalidBindings.size > 0;
 
   const actionsByMode = useMemo(() => {
     const order: ActionMode[] = ["presentation", "editing", "global"];
@@ -87,7 +89,7 @@ export function SettingsDialog({ settings, onSave, onCancel }: Props) {
   }
 
   function handleSave() {
-    if (hasConflicts) return;
+    if (hasConflicts || hasInvalid) return;
     onSave({ fullscreen_on_presentation: fullscreen, key_bindings: keyBindings });
   }
 
@@ -147,10 +149,12 @@ export function SettingsDialog({ settings, onSave, onCancel }: Props) {
                           {bindings.map((binding) => {
                             const key = `${actionDef.action}:${binding}`;
                             const isConflict = conflicts.has(key);
+                            const isInvalid = invalidBindings.has(key);
                             return (
                               <span
                                 key={binding}
-                                className={`keybinding-chip${isConflict ? " keybinding-chip--conflict" : ""}`}
+                                className={`keybinding-chip${isConflict ? " keybinding-chip--conflict" : isInvalid ? " keybinding-chip--invalid" : ""}`}
+                                title={isInvalid ? "Unknown key or modifier — this binding will never trigger" : undefined}
                               >
                                 {binding}
                                 <button
@@ -188,9 +192,14 @@ export function SettingsDialog({ settings, onSave, onCancel }: Props) {
                   })}
                 </div>
               ))}
+              {hasInvalid && (
+                <p className="settings-conflict-notice">
+                  Unknown key bindings detected (shown in orange). Remove them before saving.
+                </p>
+              )}
               {hasConflicts && (
                 <p className="settings-conflict-notice">
-                  Conflicting key bindings detected. Resolve conflicts before saving.
+                  Conflicting key bindings detected (shown in red). Resolve conflicts before saving.
                 </p>
               )}
             </div>
@@ -202,7 +211,7 @@ export function SettingsDialog({ settings, onSave, onCancel }: Props) {
           <button
             className="settings-btn-save"
             onClick={handleSave}
-            disabled={hasConflicts}
+            disabled={hasConflicts || hasInvalid}
           >
             Save
           </button>

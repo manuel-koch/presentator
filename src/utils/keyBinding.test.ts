@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { normalizeKey, matchesBinding, DEFAULT_KEY_BINDINGS } from "./keyBinding";
+import { normalizeKey, matchesBinding, DEFAULT_KEY_BINDINGS, validateBinding, computeInvalidBindings } from "./keyBinding";
 
 function fakeEvent(key: string, modifiers: { shift?: boolean; alt?: boolean; ctrl?: boolean; meta?: boolean } = {}): KeyboardEvent {
   return new KeyboardEvent("keydown", {
@@ -127,5 +127,94 @@ describe("DEFAULT_KEY_BINDINGS", () => {
     const next = new Set(DEFAULT_KEY_BINDINGS["presentation-next-step"]);
     const prev = DEFAULT_KEY_BINDINGS["presentation-prev-step"];
     expect(prev.every((b) => !next.has(b))).toBe(true);
+  });
+});
+
+describe("validateBinding", () => {
+  describe("valid bindings", () => {
+    it("accepts named keys", () => {
+      expect(validateBinding("space")).toBe(true);
+      expect(validateBinding("esc")).toBe(true);
+      expect(validateBinding("escape")).toBe(true);
+      expect(validateBinding("arrow-left")).toBe(true);
+      expect(validateBinding("arrow-right")).toBe(true);
+      expect(validateBinding("arrow-up")).toBe(true);
+      expect(validateBinding("arrow-down")).toBe(true);
+      expect(validateBinding("enter")).toBe(true);
+      expect(validateBinding("tab")).toBe(true);
+    });
+    it("accepts single letter keys", () => {
+      expect(validateBinding("n")).toBe(true);
+      expect(validateBinding("a")).toBe(true);
+    });
+    it("accepts single digit keys", () => {
+      expect(validateBinding("1")).toBe(true);
+    });
+    it("accepts valid modifier + named key", () => {
+      expect(validateBinding("shift-arrow-left")).toBe(true);
+      expect(validateBinding("cmd-enter")).toBe(true);
+    });
+    it("accepts valid modifier + single key", () => {
+      expect(validateBinding("shift-n")).toBe(true);
+      expect(validateBinding("ctrl-z")).toBe(true);
+      expect(validateBinding("alt-1")).toBe(true);
+    });
+    it("accepts multiple valid modifiers in canonical order", () => {
+      expect(validateBinding("shift-cmd-p")).toBe(true);
+      expect(validateBinding("shift-alt-ctrl-cmd-x")).toBe(true);
+    });
+  });
+
+  describe("invalid bindings", () => {
+    it("rejects unknown modifier like 'super'", () => {
+      expect(validateBinding("super-n")).toBe(false);
+    });
+    it("rejects unknown multi-word key that is not a named key", () => {
+      expect(validateBinding("page-down")).toBe(false);
+    });
+    it("rejects empty string", () => {
+      expect(validateBinding("")).toBe(false);
+    });
+    it("rejects known modifier with no key", () => {
+      expect(validateBinding("shift-")).toBe(false);
+    });
+    it("rejects unknown modifier even with a valid trailing key", () => {
+      expect(validateBinding("super-arrow-left")).toBe(false);
+    });
+  });
+});
+
+describe("computeInvalidBindings", () => {
+  it("returns empty set when all bindings are valid", () => {
+    const result = computeInvalidBindings({
+      "presentation-next-step": ["arrow-right", "space"],
+      "presentation-prev-step": ["arrow-left"],
+    });
+    expect(result.size).toBe(0);
+  });
+
+  it("flags unknown modifier in one action", () => {
+    const result = computeInvalidBindings({
+      "presentation-next-step": ["arrow-right", "super-n"],
+      "presentation-prev-step": ["arrow-left"],
+    });
+    expect(result.has("presentation-next-step:super-n")).toBe(true);
+    expect(result.size).toBe(1);
+  });
+
+  it("does not flag valid bindings alongside invalid ones", () => {
+    const result = computeInvalidBindings({
+      "presentation-next-step": ["arrow-right", "super-n"],
+    });
+    expect(result.has("presentation-next-step:arrow-right")).toBe(false);
+  });
+
+  it("flags invalid bindings across multiple actions", () => {
+    const result = computeInvalidBindings({
+      "presentation-next-step": ["super-n"],
+      "presentation-prev-step": ["hyper-p"],
+    });
+    expect(result.has("presentation-next-step:super-n")).toBe(true);
+    expect(result.has("presentation-prev-step:hyper-p")).toBe(true);
   });
 });

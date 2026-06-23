@@ -946,6 +946,12 @@ button:active {
   color: var(--red);
 }
 
+.keybinding-chip--invalid {
+  background: #3a2a00;
+  border-color: #6a4a00;
+  color: #f59e0b;
+}
+
 .keybinding-chip--learning {
   color: var(--text-muted);
   border-style: dashed;
