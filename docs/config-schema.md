@@ -12,8 +12,16 @@ background_color: "#000000" # shown outside the SVG (e.g. letterbox bars)
 exclude_id_pattern: "^(bg|helper[-_]).*"  # optional: regexp to hide IDs from the element picker
 
 transition:
-  duration_ms: 500          # default transition duration for all steps
-  easing: ease-in-out       # CSS easing function
+  duration_ms: 500          # global default transition for all inter-step gaps
+  easing: ease-in-out
+
+transitions:                # per-gap overrides; transitions[i] = between step i and step i+1
+  - duration_ms: 300
+    easing: ease-in
+    blend: true             # cross-fade elements entering/leaving visibility
+    blend_easing: linear
+  - duration_ms: 800
+    easing: ease-in-out
 
 steps:
   - name: Overview
@@ -31,8 +39,13 @@ steps:
     hidden:
       - layer-background    # SVG element id attributes (visual elements only)
       - label-group
-    transition:
-      duration_ms: 800      # overrides global default for this step
+
+  - name: Detail B
+    viewport:
+      center: [0.75, 0.6]
+      zoom: 2.0
+      rotation: 0
+    hidden: []
 ```
 
 ## Field Reference
@@ -44,15 +57,18 @@ steps:
 | `aspect_ratio` | string | yes | Viewport shape as `"width:height"` (e.g. `"16:9"`) |
 | `background_color` | string | yes | CSS color shown outside the SVG content area |
 | `exclude_id_pattern` | string | no | Regexp applied to element IDs after structural filtering; matching IDs are excluded from the element picker. They can still be listed in a step's `hidden` and will be hidden in the SVG viewport. Invalid patterns are silently ignored. |
-| `transition` | object | no | Global default transition applied to all steps |
+| `transition` | object | no | Global default transition applied to all inter-step gaps that have no per-gap override |
+| `transitions` | list | no | Per-gap transition overrides; `transitions[i]` governs the transition between step `i` and step `i+1`; length should equal `steps.length - 1`; missing entries fall back to the global `transition` default |
 | `steps` | list | yes | Ordered list of presentation steps |
 
-### `transition`
+### `transition` / `transitions[]`
 
 | Field | Type | Default | Description |
 |---|---|---|---|
-| `duration_ms` | integer | `500` | Transition duration in milliseconds |
-| `easing` | string | `ease-in-out` | CSS easing function |
+| `duration_ms` | integer | `800` | Transition duration in milliseconds |
+| `easing` | string | `ease-in-out` | CSS easing function (`linear`, `ease-in`, `ease-out`, `ease-in-out`) |
+| `blend` | boolean | `false` | When true, elements entering or leaving visibility cross-fade instead of changing instantly |
+| `blend_easing` | string | `ease-in-out` | CSS easing function for element blending; only applied when `blend` is true |
 
 ### `steps[]`
 
@@ -61,7 +77,6 @@ steps:
 | `name` | string | yes | Human-readable step name |
 | `viewport` | object | yes | Viewport definition for this step |
 | `hidden` | list of strings | no | IDs of visual SVG elements to hide; all others remain visible. See [Visual elements](#visual-elements). |
-| `transition` | object | no | Per-step transition override |
 
 ### `steps[].viewport`
 

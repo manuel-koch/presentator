@@ -16,6 +16,8 @@
 * **YAML** chosen for sidecar config format — human readable, supports comments
 * File watching (SVG + config) is active in editing mode; changes are reloaded automatically. In presentation mode, changes are ignored and a subtle indicator notifies the user that a reload is pending.
   * Debounce of ~300ms to avoid double-reloads when both files change simultaneously (e.g. a script regenerating SVG and config together)
+* **Application config** is stored separately from the sidecar in `{app_config_dir}/config.yaml` (macOS: `~/Library/Application Support/com.presentator/config.yaml`); managed by Rust via `serde_yaml`; contains user preferences (fullscreen, key bindings) that are independent of any presentation file
+* **Key bindings** are defined in `src/utils/keyBinding.ts`: human-readable format (e.g. `shift-arrow-left`), canonical modifier order (shift < alt < ctrl < cmd), action mode scoping (`"presentation"` / `"editing"` / `"global"`), and validation (unknown modifiers or keys are flagged invalid); conflict detection only flags bindings shared between actions of the same mode or involving a global action
 * **Vitest** — unit and component tests
 * **React Testing Library** — component interaction tests (D3/SVG DOM)
 * **Playwright** — end-to-end tests running against the Vite dev server (Chromium); Tauri IPC is mocked via a fixture so tests run on all platforms without a built app binary

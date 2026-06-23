@@ -42,7 +42,7 @@
 * A keyboard shortcut (Cmd-P) allows quick toggling between modes
 * The current mode persists across SVG and configuration file reloads
 
-## Presentation mode
+## Presentation Mode
 
 * presentation can be configured to implement "steps" that create
   interactive / dynamic views on that SVG content
@@ -53,8 +53,24 @@
 * the viewport used during the steps has a fixed aspect ratio
   * when rendering current viewport, it will be scaled to fill the whole screen,
     maintaining current configured aspect ratio of the viewport
+* entering presentation mode can automatically switch the window to fullscreen (configurable in Application Settings; default: enabled); exiting returns to windowed mode
 
-## Editing mode
+### Keyboard navigation
+
+* next step: configurable key bindings (defaults: arrow-right, arrow-down, space)
+* previous step: configurable key bindings (defaults: arrow-left, arrow-up)
+* exit to editing mode: Escape (hardcoded, not configurable)
+* key bindings are configured in Application Settings
+
+### Animated transitions
+
+* viewport center, zoom, and rotation are interpolated in a `requestAnimationFrame` loop for each step transition
+  * zoom is interpolated in log-space for a constant multiplicative rate of change
+  * center is compensated so the destination moves in a straight line on screen regardless of zoom change
+* optional element blending: elements entering or leaving visibility cross-fade during the transition instead of appearing/disappearing instantly
+* transitions are configured per inter-step gap (between step i and step i+1); a global default applies when no per-gap override is set (see [config-schema.md](config-schema.md))
+
+## Editing Mode
 
 * a presentation step can be edited interactively
 * presentation steps have a human readable name
@@ -66,9 +82,14 @@
   * each step has a remove button (trash-can icon, red hover) on the right side for deletion
   * each step has a clone-hide-list button that copies the current step's element-hide list to a chosen target step; clicking it opens a popup step picker to select the target step
   * an add button (plus icon) at the top of the list appends a new step with a placeholder name
+  * between consecutive step entries, a compact transition row allows configuring the inter-step transition:
+    * duration (ms)
+    * timing function (linear, ease-in, ease-out, ease-in-out)
+    * optional element blend toggle and blend easing
 * presentation step configuration regarding show/hide of SVG elements can be edited interactively via the element picker panel
   * the picker lists all visual named SVG elements in an indented tree mirroring the SVG parent-child hierarchy; groups with children are collapsed by default and expand/collapse via a chevron button
   * checking or unchecking an element hides or shows it in the current step's viewport; Shift-clicking a checkbox toggles only that element while selecting/deselecting all others
+  * when an element is itself visible but has a hidden ancestor, the element ID is shown with strikethrough and an eye-slash indicator; making such an element visible automatically un-hides all its ancestors
   * hovering an element in the list highlights its bounding box on the editing canvas with a semitransparent green overlay; when the element's centre is outside the visible canvas area, an animated green arrow points toward it (same visual as the step-hover arrow)
   * each element row has a "go to element" button (frame icon, right-aligned) that animates the editing canvas to centre on that element, matching the jump-to-viewport behaviour of the step list
   
@@ -108,6 +129,28 @@
 
 * `aspect_ratio` and `background_color` can be configured via the app UI (stored in the sidecar config)
 * `exclude_id_pattern` can be set in the sidecar YAML (not editable via UI) as a regexp string; IDs matching the pattern are excluded from the element picker — useful for project-convention IDs such as guide layers (e.g. `"^(bg|helper[-_]).*"`); matching IDs can still appear in a step's `hidden` list
+
+## Application Settings
+
+The settings dialog is accessible via **Presentator → Settings…** (keyboard shortcut: Cmd-,). Settings are persisted to `{app_config_dir}/config.yaml` (macOS: `~/Library/Application Support/com.presentator/config.yaml`).
+
+### General tab
+
+* **Fullscreen on Presentation** — automatically enter fullscreen when switching to presentation mode (default: enabled); exiting presentation mode returns to windowed mode
+
+### Key Bindings tab
+
+* Actions are grouped by mode: Presentation Mode, Editing Mode, Global
+* Each action supports one or more key bindings in human-readable format (e.g. `arrow-right`, `shift-n`, `cmd-enter`)
+  * Modifiers: `shift`, `alt`, `ctrl`, `cmd`; canonical order when combined: shift < alt < ctrl < cmd
+  * Named keys: `space`, `esc` (alias `escape`), `enter`, `tab`, `arrow-left`, `arrow-right`, `arrow-up`, `arrow-down`
+* **Learn** button: captures the next keypress and appends it as a new binding; re-pressing Learn cancels without recording
+* **Reset** button: restores an action's factory-default bindings
+* Conflicting bindings — the same key assigned to two actions of the same mode (or involving a global action) — are flagged in red; saving is blocked until conflicts are resolved
+* Invalid bindings — unknown key names or modifiers — are flagged in amber; saving is blocked until they are removed
+* Configurable actions (initial set):
+  * **Next Step** (presentation mode) — defaults: `arrow-right`, `arrow-down`, `space`
+  * **Previous Step** (presentation mode) — defaults: `arrow-left`, `arrow-up`
 
 ## Distribution
 

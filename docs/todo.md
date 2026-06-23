@@ -35,35 +35,9 @@ removing the finished tasks from the todo in favor of updated feature descriptio
 ## Presentation Mode (basic)
 
 - [ ] Step navigation UI (next / previous)
-  - [x] Keyboard: arrow keys / spacebar advance; Escape exits to editing mode
+  - Keyboard shortcuts are configurable via Application Settings (done)
   - No HUD for now: need to investigate how to show a sidecar window that acts as
     remote-control for the presentation.
-- [x] Viewport zoom + rotate transform per step
-  - CSS-transform approach; same math as the editing canvas (`computeViewportRectGeom`)
-  - No D3 dependency needed
-- [x] Show/hide SVG elements per step according to the hide-list
-  - Inject `<style>` with `display: none` rules for each ID in `step.hidden`
-- [x] Enforce fixed aspect ratio; scale viewport to fill screen (letterbox / pillarbox as needed)
-- [x] Animated transitions between steps
-  - Does not affect the (fixed) pan/zoom animation between steps in edit-mode
-  - [x] Config schema: move transition config off `Step` onto a separate array in `PresentationConfig`
-    - `PresentationConfig.transitions: TransitionConfig[]` with length `steps.length - 1`
-    - `transitions[i]` governs the transition between step `i` and step `i+1`
-    - Forward A→B uses `transitions[A]`; backward B→A uses the same config in reverse
-    - `PresentationConfig.transition` remains as the global default fallback
-    - `Step.transition` is removed; sync the `transitions` array when steps are added, removed, or reordered
-  - [x] Animation: interpolate viewport center, zoom, rotation in a `requestAnimationFrame` loop
-    - Zoom interpolated in log-space (constant multiplicative rate); center compensated so the
-      destination center moves in a straight line on screen, eliminating the "swinging" artifact
-      that arises with naive linear lerp across large zoom changes
-  - [x] Edit-mode UI to configure each inter-step transition
-    - Rendered as compact rows between step items in the step list
-    - [x] duration (ms)
-    - [x] timing-function (linear, ease-in, ease-out, ease-in-out)
-  - [x] Optional element blending (default: instant show/hide, no blending)
-    - When enabled: elements entering or leaving visibility cross-fade during the transition
-    - Driven by the same animation loop as the viewport interpolation (dynamic `<style>` per frame)
-    - [x] blend easing (linear, ease-in, ease-out, ease-in-out)
 
 ## Presentation Mode (pointer)
 
@@ -87,43 +61,6 @@ removing the finished tasks from the todo in favor of updated feature descriptio
     - tiny preview of prev / current / next steps viewport
       ( final state of step, all applicable elements hidden )
 
-## Application Settings
-
-- [x] "Fullscreen on Presentation" preference
-  - Native checkbox menu item: `View → Fullscreen on Presentation`
-  - Default: enabled
-  - Persisted to `{app_config_dir}/config.json`
-  - When enabled: entering presentation mode → fullscreen; exiting → windowed
-
-- [x] Configurable key-bindings for application
-  - [x] Save key-bindings in `{app_config_dir}/config.json` too
-  - [x] Use a easy human-readable format to configure a key-binding, like "arrow-left",
-        "enter", "shift-n", "esc" ( alias "escape" )
-    - [x] Possible (optional) modifiers: cmd, ctrl, alt, shift
-    - [x] Canocical order of modifiers ( if combined ): shift < alt < ctrl < cmd
-    - [x] hyphen between modifier and key if necessary
-  - [x] Allow mutliple key-bindings for same action
-  - [x] Actions carry a mode scope: "presentation", "editing", or "global"
-    - [x] Conflicts are only flagged between actions of the same mode, or where either action is "global"
-    - [x] Key-bindings tab groups actions by mode with a section header
-  - [x] The actions to support customizable key-bindings are ( starter for now, may add more later )
-    - [x] presentation-mode: prev/next step
-  - [x] A new settings dialog with tabs to adjust application configuration
-    - [x] Settings dialog can be opened via a main menu entry "Settings"
-          ( keyboard shortcut: cmd-comma (non-configurable) ), accessible in
-          main menu following macOS convention is "Presentator → Settings… "
-    - [x] Move the fullscreen-preference menu-entry into a new general-tab
-    - [x] New key-bindings-tab
-      - [x] for every action allow configurating one or more key-bindings
-        - [x] one multi-value field per action
-      - [x] Add a button to "learn" a key-binding ( reading the next keypress and appending
-            it as human-readable to the input-field for current action )
-        - [x] Re-pressing the "learn" button aborts current learning ( to be able to learn esc key
-              for an action )
-      - [x] Add a reset button for every action to reset to default key-bindings
-      - [x] Flag conflicting cross-action key-bindings, prevent closing/saving the configuration
-            with conflicts
-
 ## Export
 
 - [ ] At a main menu entry to create a standalone html file that provides
@@ -132,18 +69,6 @@ removing the finished tasks from the todo in favor of updated feature descriptio
   - would it be feature complete with respect to the app ?
   - should we exclude some feature in the first attempt and enhance exporting afterwards ?
   - what basic feature should we pick for the first working export results ?
-
-## Packaging
-
-- [x] App icon and metadata
-  - [x] Custom SVG icon designed (`src-tauri/icons/icon-source.svg`)
-  - [x] All raster/platform assets generated via `npx tauri icon`
-
-- [x] Add an about-dialog that shows build related info
-  - [x] dialog can be started via the standard main menu entry
-  - [x] app version
-  - [x] commit hash
-  - [x] utc build timestamp ( YYY-MM-DD HH:MM UTC )
 
 ## Testing
 
