@@ -3,6 +3,9 @@ import type { Step, TransitionConfig, Viewport } from "../types/config";
 import { DEFAULT_TRANSITION } from "../types/config";
 import type { ViewBox } from "../utils/svgViewBox";
 import { parseAspectRatio } from "../utils/svgViewBox";
+import { PointerOverlay } from "./PointerOverlay";
+
+const DEFAULT_POINTER_COLOR = "rgba(255, 40, 40, 0.85)";
 
 function applyEasing(easing: string, t: number): number {
   switch (easing) {
@@ -78,9 +81,12 @@ interface Props {
   transition?: TransitionConfig;
   aspectRatio: string;
   backgroundColor: string;
+  pointerColor?: string;
+  pointerLingerMs?: number;
+  pointerStrokeWidth?: number;
 }
 
-export function PresentationCanvas({ svgContent, viewBox: vb, step, transition, aspectRatio, backgroundColor }: Props) {
+export function PresentationCanvas({ svgContent, viewBox: vb, step, transition, aspectRatio, backgroundColor, pointerColor = DEFAULT_POINTER_COLOR, pointerLingerMs = 3000, pointerStrokeWidth = 3 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerSize, setContainerSize] = useState({ w: 0, h: 0 });
 
@@ -273,6 +279,9 @@ export function PresentationCanvas({ svgContent, viewBox: vb, step, transition, 
       className="presentation-container"
       style={{ backgroundColor }}
       data-testid="presentation-container"
+      // WebKit fires text-selection on the 2nd mousedown (detail=2) even with
+      // user-select:none on SVG content; cancelling the default stops it.
+      onMouseDown={(e) => { if (e.detail > 1) e.preventDefault(); }}
     >
       {screenW > 0 && (
         <svg
@@ -283,6 +292,7 @@ export function PresentationCanvas({ svgContent, viewBox: vb, step, transition, 
             display: "block",
             transformOrigin: `${originX}px ${originY}px`,
             transform: `rotate(${rotation}deg)`,
+            userSelect: "none",
           }}
           width={svgPixelW}
           height={svgPixelH}
@@ -290,6 +300,7 @@ export function PresentationCanvas({ svgContent, viewBox: vb, step, transition, 
           dangerouslySetInnerHTML={{ __html: liveHiddenStyle + svgInner }}
         />
       )}
+      <PointerOverlay color={pointerColor} lingerMs={pointerLingerMs} strokeWidth={pointerStrokeWidth} />
     </div>
   );
 }

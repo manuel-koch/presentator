@@ -14,7 +14,6 @@ import type { EditingCanvasHandle } from "./components/EditingCanvas";
 import { StepList } from "./components/StepList";
 import type { CopyAspectsOptions } from "./components/StepList";
 import { ElementPicker } from "./components/ElementPicker";
-import { ConfigControls } from "./components/ConfigControls";
 import { PendingReloadIndicator } from "./components/PendingReloadIndicator";
 import { ReloadNotification } from "./components/ReloadNotification";
 import { AboutDialog } from "./components/AboutDialog";
@@ -45,6 +44,8 @@ function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [appSettings, setAppSettings] = useState<AppSettings>({
     fullscreen_on_presentation: true,
+    pointer_linger_ms: 3000,
+    pointer_stroke_width: 3,
     key_bindings: DEFAULT_KEY_BINDINGS,
   });
   const [selectedStepIndex, setSelectedStepIndex] = useState<number | null>(null);
@@ -398,6 +399,9 @@ function App() {
           settings={appSettings}
           onSave={handleSaveSettings}
           onCancel={() => setShowSettings(false)}
+          filename={svgFile ? (svgFile.path.split("/").pop() ?? svgFile.path) : undefined}
+          presentationConfig={config ?? undefined}
+          onSavePresentationConfig={config ? updateConfig : undefined}
         />
       )}
       {showReloadNotification && (
@@ -448,7 +452,6 @@ function App() {
                     onGoToElement={(id) => canvasRef.current?.goToElement(id)}
                   />
                 )}
-                <ConfigControls config={config} onChange={updateConfig} />
               </>
             )}
           </aside>
@@ -486,11 +489,17 @@ function App() {
           transition={presentationTransition}
           aspectRatio={config.aspect_ratio}
           backgroundColor={config.background_color}
+          pointerColor={config.pointer_color}
+          pointerLingerMs={appSettings.pointer_linger_ms}
+          pointerStrokeWidth={appSettings.pointer_stroke_width}
         />
       ) : (
         <div
           className="presentation-container"
           style={{ backgroundColor: config?.background_color ?? "#000000" }}
+          // WebKit fires text-selection on the 2nd mousedown (detail=2) even with
+          // user-select:none on SVG content; cancelling the default stops it.
+          onMouseDown={(e) => { if (e.detail > 1) e.preventDefault(); }}
         >
           <div dangerouslySetInnerHTML={{ __html: svgFile.content }} />
         </div>

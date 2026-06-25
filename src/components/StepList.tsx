@@ -84,6 +84,8 @@ export function StepList({ steps, selectedIndex, transitions, defaultTransition,
   const [editingName, setEditingName] = useState("");
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
   const [dropPos, setDropPos] = useState<number | null>(null);
+  const [canScrollUp, setCanScrollUp] = useState(false);
+  const [canScrollDown, setCanScrollDown] = useState(false);
   const [clonePopup, setClonePopup] = useState<{
     fromIndex: number;
     top: number;
@@ -94,6 +96,31 @@ export function StepList({ steps, selectedIndex, transitions, defaultTransition,
   const listRef = useRef<HTMLUListElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const clonePopupRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (selectedIndex === null || !listRef.current) return;
+    const items = listRef.current.querySelectorAll<HTMLElement>("li.step-item");
+    items[selectedIndex]?.scrollIntoView({ block: "nearest" });
+  }, [selectedIndex]);
+
+  function checkScrollHints() {
+    const el = listRef.current;
+    if (!el) return;
+    setCanScrollUp(el.scrollTop > 2);
+    setCanScrollDown(el.scrollTop + el.clientHeight < el.scrollHeight - 2);
+  }
+
+  useEffect(() => {
+    const el = listRef.current;
+    if (!el) return;
+    checkScrollHints();
+    const ro = new ResizeObserver(checkScrollHints);
+    ro.observe(el);
+    return () => ro.disconnect();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => { checkScrollHints(); }, [steps]);
   const onReorderRef = useRef(onReorder);
   onReorderRef.current = onReorder;
   // Set to true while drag is in progress so the subsequent click event is suppressed.
@@ -222,7 +249,7 @@ export function StepList({ steps, selectedIndex, transitions, defaultTransition,
           </button>
         </div>
       </div>
-      <ul role="list" aria-label="Steps" ref={listRef}>
+      <ul role="list" aria-label="Steps" ref={listRef} onScroll={checkScrollHints}>
         {steps.flatMap((step, index) => {
           const isDropAbove = draggingIndex !== null && dropPos === index && draggingIndex !== index;
           const isDropBelow = draggingIndex !== null && dropPos === steps.length && index === steps.length - 1;
@@ -374,6 +401,12 @@ export function StepList({ steps, selectedIndex, transitions, defaultTransition,
           return [stepItem];
         })}
       </ul>
+      {canScrollUp && (
+        <div className="step-list-scroll-hint step-list-scroll-hint--top" aria-hidden>▲</div>
+      )}
+      {canScrollDown && (
+        <div className="step-list-scroll-hint step-list-scroll-hint--bottom" aria-hidden>▼</div>
+      )}
       {clonePopup !== null && (
         <div ref={clonePopupRef} className="step-clone-popup" style={{ top: clonePopup.top }}>
           <div className="step-clone-popup-title">Copy step aspects</div>

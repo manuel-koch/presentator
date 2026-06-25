@@ -22,6 +22,11 @@ removing the finished tasks from the todo in favor of updated feature descriptio
 - If no feature matches, introduce a new feature from the task content.
 - Create new feature sections, if task doesn't belong to any existing section.
 - Check if other documentation files need to be updated too to stay in-sync and consistent
+- When a task changes a specific feature or visual appearance, then only note the current
+  implementation in the features document. Don't mention any former implementation state
+  or migration guide unless user explicitly requested it.
+  Clarify with user when the change contradicts or significantly narrows an
+  existing feature description.
 
 ## Edit Mode
 
@@ -73,11 +78,62 @@ removing the finished tasks from the todo in favor of updated feature descriptio
 
 ## Presentation Mode (pointer)
 
-- [ ] a click in presentation-mode show a click-indicator at the clicked position that has
-      a simple animation ( maybe a small animated circle ? )
-- [ ] drag'n'drop in presentation mode draws an draw-indicator along the moved mouse positions
-      like a pen that write across the presentation-slide ( animated / smooth line drawing )
-- [ ] click-indicator and draw-indicator fade out after a short period
+All pointer indicators are purely ephemeral (not persisted, not part of the sidecar config).
+They are rendered in a transparent SVG overlay on top of the presentation viewport using
+screen-space coordinates, so they are unaffected by the step viewport transform.
+The overlay captures pointer events for drawing but must not block step navigation (keyboard).
+
+- [x] **Click indicator** — show an animated ripple at every click position
+  - Appearance: an expanding ring (outline circle) that grows from ~12 px to ~48 px and fades
+    out simultaneously over ~600 ms; no fill, stroke ~2 px
+  - Multiple clicks create independent ripples; each fades on its own timer
+  - After the animation completes the ripple is removed from the DOM
+
+- [x] **Draw indicator** — render a smooth freehand stroke while the pointer is dragged
+  - Appearance: a colored path drawn along the drag trajectory; stroke ~3 px, no fill
+  - Smoothing: use Catmull-Rom interpolation (or equivalent SVG cubic Bézier fitting) to
+    avoid a jagged polyline of raw mouse positions
+  - Multiple strokes per session are allowed (each drag = one new stroke); strokes accumulate
+    until cleared or faded
+  - The stroke is drawn incrementally as the pointer moves (not deferred to mouse-up)
+
+- [x] **Fade-out** — both indicators disappear automatically after a configurable idle time
+  - Click ripple: fades as part of its expand animation (~600 ms total, no extra delay)
+  - Draw strokes: fade out N seconds after the last stroke in a group is released
+    (opacity 1 → 0 over ~800 ms), then removed from the DOM
+  - Strokes drawn within the linger window of each other belong to the same group and
+    fade together; a gap longer than the linger timeout starts a new independent group
+  - Linger timeout is configurable in Application Settings (Presentation tab), default 3 s
+  - Active stroke (pointer still down) never fades prematurely
+
+- [x] **Indicator color** — a single color applies to both click ripples and draw strokes
+  - Default: semi-transparent red (`rgba(255, 40, 40, 0.85)`) — visible on most backgrounds
+  - Configurable per presentation via the config panel (Pointer color picker) and persisted
+    in the sidecar config as `pointer_color`
+
+- [x] **Line width** — stroke width of drawn lines is configurable
+  - Configurable in Application Settings (Presentation tab), default 3 px
+  - Applies to both the live stroke and persisted strokes
+
+- [x] **Application Settings — Presentation tab** — per-file settings for the loaded SVG
+  - Shows the currently loaded filename (read-only)
+  - Aspect ratio (e.g. 16:9, 4:3)
+  - Background color
+  - Pointer indicator color
+  - Formerly managed via a sidebar config panel (ConfigControls), now in the settings dialog
+
+- [x] **Application Settings — Playback tab** — global presentation-mode behavior settings
+  - Fullscreen on Presentation
+  - Pointer indicator fade delay (seconds)
+  - Pointer indicator line width (px)
+  - Formerly named "General" tab, renamed to "Playback" to distinguish from per-file settings
+
+- [x] **Non-interference with navigation**
+  - A plain click (no drag) must still trigger the click ripple AND not accidentally advance
+    the step — navigation is keyboard-only, so there is no conflict
+  - If gesture-based step navigation (swipe) is added later, draw mode should require a
+    modifier key (e.g. hold Alt while dragging) to distinguish drawing from a swipe gesture;
+    note this here to avoid a future breaking change
 
 ## Presentation Mode (notes)
 

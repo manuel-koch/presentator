@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { vi, describe, it, expect, beforeEach } from "vitest";
 import App from "./App";
@@ -33,7 +33,9 @@ function setupListenMock() {
 }
 
 function fireEvent(event: string, payload?: unknown) {
-  capturedHandlers[event]?.({ payload });
+  act(() => {
+    capturedHandlers[event]?.({ payload });
+  });
 }
 
 describe("App", () => {

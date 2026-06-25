@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ACTIONS, DEFAULT_KEY_BINDINGS, normalizeKey, computeInvalidBindings } from "../utils/keyBinding";
 import type { ActionMode } from "../utils/keyBinding";
+import type { PresentationConfig } from "../types/config";
 
 export interface AppSettings {
   fullscreen_on_presentation: boolean;
+  pointer_linger_ms: number;
+  pointer_stroke_width: number;
   key_bindings: Record<string, string[]>;
 }
 
@@ -11,13 +14,19 @@ interface Props {
   settings: AppSettings;
   onSave: (settings: AppSettings) => void;
   onCancel: () => void;
+  filename?: string;
+  presentationConfig?: PresentationConfig;
+  onSavePresentationConfig?: (config: PresentationConfig) => void;
 }
 
-type Tab = "general" | "keybindings";
+type Tab = "presentation" | "playback" | "keybindings";
 
-export function SettingsDialog({ settings, onSave, onCancel }: Props) {
-  const [activeTab, setActiveTab] = useState<Tab>("general");
+export function SettingsDialog({ settings, onSave, onCancel, filename, presentationConfig, onSavePresentationConfig }: Props) {
+  const [activeTab, setActiveTab] = useState<Tab>("presentation");
   const [fullscreen, setFullscreen] = useState(settings.fullscreen_on_presentation);
+  const [lingerMs, setLingerMs] = useState(settings.pointer_linger_ms ?? 3000);
+  const [lingerSecsStr, setLingerSecsStr] = useState(() => String((settings.pointer_linger_ms ?? 3000) / 1000));
+  const [strokeWidth, setStrokeWidth] = useState(settings.pointer_stroke_width ?? 3);
   const [keyBindings, setKeyBindings] = useState<Record<string, string[]>>(() => {
     const result: Record<string, string[]> = {};
     for (const action of ACTIONS) {
@@ -28,6 +37,10 @@ export function SettingsDialog({ settings, onSave, onCancel }: Props) {
   const [learningAction, setLearningAction] = useState<string | null>(null);
   const learnRef = useRef<string | null>(null);
   learnRef.current = learningAction;
+
+  const [aspectRatio, setAspectRatio] = useState(presentationConfig?.aspect_ratio ?? "16:9");
+  const [backgroundColor, setBackgroundColor] = useState(presentationConfig?.background_color ?? "#000000");
+  const [pointerColor, setPointerColor] = useState(presentationConfig?.pointer_color ?? "#ff2828");
 
   const conflicts = useMemo(() => computeConflicts(keyBindings), [keyBindings]);
   const invalidBindings = useMemo(() => computeInvalidBindings(keyBindings), [keyBindings]);
@@ -90,7 +103,10 @@ export function SettingsDialog({ settings, onSave, onCancel }: Props) {
 
   function handleSave() {
     if (hasConflicts || hasInvalid) return;
-    onSave({ fullscreen_on_presentation: fullscreen, key_bindings: keyBindings });
+    onSave({ fullscreen_on_presentation: fullscreen, pointer_linger_ms: lingerMs, pointer_stroke_width: strokeWidth, key_bindings: keyBindings });
+    if (presentationConfig && onSavePresentationConfig) {
+      onSavePresentationConfig({ ...presentationConfig, aspect_ratio: aspectRatio, background_color: backgroundColor, pointer_color: pointerColor });
+    }
   }
 
   return (
@@ -104,10 +120,16 @@ export function SettingsDialog({ settings, onSave, onCancel }: Props) {
       <div className="settings-dialog" onClick={(e) => e.stopPropagation()}>
         <div className="settings-tabs">
           <button
-            className={`settings-tab-btn${activeTab === "general" ? " settings-tab-btn--active" : ""}`}
-            onClick={() => setActiveTab("general")}
+            className={`settings-tab-btn${activeTab === "presentation" ? " settings-tab-btn--active" : ""}`}
+            onClick={() => setActiveTab("presentation")}
           >
-            General
+            Presentation
+          </button>
+          <button
+            className={`settings-tab-btn${activeTab === "playback" ? " settings-tab-btn--active" : ""}`}
+            onClick={() => setActiveTab("playback")}
+          >
+            Playback
           </button>
           <button
             className={`settings-tab-btn${activeTab === "keybindings" ? " settings-tab-btn--active" : ""}`}
@@ -118,18 +140,103 @@ export function SettingsDialog({ settings, onSave, onCancel }: Props) {
         </div>
 
         <div className="settings-tab-content">
-          <div className={`settings-tab-panel${activeTab === "general" ? "" : " settings-tab-panel--hidden"}`}>
+          <div className={`settings-tab-panel${activeTab === "presentation" ? "" : " settings-tab-panel--hidden"}`}>
+            {presentationConfig && filename ? (
+              <div className="settings-general">
+                <div className="settings-row">
+                  <span className="settings-row-title">File</span>
+                  <span className="settings-row-control settings-row-value">{filename}</span>
+                  <span className="settings-row-desc">Currently loaded SVG presentation file.</span>
+                </div>
+                <label className="settings-row">
+                  <span className="settings-row-title">Aspect ratio</span>
+                  <input
+                    type="text"
+                    value={aspectRatio}
+                    onChange={(e) => setAspectRatio(e.target.value)}
+                    className="settings-row-control settings-text-input"
+                    aria-label="Aspect ratio"
+                  />
+                  <span className="settings-row-desc">Viewport aspect ratio (e.g. 16:9, 4:3).</span>
+                </label>
+                <label className="settings-row">
+                  <span className="settings-row-title">Background color</span>
+                  <input
+                    type="color"
+                    value={backgroundColor}
+                    onChange={(e) => setBackgroundColor(e.target.value)}
+                    className="settings-row-control settings-color-input"
+                    aria-label="Background color"
+                  />
+                  <span className="settings-row-desc">Background color of the presentation canvas.</span>
+                </label>
+                <label className="settings-row">
+                  <span className="settings-row-title">Pointer indicator color</span>
+                  <input
+                    type="color"
+                    value={pointerColor}
+                    onChange={(e) => setPointerColor(e.target.value)}
+                    className="settings-row-control settings-color-input"
+                    aria-label="Pointer indicator color"
+                  />
+                  <span className="settings-row-desc">Color used for click ripples and drawn lines.</span>
+                </label>
+              </div>
+            ) : (
+              <p className="settings-no-file">No presentation file loaded.</p>
+            )}
+          </div>
+
+          <div className={`settings-tab-panel${activeTab === "playback" ? "" : " settings-tab-panel--hidden"}`}>
             <div className="settings-general">
-              <label className="settings-checkbox-row">
+              <label className="settings-row">
+                <span className="settings-row-title">Fullscreen on Presentation</span>
                 <input
                   type="checkbox"
+                  className="settings-row-control"
                   checked={fullscreen}
                   onChange={(e) => setFullscreen(e.target.checked)}
                 />
-                <span>
-                  <strong>Fullscreen on Presentation</strong>
-                  <span className="settings-field-desc">Automatically enter fullscreen when switching to presentation mode.</span>
-                </span>
+                <span className="settings-row-desc">Automatically enter fullscreen when switching to presentation mode.</span>
+              </label>
+              <label className="settings-row">
+                <span className="settings-row-title">Pointer indicator fade delay (s)</span>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={lingerSecsStr}
+                  onChange={(e) => setLingerSecsStr(e.target.value)}
+                  onBlur={() => {
+                    const v = parseFloat(lingerSecsStr);
+                    if (!isNaN(v) && v >= 0.5) {
+                      const committed = Math.round(Math.min(60, v) * 1000);
+                      setLingerMs(committed);
+                      setLingerSecsStr(String(committed / 1000));
+                    } else {
+                      setLingerSecsStr(String(lingerMs / 1000));
+                    }
+                  }}
+                  className="settings-row-control settings-number-input"
+                  aria-label="Pointer indicator fade delay in seconds"
+                />
+                <span className="settings-row-desc">Seconds after the last drawn line before the drawing fades out.</span>
+              </label>
+              <label className="settings-row">
+                <span className="settings-row-title">Pointer indicator line width (px)</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={20}
+                  step={1}
+                  value={strokeWidth}
+                  onChange={(e) => {
+                    const v = parseInt(e.target.value, 10);
+                    if (!isNaN(v) && v >= 1) setStrokeWidth(v);
+                  }}
+                  className="settings-row-control settings-number-input"
+                  aria-label="Pointer indicator line width in pixels"
+                />
+                <span className="settings-row-desc">Stroke width of drawn lines in presentation mode.</span>
               </label>
             </div>
           </div>

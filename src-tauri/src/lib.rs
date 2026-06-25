@@ -18,6 +18,9 @@ type ModeMenuState = Mutex<Option<ModeMenuItems>>;
 
 fn default_true() -> bool { true }
 
+fn default_pointer_linger_ms() -> u32 { 3000 }
+fn default_pointer_stroke_width() -> u32 { 3 }
+
 fn default_key_bindings() -> HashMap<String, Vec<String>> {
     let mut map = HashMap::new();
     map.insert(
@@ -35,6 +38,10 @@ fn default_key_bindings() -> HashMap<String, Vec<String>> {
 struct AppConfig {
     #[serde(default = "default_true")]
     fullscreen_on_presentation: bool,
+    #[serde(default = "default_pointer_linger_ms")]
+    pointer_linger_ms: u32,
+    #[serde(default = "default_pointer_stroke_width")]
+    pointer_stroke_width: u32,
     #[serde(default = "default_key_bindings")]
     key_bindings: HashMap<String, Vec<String>>,
 }
@@ -43,6 +50,8 @@ impl Default for AppConfig {
     fn default() -> Self {
         Self {
             fullscreen_on_presentation: true,
+            pointer_linger_ms: default_pointer_linger_ms(),
+            pointer_stroke_width: default_pointer_stroke_width(),
             key_bindings: default_key_bindings(),
         }
     }

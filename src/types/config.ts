@@ -22,6 +22,7 @@ export interface Step {
 export interface PresentationConfig {
   aspect_ratio: string;
   background_color: string;
+  pointer_color?: string;
   transition?: TransitionConfig;
   transitions?: TransitionConfig[];
   exclude_id_pattern?: string;

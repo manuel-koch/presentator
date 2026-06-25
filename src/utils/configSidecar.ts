@@ -14,6 +14,7 @@ export function parseConfig(yamlContent: string): PresentationConfig {
   return {
     aspect_ratio: (raw.aspect_ratio as string) ?? "16:9",
     background_color: (raw.background_color as string) ?? "#000000",
+    ...(raw.pointer_color !== undefined && { pointer_color: raw.pointer_color as string }),
     ...(raw.transition !== undefined && { transition: raw.transition as TransitionConfig }),
     ...(raw.transitions !== undefined && { transitions: raw.transitions as TransitionConfig[] }),
     ...(raw.exclude_id_pattern !== undefined && { exclude_id_pattern: raw.exclude_id_pattern as string }),
