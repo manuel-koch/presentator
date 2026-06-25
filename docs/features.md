@@ -62,6 +62,16 @@
 * exit to editing mode: Escape (hardcoded, not configurable)
 * key bindings are configured in Application Settings
 
+### Pointer indicators
+
+A transparent SVG overlay on top of the presentation viewport captures pointer events and renders ephemeral indicators in screen-space coordinates, unaffected by the step viewport transform. Indicators are not persisted and are cleared when leaving presentation mode.
+
+* **Click indicator** — an animated ripple (expanding ring, no fill) appears at each click position; grows from ~12 px to ~48 px and fades out over ~600 ms; multiple independent ripples can be active simultaneously
+* **Draw indicator** — a smooth freehand stroke is drawn along the drag trajectory using Catmull-Rom interpolation; stroke ~3 px, no fill; strokes accumulate across drags until cleared or faded
+* **Fade-out** — draw strokes fade (opacity 1 → 0 over ~800 ms) and are removed from the DOM after a configurable linger timeout since the last stroke of a group is released; strokes drawn within the linger window belong to the same group and fade together; an active stroke never fades prematurely; linger timeout is configurable in Application Settings (default: 3 s)
+* **Indicator color** — a single color applies to both click ripples and draw strokes; default: semi-transparent red (`rgba(255, 40, 40, 0.85)`); configurable in the Presentation tab of Application Settings and persisted in the sidecar config as `pointer_color`
+* **Line width** — configurable stroke width for drawn lines; default: 3 px; configured in Application Settings (Playback tab)
+
 ### Animated transitions
 
 * viewport center, zoom, and rotation are interpolated in a `requestAnimationFrame` loop for each step transition
@@ -80,7 +90,7 @@
   * drag'n'drop of presentation step in the list can be used to re-order steps
   * each step has a duplicate button (two-rectangles icon, blue hover) that creates a copy of the step inserted directly below the original, with " (Clone)" appended to its name
   * each step has a remove button (trash-can icon, red hover) on the right side for deletion
-  * each step has a clone-hide-list button that copies the current step's element-hide list to a chosen target step; clicking it opens a popup step picker to select the target step
+  * each step has a copy-step-aspects button that opens a popup with two parts: a checklist of aspects to copy (element visibility is pre-checked; viewport — center, zoom, rotation — is unchecked by default), and a list of target steps; target steps are toggled individually and confirmed with an Apply button, allowing multiple targets at once; the button is disabled when fewer than 2 steps exist; Apply is disabled when no aspect is checked
   * an add button (plus icon) at the top of the list appends a new step with a placeholder name
   * between consecutive step entries, a compact transition row allows configuring the inter-step transition:
     * duration (ms)
@@ -127,16 +137,29 @@
   * a notification appears in the lower right corner when files have been reloaded
   * a main menu entry allows unconditional manual reload of SVG and sidecar on demand
 
-* `aspect_ratio` and `background_color` can be configured via the app UI (stored in the sidecar config)
+* `aspect_ratio` and `background_color` are configured in the Presentation tab of Application Settings and stored in the sidecar config
 * `exclude_id_pattern` can be set in the sidecar YAML (not editable via UI) as a regexp string; IDs matching the pattern are excluded from the element picker — useful for project-convention IDs such as guide layers (e.g. `"^(bg|helper[-_]).*"`); matching IDs can still appear in a step's `hidden` list
 
 ## Application Settings
 
 The settings dialog is accessible via **Presentator → Settings…** (keyboard shortcut: Cmd-,). Settings are persisted to `{app_config_dir}/config.yaml` (macOS: `~/Library/Application Support/com.presentator/config.yaml`).
 
-### General tab
+### Presentation tab
+
+Per-file settings for the currently loaded SVG, stored in the sidecar config:
+
+* Currently loaded filename (read-only)
+* **Aspect ratio** (e.g. `16:9`, `4:3`)
+* **Background color** — shown outside the SVG content area
+* **Pointer indicator color** — persisted as `pointer_color`
+
+### Playback tab
+
+Global presentation-mode behavior settings:
 
 * **Fullscreen on Presentation** — automatically enter fullscreen when switching to presentation mode (default: enabled); exiting presentation mode returns to windowed mode
+* **Pointer indicator fade delay** — seconds before draw strokes begin fading after the last stroke in a group is released (default: 3 s)
+* **Pointer indicator line width** — stroke width for drawn pointer lines in pixels (default: 3 px)
 
 ### Key Bindings tab
 

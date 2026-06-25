@@ -9,6 +9,7 @@ Presentation configuration is stored in a YAML sidecar file named `<svgname>.pre
 
 aspect_ratio: "16:9"        # width:height of the presentation viewport
 background_color: "#000000" # shown outside the SVG (e.g. letterbox bars)
+pointer_color: "rgba(255,40,40,0.85)"  # optional: color for pointer indicators in presentation mode
 exclude_id_pattern: "^(bg|helper[-_]).*"  # optional: regexp to hide IDs from the element picker
 
 transition:
@@ -56,6 +57,7 @@ steps:
 |---|---|---|---|
 | `aspect_ratio` | string | yes | Viewport shape as `"width:height"` (e.g. `"16:9"`) |
 | `background_color` | string | yes | CSS color shown outside the SVG content area |
+| `pointer_color` | string | no | CSS color for pointer indicators (click ripples and draw strokes) in presentation mode; default: `rgba(255, 40, 40, 0.85)` |
 | `exclude_id_pattern` | string | no | Regexp applied to element IDs after structural filtering; matching IDs are excluded from the element picker. They can still be listed in a step's `hidden` and will be hidden in the SVG viewport. Invalid patterns are silently ignored. |
 | `transition` | object | no | Global default transition applied to all inter-step gaps that have no per-gap override |
 | `transitions` | list | no | Per-gap transition overrides; `transitions[i]` governs the transition between step `i` and step `i+1`; length should equal `steps.length - 1`; missing entries fall back to the global `transition` default |
