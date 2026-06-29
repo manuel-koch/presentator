@@ -66,20 +66,20 @@ Render pipeline (all Rust, no browser engine):
 
 ### Phase 2 — Data model and config schema
 
-- [ ] Add `OverlayStyle` type to `src/types/config.ts`:
+- [x] Add `OverlayStyle` type to `src/types/config.ts`:
       `font_size_pt?: number`, `text_color?: string`, `font_family?: string`
-- [ ] Add `MarkdownOverlay` type to `src/types/config.ts`:
+- [x] Add `MarkdownOverlay` type to `src/types/config.ts`:
       `id`, `content` (markdown string), `x`, `y`, `width` (SVG units),
       `rotation?: number` (degrees, default 0);
       no `height` field — height is auto-computed from the rendered SVG's intrinsic aspect ratio
       and `width` at embed time
-- [ ] Add optional `style?: OverlayStyle` field to `MarkdownOverlay`
-- [ ] Add optional `overlays?: MarkdownOverlay[]` field to `PresentationConfig`
-- [ ] Add optional `hidden_overlays?: string[]` (overlay IDs) field to `Step`,
+- [x] Add optional `style?: OverlayStyle` field to `MarkdownOverlay`
+- [x] Add optional `overlays?: MarkdownOverlay[]` field to `PresentationConfig`
+- [x] Add optional `hidden_overlays?: string[]` (overlay IDs) field to `Step`,
       mirroring how `hidden` works for SVG elements
-- [ ] Extend YAML parse and serialize in `src/utils/configSidecar.ts` to round-trip overlays
-- [ ] Unit-test config parse → serialize → parse round-trip with overlays and style present
-- [ ] Verify: open existing sidecar YAML without overlays, confirm app still loads correctly
+- [x] Extend YAML parse and serialize in `src/utils/configSidecar.ts` to round-trip overlays
+- [x] Unit-test config parse → serialize → parse round-trip with overlays and style present
+- [x] Verify: open existing sidecar YAML without overlays, confirm app still loads correctly
 
 ### Phase 3 — Render overlays in PresentationCanvas
 

@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { sidecarPath, parseConfig, serializeConfig } from "./configSidecar";
 import { defaultConfig } from "../types/config";
+import type { MarkdownOverlay, PresentationConfig } from "../types/config";
 
 describe("sidecarPath", () => {
   it("replaces .svg extension with .presentator.yaml", () => {
@@ -125,6 +126,141 @@ describe("serializeConfig / parseConfig roundtrip", () => {
           viewport: { center: [0.1, 0.9] as [number, number], zoom: 1.5, rotation: 45 },
           hidden: ["el-a", "el-b"],
         },
+      ],
+    };
+    const roundtripped = parseConfig(serializeConfig(original));
+    expect(roundtripped).toEqual(original);
+  });
+});
+
+describe("MarkdownOverlay support", () => {
+  const yamlWithOverlay = `
+aspect_ratio: "16:9"
+background_color: "#000000"
+steps:
+  - name: Intro
+    viewport:
+      center: [0.5, 0.5]
+      zoom: 1.0
+      rotation: 0
+    hidden: []
+    hidden_overlays:
+      - overlay-1
+overlays:
+  - id: overlay-1
+    content: "# Hello"
+    x: 100
+    y: 200
+    width: 300
+    rotation: 15
+    style:
+      font_size_pt: 18
+      text_color: "#ffffff"
+      font_family: Monaco
+`;
+
+  it("parses overlay fields from YAML", () => {
+    const config = parseConfig(yamlWithOverlay);
+    expect(config.overlays).toHaveLength(1);
+    const o = config.overlays![0];
+    expect(o.id).toBe("overlay-1");
+    expect(o.content).toBe("# Hello");
+    expect(o.x).toBe(100);
+    expect(o.y).toBe(200);
+    expect(o.width).toBe(300);
+    expect(o.rotation).toBe(15);
+  });
+
+  it("parses overlay style", () => {
+    const config = parseConfig(yamlWithOverlay);
+    const style = config.overlays![0].style!;
+    expect(style.font_size_pt).toBe(18);
+    expect(style.text_color).toBe("#ffffff");
+    expect(style.font_family).toBe("Monaco");
+  });
+
+  it("parses hidden_overlays on a step", () => {
+    const config = parseConfig(yamlWithOverlay);
+    expect(config.steps[0].hidden_overlays).toEqual(["overlay-1"]);
+  });
+
+  it("omits rotation when not present in YAML", () => {
+    const config = parseConfig(`
+aspect_ratio: "16:9"
+background_color: "#000000"
+steps: []
+overlays:
+  - id: o1
+    content: hello
+    x: 0
+    y: 0
+    width: 100
+`);
+    expect(config.overlays![0]).not.toHaveProperty("rotation");
+  });
+
+  it("omits style when not present in YAML", () => {
+    const config = parseConfig(`
+aspect_ratio: "16:9"
+background_color: "#000000"
+steps: []
+overlays:
+  - id: o1
+    content: hello
+    x: 0
+    y: 0
+    width: 100
+`);
+    expect(config.overlays![0]).not.toHaveProperty("style");
+  });
+
+  it("omits hidden_overlays on step when not present in YAML", () => {
+    const config = parseConfig(`
+aspect_ratio: "16:9"
+background_color: "#000000"
+steps:
+  - name: S
+    viewport: { center: [0.5, 0.5], zoom: 1.0, rotation: 0 }
+    hidden: []
+`);
+    expect(config.steps[0]).not.toHaveProperty("hidden_overlays");
+  });
+
+  it("config without overlays still parses correctly", () => {
+    const config = parseConfig(`
+aspect_ratio: "16:9"
+background_color: "#000000"
+steps:
+  - name: S
+    viewport: { center: [0.5, 0.5], zoom: 1.0, rotation: 0 }
+    hidden: []
+`);
+    expect(config).not.toHaveProperty("overlays");
+    expect(config.steps[0].hidden).toEqual([]);
+  });
+
+  it("roundtrips a config with overlays and hidden_overlays without data loss", () => {
+    const original: PresentationConfig = {
+      aspect_ratio: "16:9",
+      background_color: "#000000",
+      steps: [
+        {
+          name: "Step 1",
+          viewport: { center: [0.5, 0.5], zoom: 1.0, rotation: 0 },
+          hidden: [],
+          hidden_overlays: ["overlay-1"],
+        },
+      ],
+      overlays: [
+        {
+          id: "overlay-1",
+          content: "# Title\n\nSome text.",
+          x: 50,
+          y: 100,
+          width: 400,
+          rotation: 10,
+          style: { font_size_pt: 16, text_color: "#ffffff", font_family: "Arial" },
+        } satisfies MarkdownOverlay,
       ],
     };
     const roundtripped = parseConfig(serializeConfig(original));

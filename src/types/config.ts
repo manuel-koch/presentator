@@ -17,6 +17,23 @@ export interface Step {
   name: string;
   viewport: Viewport;
   hidden: string[];
+  hidden_overlays?: string[];
+}
+
+export interface OverlayStyle {
+  font_size_pt?: number;
+  text_color?: string;
+  font_family?: string;
+}
+
+export interface MarkdownOverlay {
+  id: string;
+  content: string;
+  x: number;
+  y: number;
+  width: number;
+  rotation?: number;
+  style?: OverlayStyle;
 }
 
 export interface PresentationConfig {
@@ -27,6 +44,7 @@ export interface PresentationConfig {
   transitions?: TransitionConfig[];
   exclude_id_pattern?: string;
   steps: Step[];
+  overlays?: MarkdownOverlay[];
 }
 
 export function defaultConfig(): PresentationConfig {
