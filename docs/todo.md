@@ -125,7 +125,20 @@ Cache rendered overlay SVGs on disk so reopening the same file skips Typst compi
 - [x] Verify: open a file with overlays, reload — confirm `render_markdown_to_svg` is NOT called
       a second time for unchanged overlays (integration / e2e test)
 
-### Phase 6 — Overlay list and management UI
+### Phase 6 — Render overlays in EditingCanvas
+
+Overlays can already be authored manually in the sidecar YAML. They should be visible in
+editing mode so the author can see them while arranging steps.
+
+- [x] In `EditingCanvas`, embed each overlay as a nested `<svg>` element using the same
+      logic as `PresentationCanvas` (position, width, derived height, optional rotation);
+      reuse the already-rendered SVGs from `useOverlaySvgs` — no additional Tauri calls needed
+- [x] Apply the active step's `hidden_overlays` list: overlays listed there are not shown
+      while that step is selected (mirrors presentation-mode visibility)
+- [x] Verify: open a sidecar YAML that contains overlays, switch to editing mode, confirm
+      each overlay appears at the correct position and scale on the canvas
+
+### Phase 7 — Overlay list and management UI
 
 - [ ] Add an "Overlays" section below the step list in the editing sidebar
 - [ ] Each overlay row shows its `id`; includes a delete button
@@ -135,7 +148,7 @@ Cache rendered overlay SVGs on disk so reopening the same file skips Typst compi
 - [ ] current overlay's bounds is visualized as rectangle, if the rectangle is outside the
       current viewport then show the "outside" indicator like the step-viewport
 
-### Phase 7 — Markdown editor dialog
+### Phase 8 — Markdown editor dialog
 
 - [ ] Open a split-pane dialog when editing an overlay:
       left pane — editable markdown textarea; right pane — live rendered preview
@@ -143,7 +156,7 @@ Cache rendered overlay SVGs on disk so reopening the same file skips Typst compi
 - [ ] Confirm/Save writes the updated `content` back to the overlay in config
 - [ ] Verify: edit markdown text, confirm preview updates and the change persists after reload
 
-### Phase 8 — Bounds editing in EditingCanvas
+### Phase 9 — Bounds editing in EditingCanvas
 
 Functionality should be like the step-viewport editing: moving, resizing, rotating.
 
@@ -178,7 +191,7 @@ Functionality should be like the step-viewport editing: moving, resizing, rotati
 - [ ] Verify: drag a step viewport near an overlay edge; confirm it snaps and the guide line
       is visible
 
-### Phase 9 — Per-step visibility toggle
+### Phase 10 — Per-step visibility toggle
 
 - [ ] In the step list, add a toggle (eye icon) per overlay row to hide/show the overlay
       for that step (updates `hidden_overlays` on the step)

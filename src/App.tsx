@@ -483,6 +483,8 @@ function App() {
                 }}
                 hidden={selectedStep?.hidden ?? []}
                 hoveredElementId={hoveredElementId}
+                overlays={config?.overlays}
+                overlaySvgs={overlaySvgs}
               />
             ) : (
               <div className="svg-viewport" data-testid="svg-viewport">

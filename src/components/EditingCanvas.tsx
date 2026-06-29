@@ -1,6 +1,7 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from "react";
-import type { Step, Viewport } from "../types/config";
+import type { MarkdownOverlay, Step, Viewport } from "../types/config";
 import type { ViewBox } from "../utils/svgViewBox";
+import { buildOverlayEmbeds } from "./PresentationCanvas";
 import { parseAspectRatio } from "../utils/svgViewBox";
 
 interface Props {
@@ -15,6 +16,8 @@ interface Props {
   onSelectStep?: (index: number) => void;
   hidden?: string[];
   hoveredElementId?: string | null;
+  overlays?: MarkdownOverlay[];
+  overlaySvgs?: Map<string, string>;
 }
 
 export interface EditingCanvasHandle {
@@ -240,7 +243,7 @@ interface DragState {
 }
 
 export const EditingCanvas = forwardRef<EditingCanvasHandle, Props>(function EditingCanvas(
-  { svgContent, viewBox: vb, steps, selectedStepIndex, hoveredStepIndex = null, aspectRatio, backgroundColor, onViewportChange, onSelectStep, hidden, hoveredElementId = null },
+  { svgContent, viewBox: vb, steps, selectedStepIndex, hoveredStepIndex = null, aspectRatio, backgroundColor, onViewportChange, onSelectStep, hidden, hoveredElementId = null, overlays, overlaySvgs },
   ref
 ) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -321,6 +324,11 @@ export const EditingCanvas = forwardRef<EditingCanvasHandle, Props>(function Edi
     // everywhere, giving it higher CSS specificity (1,0,0,0) than our #id{display:none} rules.
     return raw.replace(/display\s*:\s*inline(?![a-z-])\s*;?/gi, '');
   }, [svgContent]);
+
+  const overlayHtml = useMemo(() => {
+    if (!overlays?.length || !overlaySvgs) return "";
+    return buildOverlayEmbeds(overlays, overlaySvgs, selectedStep?.hidden_overlays ?? []);
+  }, [overlays, overlaySvgs, selectedStep?.hidden_overlays]);
 
   // Fit SVG to canvas on first render / when viewBox changes.
   useEffect(() => {
@@ -998,11 +1006,11 @@ export const EditingCanvas = forwardRef<EditingCanvasHandle, Props>(function Edi
               height={vb.height * zoom}
               viewBox={`${vb.x} ${vb.y} ${vb.width} ${vb.height}`}
               dangerouslySetInnerHTML={{
-                __html: hidden && hidden.length > 0
+                __html: (hidden && hidden.length > 0
                   ? `<style>${hidden.map(id =>
                       `#${CSS.escape(id)}{${id === hoveredElementId ? "opacity:0.15" : "display:none"}}`
                     ).join("")}</style>${svgInner}`
-                  : svgInner,
+                  : svgInner) + overlayHtml,
               }}
             />
           </div>
