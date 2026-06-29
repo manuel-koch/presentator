@@ -42,8 +42,10 @@ describe("useOverlaySvgs", () => {
     expect(result.current.svgMap.get("o1")).toBe(SAMPLE_SVG);
     expect(result.current.pendingCount).toBe(0);
     expect(invoke).toHaveBeenCalledWith("render_markdown_to_svg", {
+      id: "o1",
       content: "# Hello",
       options: { font_size_pt: 14.0, text_color: "#000000", font_family: "Helvetica Neue" },
+      width: 100,
     });
   });
 
@@ -52,8 +54,10 @@ describe("useOverlaySvgs", () => {
     const { result } = renderHook(() => useOverlaySvgs([OVERLAY_WITH_STYLE]));
     await waitFor(() => expect(result.current.svgMap.size).toBe(1));
     expect(invoke).toHaveBeenCalledWith("render_markdown_to_svg", {
+      id: "o2",
       content: "## Styled",
       options: { font_size_pt: 18, text_color: "#ff0000", font_family: "Monaco" },
+      width: 200,
     });
   });
 

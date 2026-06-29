@@ -1,4 +1,5 @@
 mod markdown;
+mod overlay_cache;
 
 use std::collections::HashMap;
 use std::sync::Mutex;
@@ -157,10 +158,67 @@ fn get_app_settings(state: State<AppConfigState>) -> AppConfig {
 
 #[tauri::command]
 fn render_markdown_to_svg(
+    id: String,
     content: String,
     options: markdown::RenderOptions,
+    width: f64,
+    app: AppHandle,
 ) -> Result<String, String> {
-    markdown::render_markdown_to_svg(&content, &options)
+    let key = overlay_cache::cache_key(
+        &content,
+        options.font_size_pt,
+        &options.text_color,
+        &options.font_family,
+        width,
+    );
+    let cache_dir = app
+        .path()
+        .app_cache_dir()
+        .ok()
+        .map(|d| overlay_cache::overlay_svg_dir(&d));
+
+    if let Some(ref dir) = cache_dir {
+        if let Some(svg) = overlay_cache::get(dir, &key) {
+            log::debug!("overlay-svg cache hit id={id}");
+            return Ok(svg);
+        }
+    }
+
+    log::info!("rendering markdown → svg id={id} width={width}");
+
+    let svg = markdown::render_markdown_to_svg(&content, &options)?;
+
+    if let Some(ref dir) = cache_dir {
+        let _ = overlay_cache::put(dir, &key, &svg);
+    }
+
+    Ok(svg)
+}
+
+#[tauri::command]
+fn get_overlay_cache_stats(app: AppHandle) -> overlay_cache::CacheStats {
+    let cache_dir = app
+        .path()
+        .app_cache_dir()
+        .ok()
+        .map(|d| overlay_cache::overlay_svg_dir(&d));
+    match cache_dir {
+        Some(dir) => overlay_cache::stats(&dir),
+        None => overlay_cache::CacheStats { entry_count: 0, total_bytes: 0 },
+    }
+}
+
+#[tauri::command]
+fn clear_overlay_svg_cache(app: AppHandle) -> usize {
+    let Some(cache_dir) = app
+        .path()
+        .app_cache_dir()
+        .ok()
+        .map(|d| overlay_cache::overlay_svg_dir(&d))
+    else {
+        return 0;
+    };
+    overlay_cache::clear(&cache_dir)
 }
 
 #[tauri::command]
@@ -176,6 +234,12 @@ fn set_app_settings(settings: AppConfig, app: AppHandle, state: State<AppConfigS
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(
+            tauri_plugin_log::Builder::new()
+                .level(log::LevelFilter::Info)
+                .level_for("presentator_lib", log::LevelFilter::Debug)
+                .build(),
+        )
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .manage(Mutex::<Option<RecommendedWatcher>>::new(None))
@@ -184,6 +248,18 @@ pub fn run() {
         .manage(AppConfigState::new(AppConfig::default()))
         .setup(|app| {
             use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
+
+            // Log overlay SVG cache stats.
+            if let Ok(cache_root) = app.path().app_cache_dir() {
+                let dir = overlay_cache::overlay_svg_dir(&cache_root);
+                let s = overlay_cache::stats(&dir);
+                log::info!(
+                    "overlay-svg cache: {} entr{}, {} KB",
+                    s.entry_count,
+                    if s.entry_count == 1 { "y" } else { "ies" },
+                    s.total_bytes / 1024,
+                );
+            }
 
             // Load persisted app config and replace the default-initialised state.
             let loaded_config = load_app_config(app.handle());
@@ -287,7 +363,9 @@ pub fn run() {
             update_mode_menu,
             get_app_settings,
             set_app_settings,
-            render_markdown_to_svg
+            render_markdown_to_svg,
+            get_overlay_cache_stats,
+            clear_overlay_svg_cache
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

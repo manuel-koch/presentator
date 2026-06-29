@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { ACTIONS, DEFAULT_KEY_BINDINGS, normalizeKey, computeInvalidBindings } from "../utils/keyBinding";
 import type { ActionMode } from "../utils/keyBinding";
 import type { PresentationConfig } from "../types/config";
@@ -37,6 +38,21 @@ export function SettingsDialog({ settings, onSave, onCancel, filename, presentat
   const [learningAction, setLearningAction] = useState<string | null>(null);
   const learnRef = useRef<string | null>(null);
   learnRef.current = learningAction;
+
+  const [cacheStats, setCacheStats] = useState<{ entry_count: number; total_bytes: number } | null>(null);
+
+  useEffect(() => {
+    invoke<{ entry_count: number; total_bytes: number }>("get_overlay_cache_stats")
+      .then(setCacheStats)
+      .catch(() => {});
+  }, []);
+
+  async function handleClearCache() {
+    await invoke("clear_overlay_svg_cache").catch(() => {});
+    invoke<{ entry_count: number; total_bytes: number }>("get_overlay_cache_stats")
+      .then(setCacheStats)
+      .catch(() => {});
+  }
 
   const [aspectRatio, setAspectRatio] = useState(presentationConfig?.aspect_ratio ?? "16:9");
   const [backgroundColor, setBackgroundColor] = useState(presentationConfig?.background_color ?? "#000000");
@@ -238,6 +254,22 @@ export function SettingsDialog({ settings, onSave, onCancel, filename, presentat
                 />
                 <span className="settings-row-desc">Stroke width of drawn lines in presentation mode.</span>
               </label>
+              <div className="settings-row">
+                <span className="settings-row-title">Overlay render cache</span>
+                <button
+                  className="settings-row-control settings-btn-clear-cache"
+                  onClick={handleClearCache}
+                  disabled={cacheStats?.entry_count === 0}
+                  aria-label="Clear overlay render cache"
+                >
+                  Clear
+                </button>
+                <span className="settings-row-desc">
+                  {cacheStats
+                    ? `${cacheStats.entry_count} entr${cacheStats.entry_count === 1 ? "y" : "ies"} · ${formatBytes(cacheStats.total_bytes)}`
+                    : "Loading…"}
+                </span>
+              </div>
             </div>
           </div>
 
@@ -326,6 +358,12 @@ export function SettingsDialog({ settings, onSave, onCancel, filename, presentat
       </div>
     </div>
   );
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 const MODE_LABELS: Record<ActionMode, string> = {

@@ -77,8 +77,10 @@ export function useOverlaySvgs(
         font_family: overlay.style?.font_family ?? "Helvetica Neue",
       };
       invoke<string>("render_markdown_to_svg", {
+        id: overlay.id,
         content: overlay.content,
         options,
+        width: overlay.width,
       })
         .then((svg) => {
           if (!cancelled) cache.current.set(key, svg);

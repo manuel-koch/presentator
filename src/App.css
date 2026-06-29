@@ -1254,6 +1254,25 @@ button:active {
   background-color: var(--btn-bg);
 }
 
+.settings-btn-clear-cache {
+  padding: 0.25em 0.75em;
+  font-size: 0.8rem;
+  background: transparent;
+  border: 1px solid var(--border-muted);
+  color: var(--text-secondary);
+}
+
+.settings-btn-clear-cache:hover:not(:disabled) {
+  background: var(--red-bg-active);
+  border-color: var(--red-border);
+  color: var(--red);
+}
+
+.settings-btn-clear-cache:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 /* Overlay render progress indicator */
 @keyframes spin {
   to { transform: rotate(360deg); }

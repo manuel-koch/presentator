@@ -109,18 +109,21 @@ Render pipeline (all Rust, no browser engine):
 
 Cache rendered overlay SVGs on disk so reopening the same file skips Typst compilation.
 
-- [ ] Use Tauri's `app.path().app_cache_dir()` as the cache root
+- [x] Use Tauri's `app.path().app_cache_dir()` as the cache root
       (cache dir is evictable OS-managed storage, unlike `app_data_dir`)
-- [ ] Compute cache key = SHA-256 of `(content + font_size_pt + text_color + font_family + width)`;
+- [x] Compute cache key = SHA-256 of `(content + font_size_pt + text_color + font_family + width)`;
       store entries at `<cache_dir>/overlay-svg/<hash>.svg`
-- [ ] In the Rust `render_markdown_to_svg` command (or a new `render_markdown_to_svg_cached`):
+- [x] In the Rust `render_markdown_to_svg` command:
       check for `<hash>.svg` first and return its contents on hit;
-      on miss: render, write to file atomically (write temp → rename), return SVG string
-- [ ] Expose a Tauri command `clear_overlay_svg_cache` that removes all files in the cache dir;
-      wire it to a "Clear cache" button in the Settings dialog or a dedicated menu entry
-- [ ] Log approximate cache size (file count, total bytes) to the app console on startup
-- [ ] Verify: open a file with overlays, reload — confirm `render_markdown_to_svg` is NOT called
-      a second time for unchanged overlays
+      on miss: render, write to file atomically (write temp → rename), return SVG string;
+      cache is best-effort — if the cache dir is unavailable the command still renders
+- [x] Pass `width` from the frontend hook to `render_markdown_to_svg` for cache key derivation
+- [x] Expose `get_overlay_cache_stats` (entry count + total bytes) and `clear_overlay_svg_cache` commands
+- [x] Wire "Overlay render cache" row into the Settings → Playback tab:
+      shows entry count and size, "Clear" button resets the cache
+- [x] Log cache stats (entry count, KB) to stderr on app startup
+- [x] Verify: open a file with overlays, reload — confirm `render_markdown_to_svg` is NOT called
+      a second time for unchanged overlays (integration / e2e test)
 
 ### Phase 6 — Overlay list and management UI
 

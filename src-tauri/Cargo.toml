@@ -19,12 +19,15 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 tauri = { version = "2", features = [] }
+tauri-plugin-log = "2"
 tauri-plugin-opener = "2"
 tauri-plugin-dialog = "2"
+log = "0.4"
 serde = { version = "1", features = ["derive"] }
 serde_yaml = "0.9"
 notify = "6"
 pulldown-cmark = "0.13"
+sha2 = "0.10"
 typst = "0.14"
 typst-as-lib = { version = "0.15", features = ["typst-kit-fonts"] }
 typst-svg = "0.14"
