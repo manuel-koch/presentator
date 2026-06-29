@@ -5,6 +5,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useSvgFile } from "./hooks/useSvgFile";
 import { useSidecarConfig } from "./hooks/useSidecarConfig";
 import { useFileWatcher } from "./hooks/useFileWatcher";
+import { useOverlaySvgs } from "./hooks/useOverlaySvgs";
 import { sidecarPath } from "./utils/configSidecar";
 import { parseSvgViewBox, parseAspectRatio } from "./utils/svgViewBox";
 import { extractNamedElements } from "./utils/svgElements";
@@ -37,6 +38,7 @@ function getTransitions(config: { steps: Step[]; transition?: TransitionConfig; 
 function App() {
   const { svgFile, error, pickFile, reloadFile } = useSvgFile();
   const { config, updateConfig, reloadConfig } = useSidecarConfig(svgFile?.path ?? null);
+  const { svgMap: overlaySvgs, pendingCount: overlaysPending } = useOverlaySvgs(config?.overlays);
   const [mode, setMode] = useState<AppMode>("editing");
   const [pendingReload, setPendingReload] = useState(false);
   const [showReloadNotification, setShowReloadNotification] = useState(false);
@@ -425,6 +427,14 @@ function App() {
           <aside className="editor-sidebar">
             {config && (
               <>
+                {overlaysPending > 0 && (
+                  <div className="overlay-render-status">
+                    <span className="overlay-render-spinner" />
+                    {overlaysPending === 1
+                      ? "Rendering overlay…"
+                      : `Rendering ${overlaysPending} overlays…`}
+                  </div>
+                )}
                 <StepList
                   steps={config.steps}
                   selectedIndex={selectedStepIndex}
@@ -492,6 +502,8 @@ function App() {
           pointerColor={config.pointer_color}
           pointerLingerMs={appSettings.pointer_linger_ms}
           pointerStrokeWidth={appSettings.pointer_stroke_width}
+          overlays={config.overlays}
+          overlaySvgs={overlaySvgs}
         />
       ) : (
         <div

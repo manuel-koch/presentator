@@ -1,11 +1,54 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { Step, TransitionConfig, Viewport } from "../types/config";
+import type { MarkdownOverlay, Step, TransitionConfig, Viewport } from "../types/config";
 import { DEFAULT_TRANSITION } from "../types/config";
 import type { ViewBox } from "../utils/svgViewBox";
 import { parseAspectRatio } from "../utils/svgViewBox";
 import { PointerOverlay } from "./PointerOverlay";
 
 const DEFAULT_POINTER_COLOR = "rgba(255, 40, 40, 0.85)";
+
+export interface ParsedViewBox { x: number; y: number; w: number; h: number }
+
+export function parseOverlayViewBox(svg: string): ParsedViewBox | null {
+  const m = svg.match(/viewBox="([^"]+)"/);
+  if (!m) return null;
+  const parts = m[1].trim().split(/[\s,]+/).map(Number);
+  if (parts.length < 4 || parts.some(isNaN) || parts[2] === 0) return null;
+  return { x: parts[0], y: parts[1], w: parts[2], h: parts[3] };
+}
+
+function extractSvgInner(svg: string): string {
+  const openEnd = svg.indexOf(">");
+  if (openEnd === -1) return "";
+  const closeStart = svg.lastIndexOf("</svg>");
+  return closeStart === -1 ? svg.substring(openEnd + 1) : svg.substring(openEnd + 1, closeStart);
+}
+
+export function buildOverlayEmbeds(
+  overlays: MarkdownOverlay[],
+  overlaySvgs: Map<string, string>,
+  hiddenOverlays: string[],
+): string {
+  const hiddenSet = new Set(hiddenOverlays);
+  return overlays
+    .filter((o) => !hiddenSet.has(o.id))
+    .map((o) => {
+      const svg = overlaySvgs.get(o.id);
+      if (!svg) return "";
+      const vb = parseOverlayViewBox(svg);
+      if (!vb) return "";
+      const embedH = o.width * (vb.h / vb.w);
+      const cx = o.x + o.width / 2;
+      const cy = o.y + embedH / 2;
+      const inner = extractSvgInner(svg);
+      const rotation = o.rotation ?? 0;
+      const transform = rotation !== 0
+        ? ` transform="rotate(${rotation}, ${cx}, ${cy})"`
+        : "";
+      return `<svg x="${o.x}" y="${o.y}" width="${o.width}" height="${embedH}" viewBox="${vb.x} ${vb.y} ${vb.w} ${vb.h}"${transform}>${inner}</svg>`;
+    })
+    .join("");
+}
 
 function applyEasing(easing: string, t: number): number {
   switch (easing) {
@@ -84,9 +127,11 @@ interface Props {
   pointerColor?: string;
   pointerLingerMs?: number;
   pointerStrokeWidth?: number;
+  overlays?: MarkdownOverlay[];
+  overlaySvgs?: Map<string, string>;
 }
 
-export function PresentationCanvas({ svgContent, viewBox: vb, step, transition, aspectRatio, backgroundColor, pointerColor = DEFAULT_POINTER_COLOR, pointerLingerMs = 3000, pointerStrokeWidth = 3 }: Props) {
+export function PresentationCanvas({ svgContent, viewBox: vb, step, transition, aspectRatio, backgroundColor, pointerColor = DEFAULT_POINTER_COLOR, pointerLingerMs = 3000, pointerStrokeWidth = 3, overlays, overlaySvgs }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerSize, setContainerSize] = useState({ w: 0, h: 0 });
 
@@ -111,6 +156,11 @@ export function PresentationCanvas({ svgContent, viewBox: vb, step, transition, 
     // everywhere, giving it higher CSS specificity (1,0,0,0) than our #id{display:none} rules.
     return raw.replace(/display\s*:\s*inline(?![a-z-])\s*;?/gi, "");
   }, [svgContent]);
+
+  const overlayHtml = useMemo(() => {
+    if (!overlays?.length || !overlaySvgs) return "";
+    return buildOverlayEmbeds(overlays, overlaySvgs, step.hidden_overlays ?? []);
+  }, [overlays, overlaySvgs, step.hidden_overlays]);
 
   // Viewport animation state.
   const [liveViewport, setLiveViewport] = useState<Viewport>(() => step.viewport);
@@ -297,7 +347,7 @@ export function PresentationCanvas({ svgContent, viewBox: vb, step, transition, 
           width={svgPixelW}
           height={svgPixelH}
           viewBox={`${vb.x} ${vb.y} ${vb.width} ${vb.height}`}
-          dangerouslySetInnerHTML={{ __html: liveHiddenStyle + svgInner }}
+          dangerouslySetInnerHTML={{ __html: liveHiddenStyle + svgInner + overlayHtml }}
         />
       )}
       <PointerOverlay color={pointerColor} lingerMs={pointerLingerMs} strokeWidth={pointerStrokeWidth} />

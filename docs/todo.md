@@ -83,18 +83,46 @@ Render pipeline (all Rust, no browser engine):
 
 ### Phase 3 — Render overlays in PresentationCanvas
 
-- [ ] On config load, call `render_markdown_to_svg` for each overlay; cache results by
-      `blake3` hash of content and style so re-renders do not recompile unchanged overlays
-- [ ] Derive the embed height from the rendered SVG's intrinsic `viewBox` aspect ratio
+- [x] On config load, call `render_markdown_to_svg` for each overlay; cache results by
+      content+style string key so re-renders do not recompile unchanged overlays
+- [x] Derive the embed height from the rendered SVG's intrinsic `viewBox` aspect ratio
       and the overlay's `width` in SVG units
-- [ ] Embed each overlay as `<svg x="…" y="…" width="…" height="…" transform="rotate(angle, cx, cy)">…</svg>`
+- [x] Embed each overlay as `<svg x="…" y="…" width="…" height="…" transform="rotate(angle, cx, cy)">…</svg>`
       inside `PresentationCanvas`, where (cx, cy) is the overlay's center in SVG coordinates;
       omit the transform attribute when `rotation` is 0
-- [ ] Respect `hidden_overlays` on the active step: skip embedding overlays listed there
-- [ ] Verify: manually add an overlay entry to a `.presentator.yaml` file and confirm it
-      appears at the correct SVG position in presentation mode
+- [x] Respect `hidden_overlays` on the active step: skip embedding overlays listed there
+- [x] Verify: e2e test loads a sidecar with overlay, switches to presentation mode, and
+      confirms the overlay's inner SVG content is attached to the canvas DOM
 
-### Phase 4 — Overlay list and management UI
+### Phase 4 — Loading progress indicator
+
+- [x] Include overlay `width` in the cache key alongside `content` and `style`
+      (width affects how the SVG is used; ensures re-render when the overlay is resized)
+- [x] Change `useOverlaySvgs` return value from a plain `Map` to `{ svgMap, pendingCount }`,
+      where `pendingCount` tracks how many renders are still in-flight
+- [x] Update per-overlay as each SVG resolves (progressive — overlays appear one by one,
+      not all-or-nothing at the end); `pendingCount` decrements on each completion (success or fail)
+- [x] Show a spinner + "Rendering N overlays…" status at the top of the editing sidebar
+      while `pendingCount > 0`; disappears automatically when all renders settle
+
+### Phase 5 — Persistent overlay SVG cache
+
+Cache rendered overlay SVGs on disk so reopening the same file skips Typst compilation.
+
+- [ ] Use Tauri's `app.path().app_cache_dir()` as the cache root
+      (cache dir is evictable OS-managed storage, unlike `app_data_dir`)
+- [ ] Compute cache key = SHA-256 of `(content + font_size_pt + text_color + font_family + width)`;
+      store entries at `<cache_dir>/overlay-svg/<hash>.svg`
+- [ ] In the Rust `render_markdown_to_svg` command (or a new `render_markdown_to_svg_cached`):
+      check for `<hash>.svg` first and return its contents on hit;
+      on miss: render, write to file atomically (write temp → rename), return SVG string
+- [ ] Expose a Tauri command `clear_overlay_svg_cache` that removes all files in the cache dir;
+      wire it to a "Clear cache" button in the Settings dialog or a dedicated menu entry
+- [ ] Log approximate cache size (file count, total bytes) to the app console on startup
+- [ ] Verify: open a file with overlays, reload — confirm `render_markdown_to_svg` is NOT called
+      a second time for unchanged overlays
+
+### Phase 6 — Overlay list and management UI
 
 - [ ] Add an "Overlays" section below the step list in the editing sidebar
 - [ ] Each overlay row shows its `id`; includes a delete button
@@ -104,7 +132,7 @@ Render pipeline (all Rust, no browser engine):
 - [ ] current overlay's bounds is visualized as rectangle, if the rectangle is outside the
       current viewport then show the "outside" indicator like the step-viewport
 
-### Phase 5 — Markdown editor dialog
+### Phase 7 — Markdown editor dialog
 
 - [ ] Open a split-pane dialog when editing an overlay:
       left pane — editable markdown textarea; right pane — live rendered preview
@@ -112,7 +140,7 @@ Render pipeline (all Rust, no browser engine):
 - [ ] Confirm/Save writes the updated `content` back to the overlay in config
 - [ ] Verify: edit markdown text, confirm preview updates and the change persists after reload
 
-### Phase 6 — Bounds editing in EditingCanvas
+### Phase 8 — Bounds editing in EditingCanvas
 
 Functionality should be like the step-viewport editing: moving, resizing, rotating.
 
@@ -147,7 +175,7 @@ Functionality should be like the step-viewport editing: moving, resizing, rotati
 - [ ] Verify: drag a step viewport near an overlay edge; confirm it snaps and the guide line
       is visible
 
-### Phase 7 — Per-step visibility toggle
+### Phase 9 — Per-step visibility toggle
 
 - [ ] In the step list, add a toggle (eye icon) per overlay row to hide/show the overlay
       for that step (updates `hidden_overlays` on the step)

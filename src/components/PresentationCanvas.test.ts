@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { computeBlendSets, buildBlendStyle } from "./PresentationCanvas";
+import { computeBlendSets, buildBlendStyle, parseOverlayViewBox, buildOverlayEmbeds } from "./PresentationCanvas";
+import type { MarkdownOverlay } from "../types/config";
 
 describe("computeBlendSets", () => {
   it("forward: elements hidden in from-step that become visible are entering", () => {
@@ -103,5 +104,105 @@ describe("buildBlendStyle", () => {
     expect(easeOut).toContain("#a{opacity:0.8750}");
     // linear at t=0.5 is just 0.5
     expect(linear).toContain("#a{opacity:0.5000}");
+  });
+});
+
+describe("parseOverlayViewBox", () => {
+  it("parses a standard SVG viewBox attribute", () => {
+    const vb = parseOverlayViewBox('<svg viewBox="0 0 400 200.5" width="400pt">');
+    expect(vb).toEqual({ x: 0, y: 0, w: 400, h: 200.5 });
+  });
+
+  it("parses a viewBox with non-zero origin", () => {
+    const vb = parseOverlayViewBox('<svg viewBox="10 20 400 200">');
+    expect(vb).toEqual({ x: 10, y: 20, w: 400, h: 200 });
+  });
+
+  it("returns null when viewBox attribute is absent", () => {
+    expect(parseOverlayViewBox('<svg width="400" height="200">')).toBeNull();
+  });
+
+  it("returns null when viewBox width is zero", () => {
+    expect(parseOverlayViewBox('<svg viewBox="0 0 0 200">')).toBeNull();
+  });
+
+  it("returns null when viewBox contains non-numeric values", () => {
+    expect(parseOverlayViewBox('<svg viewBox="0 0 abc 200">')).toBeNull();
+  });
+});
+
+describe("buildOverlayEmbeds", () => {
+  const overlayA: MarkdownOverlay = { id: "a", content: "# Hello", x: 100, y: 200, width: 300 };
+  const overlayB: MarkdownOverlay = { id: "b", content: "# World", x: 0, y: 0, width: 200 };
+  // viewBox 400×200 → aspect ratio 0.5 → embedH = 300 * 0.5 = 150
+  const svgA = '<svg viewBox="0 0 400 200"><g id="a-inner"/></svg>';
+  // viewBox 400×100 → aspect ratio 0.25 → embedH = 200 * 0.25 = 50
+  const svgB = '<svg viewBox="0 0 400 100"><g id="b-inner"/></svg>';
+
+  it("embeds overlay at its SVG coordinate position", () => {
+    const result = buildOverlayEmbeds([overlayA], new Map([["a", svgA]]), []);
+    expect(result).toContain('x="100"');
+    expect(result).toContain('y="200"');
+    expect(result).toContain('width="300"');
+  });
+
+  it("derives embed height from rendered SVG aspect ratio", () => {
+    const result = buildOverlayEmbeds([overlayA], new Map([["a", svgA]]), []);
+    expect(result).toContain('height="150"');
+  });
+
+  it("passes the rendered SVG viewBox to the nested element", () => {
+    const result = buildOverlayEmbeds([overlayA], new Map([["a", svgA]]), []);
+    expect(result).toContain('viewBox="0 0 400 200"');
+  });
+
+  it("injects the SVG inner content", () => {
+    const result = buildOverlayEmbeds([overlayA], new Map([["a", svgA]]), []);
+    expect(result).toContain('id="a-inner"');
+  });
+
+  it("adds rotation transform with correct center point when rotation is non-zero", () => {
+    // cx = 100 + 300/2 = 250; cy = 200 + 150/2 = 275
+    const rotated: MarkdownOverlay = { ...overlayA, rotation: 30 };
+    const result = buildOverlayEmbeds([rotated], new Map([["a", svgA]]), []);
+    expect(result).toContain('transform="rotate(30, 250, 275)"');
+  });
+
+  it("omits transform attribute when rotation is zero", () => {
+    const result = buildOverlayEmbeds([{ ...overlayA, rotation: 0 }], new Map([["a", svgA]]), []);
+    expect(result).not.toContain("transform=");
+  });
+
+  it("omits transform attribute when rotation is absent", () => {
+    const result = buildOverlayEmbeds([overlayA], new Map([["a", svgA]]), []);
+    expect(result).not.toContain("transform=");
+  });
+
+  it("skips overlays listed in hiddenOverlays", () => {
+    const result = buildOverlayEmbeds(
+      [overlayA, overlayB],
+      new Map([["a", svgA], ["b", svgB]]),
+      ["a"]
+    );
+    expect(result).not.toContain('id="a-inner"');
+    expect(result).toContain('id="b-inner"');
+  });
+
+  it("skips overlays with no rendered SVG in the map", () => {
+    expect(buildOverlayEmbeds([overlayA], new Map(), [])).toBe("");
+  });
+
+  it("returns empty string for an empty overlays array", () => {
+    expect(buildOverlayEmbeds([], new Map(), [])).toBe("");
+  });
+
+  it("concatenates multiple overlay embeds", () => {
+    const result = buildOverlayEmbeds(
+      [overlayA, overlayB],
+      new Map([["a", svgA], ["b", svgB]]),
+      []
+    );
+    expect(result).toContain('id="a-inner"');
+    expect(result).toContain('id="b-inner"');
   });
 });

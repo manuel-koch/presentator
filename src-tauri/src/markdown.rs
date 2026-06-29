@@ -59,8 +59,9 @@ fn compile_typst_to_svg(source: &str) -> Result<String, String> {
 /// derived from `opts`. Used by `render_markdown_to_svg` and directly testable.
 pub fn markdown_to_typst(content: &str, opts: &RenderOptions) -> String {
     let mut out = format!(
-        "#set page(width: {}pt, height: auto, margin: 1em)\n\
-         #set text(font: (\"{}\", \"Arial\"), size: {}pt, fill: rgb(\"{}\"))\n\n",
+        "#set page(width: {}pt, height: auto, margin: 1em, fill: none)\n\
+         #set text(font: (\"{}\", \"Arial\"), size: {}pt, fill: rgb(\"{}\"))\n\
+         #show raw: set text(font: (\"Menlo\", \"Courier New\", \"Consolas\"))\n\n",
         PAGE_WIDTH_PT,
         escape_typst_str(&opts.font_family),
         opts.font_size_pt,
@@ -120,9 +121,7 @@ pub fn markdown_to_typst(content: &str, opts: &RenderOptions) -> String {
                 if !code_lang.is_empty() {
                     out.push_str(&format!(", lang: \"{}\"", escape_typst_str(&code_lang)));
                 }
-                out.push_str(", \"\"\"\n");
-                out.push_str(&escape_triple_quotes(&code_content));
-                out.push_str("\n\"\"\")\n\n");
+                out.push_str(&format!(", \"{}\")\n\n", escape_typst_str(&code_content)));
                 in_code_block = false;
                 code_content.clear();
             }
@@ -168,12 +167,11 @@ fn escape_typst_markup(s: &str) -> String {
 
 /// Escapes characters that have special meaning inside a Typst string literal.
 fn escape_typst_str(s: &str) -> String {
-    s.replace('\\', "\\\\").replace('"', "\\\"")
-}
-
-/// Escapes triple-quote sequences inside a Typst raw block.
-fn escape_triple_quotes(s: &str) -> String {
-    s.replace("\"\"\"", "\"\"\\\"")
+    s.replace('\\', "\\\\")
+        .replace('"', "\\\"")
+        .replace('\n', "\\n")
+        .replace('\r', "\\r")
+        .replace('\t', "\\t")
 }
 
 #[cfg(test)]
@@ -198,6 +196,22 @@ mod tests {
         let out = markdown_to_typst("x", &opts());
         assert!(out.contains("width: 400pt"), "missing page width");
         assert!(out.contains("height: auto"), "missing auto height");
+    }
+
+    #[test]
+    fn preamble_sets_transparent_page_background() {
+        let out = markdown_to_typst("x", &opts());
+        assert!(out.contains("fill: none"), "page background must be transparent");
+    }
+
+    #[test]
+    fn preamble_sets_monospace_font_for_raw_blocks() {
+        let out = markdown_to_typst("x", &opts());
+        assert!(
+            out.contains("#show raw: set text(font:"),
+            "missing monospace font show-set rule for raw blocks"
+        );
+        assert!(out.contains("\"Menlo\""), "Menlo should be first code font preference");
     }
 
     #[test]
@@ -279,6 +293,20 @@ mod tests {
         assert!(out.contains("let x = 1;"));
     }
 
+    #[test]
+    fn fenced_code_block_newlines_escaped_as_backslash_n() {
+        let out = body("```\nline1\nline2\n```");
+        // Newlines inside the code content must be \\n, not literal newlines,
+        // because Typst string literals do not support literal newlines.
+        assert!(out.contains("\"line1\\nline2\\n\""));
+    }
+
+    #[test]
+    fn fenced_code_block_backslash_escaped() {
+        let out = body("```\na\\b\n```");
+        assert!(out.contains("\"a\\\\b\\n\""));
+    }
+
     // ── Lists ─────────────────────────────────────────────────────────────────
 
     #[test]
@@ -357,6 +385,14 @@ mod tests {
             .expect("render failed");
         assert!(svg.starts_with("<svg"), "output should be an SVG element");
         assert!(svg.contains("</svg>"), "output should close the SVG element");
+    }
+
+    #[test]
+    fn fenced_code_block_renders_to_svg() {
+        let md = "# Title\n\n```python\nimport math\n\nx = math.sin(0.358654)\n```\n";
+        let svg = render_markdown_to_svg(md, &RenderOptions::default())
+            .expect("render with fenced code block failed");
+        assert!(svg.starts_with("<svg"), "output should be SVG");
     }
 
     #[test]
