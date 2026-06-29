@@ -1,3 +1,5 @@
+mod markdown;
+
 use std::collections::HashMap;
 use std::sync::Mutex;
 use std::path::PathBuf;
@@ -154,6 +156,14 @@ fn get_app_settings(state: State<AppConfigState>) -> AppConfig {
 }
 
 #[tauri::command]
+fn render_markdown_to_svg(
+    content: String,
+    options: markdown::RenderOptions,
+) -> Result<String, String> {
+    markdown::render_markdown_to_svg(&content, &options)
+}
+
+#[tauri::command]
 fn set_app_settings(settings: AppConfig, app: AppHandle, state: State<AppConfigState>) {
     {
         let mut cfg = state.lock().unwrap();
@@ -276,7 +286,8 @@ pub fn run() {
             set_reload_enabled,
             update_mode_menu,
             get_app_settings,
-            set_app_settings
+            set_app_settings,
+            render_markdown_to_svg
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -324,6 +335,7 @@ mod tests {
                 m.insert("presentation-next-step".to_string(), vec!["enter".to_string()]);
                 m
             },
+            ..AppConfig::default()
         };
         let yaml = serde_yaml::to_string(&original).unwrap();
         let restored: AppConfig = serde_yaml::from_str(&yaml).unwrap();
@@ -370,6 +382,7 @@ mod tests {
                 m.insert("presentation-prev-step".to_string(), vec!["shift-arrow-left".to_string()]);
                 m
             },
+            ..AppConfig::default()
         };
         std::fs::write(&path, serde_yaml::to_string(&original).unwrap()).unwrap();
         let loaded: AppConfig = serde_yaml::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();

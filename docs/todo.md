@@ -44,24 +44,24 @@ Render pipeline (all Rust, no browser engine):
 
 ### Phase 1 — Rust: markdown-to-SVG command
 
-- [ ] Add `pulldown-cmark` and `typst`/`typst-svg` to `src-tauri/Cargo.toml`
-- [ ] Define `RenderOptions` struct in Rust:
+- [x] Add `pulldown-cmark` and `typst`/`typst-svg` to `src-tauri/Cargo.toml`
+- [x] Define `RenderOptions` struct in Rust:
       `font_size_pt: f32` (default 14), `text_color: String` (default `"#000000"`),
       `font_family: String` (default `"Helvetica Neue"`);
       page width is a fixed internal constant (400pt) and not user-facing
-- [ ] Implement `markdown_to_typst(content: &str, opts: &RenderOptions) -> String` mapper
+- [x] Implement `markdown_to_typst(content: &str, opts: &RenderOptions) -> String` mapper
       covering: headings, paragraphs, emphasis, strong, inline code, fenced code blocks
       (with language), bullet and ordered lists, links, horizontal rules;
       inject `font_size_pt`, `text_color`, and `font_family` as a Typst preamble
       (`#set text(font: ("Helvetica Neue", "Arial"), size: 14pt, fill: rgb("#000000"))`);
       set `#set page(width: 400pt, height: auto)` so output height follows content;
       escape Typst special chars (`#`, `\`, `[`, `]`)
-- [ ] Implement Tauri command
+- [x] Implement Tauri command
       `render_markdown_to_svg(content: String, options: RenderOptions) -> Result<String, String>`
       that feeds the mapped Typst source into `typst-as-lib` and returns the SVG string;
       the SVG's intrinsic height reflects the actual content height (auto-height)
-- [ ] Unit-test `markdown_to_typst()` for each supported element
-- [ ] Verify `render_markdown_to_svg` returns valid SVG whose height matches content length
+- [x] Unit-test `markdown_to_typst()` for each supported element
+- [x] Verify `render_markdown_to_svg` returns valid SVG whose height matches content length
       (short snippet → short SVG; long snippet → taller SVG)
 
 ### Phase 2 — Data model and config schema

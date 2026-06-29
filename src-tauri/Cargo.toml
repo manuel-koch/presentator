@@ -1,7 +1,7 @@
 [package]
 name = "presentator"
-version = "0.1.0"
-description = "Interactive presentation app built from SVG input files"
+version = "0.2.0"
+description = "Interactive presentation app built from SVG input file and markdown snippets"
 authors = []
 edition = "2021"
 
@@ -24,4 +24,7 @@ tauri-plugin-dialog = "2"
 serde = { version = "1", features = ["derive"] }
 serde_yaml = "0.9"
 notify = "6"
-
+pulldown-cmark = "0.13"
+typst = "0.14"
+typst-as-lib = { version = "0.15", features = ["typst-kit-fonts"] }
+typst-svg = "0.14"
