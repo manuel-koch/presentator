@@ -157,7 +157,7 @@ fn get_app_settings(state: State<AppConfigState>) -> AppConfig {
 }
 
 #[tauri::command]
-fn render_markdown_to_svg(
+async fn render_markdown_to_svg(
     id: String,
     content: String,
     options: markdown::RenderOptions,
@@ -170,6 +170,7 @@ fn render_markdown_to_svg(
         &options.text_color,
         &options.font_family,
         width,
+        env!("CARGO_PKG_VERSION"),
     );
     let cache_dir = app
         .path()
@@ -177,6 +178,7 @@ fn render_markdown_to_svg(
         .ok()
         .map(|d| overlay_cache::overlay_svg_dir(&d));
 
+    // Cache read is a quick disk hit; keep it synchronous on the happy path.
     if let Some(ref dir) = cache_dir {
         if let Some(svg) = overlay_cache::get(dir, &key) {
             log::debug!("overlay-svg cache hit id={id}");
@@ -186,13 +188,18 @@ fn render_markdown_to_svg(
 
     log::info!("rendering markdown → svg id={id} width={width}");
 
-    let svg = markdown::render_markdown_to_svg(&content, &options)?;
-
-    if let Some(ref dir) = cache_dir {
-        let _ = overlay_cache::put(dir, &key, &svg);
-    }
-
-    Ok(svg)
+    // Typst compilation is CPU-intensive; offload it (and the subsequent cache
+    // write) to the blocking thread pool so async executor threads stay free.
+    tokio::task::spawn_blocking(move || -> Result<String, String> {
+        let svg = markdown::render_markdown_to_svg(&content, &options)?;
+        if let Some(ref dir) = cache_dir {
+            let _ = overlay_cache::put(dir, &key, &svg);
+        }
+        Ok(svg)
+    })
+    .await
+    .map_err(|e| format!("task join error: {e}"))
+    .and_then(|r| r)
 }
 
 #[tauri::command]
@@ -288,6 +295,21 @@ pub fn run() {
             let file_menu = Submenu::with_items(app, "File", true, &[&open_svg, &reload, &separator, &quit])?;
             *app.state::<ReloadMenuState>().lock().unwrap() = Some(reload);
 
+            let edit_menu = Submenu::with_items(
+                app,
+                "Edit",
+                true,
+                &[
+                    &PredefinedMenuItem::undo(app, None)?,
+                    &PredefinedMenuItem::redo(app, None)?,
+                    &PredefinedMenuItem::separator(app)?,
+                    &PredefinedMenuItem::cut(app, None)?,
+                    &PredefinedMenuItem::copy(app, None)?,
+                    &PredefinedMenuItem::paste(app, None)?,
+                    &PredefinedMenuItem::select_all(app, None)?,
+                ],
+            )?;
+
             let editing = CheckMenuItem::with_id(
                 app,
                 "mode-editing",
@@ -311,7 +333,7 @@ pub fn run() {
                 &[&editing, &presentation],
             )?;
 
-            let menu = Menu::with_items(app, &[&app_menu, &file_menu, &view_menu])?;
+            let menu = Menu::with_items(app, &[&app_menu, &file_menu, &edit_menu, &view_menu])?;
             app.set_menu(menu)?;
 
             *app.state::<ModeMenuState>().lock().unwrap() =

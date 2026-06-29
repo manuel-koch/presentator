@@ -280,6 +280,9 @@ export function StepList({ steps, selectedIndex, transitions, defaultTransition,
               {editingIndex === index ? (
                 <input
                   autoFocus
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  spellCheck={false}
                   value={editingName}
                   onChange={(e) => setEditingName(e.target.value)}
                   onBlur={commitEdit}

@@ -140,20 +140,23 @@ editing mode so the author can see them while arranging steps.
 
 ### Phase 7 — Overlay list and management UI
 
-- [ ] Add an "Overlays" section below the step list in the editing sidebar
-- [ ] Each overlay row shows its `id`; includes a delete button
-  - [ ] prevent id collision between all markdown-overlays and existing IDs of the loaded SVG
-- [ ] "Add overlay" button creates a new overlay with default position (center of current
+- [x] Add an "Overlays" section below the step list in the editing sidebar
+- [x] Each overlay row shows its `id`; includes a delete button
+  - [x] prevent id collision between all markdown-overlays and existing IDs of the loaded SVG
+- [x] "Add overlay" button creates a new overlay with default position (center of current
       viewport) and opens the editor dialog (Phase 8)
-- [ ] Verify: add and delete overlays via the UI; confirm sidecar YAML is updated
+- [x] Double-click an overlay row to rename its `id` inline (same pattern as step-name
+      editing in `StepList`); commit on Enter or blur, cancel on Escape; reject empty names
+      and names that collide with SVG element IDs or other overlay IDs
+- [x] Verify: add and delete overlays via the UI; confirm sidecar YAML is updated
 
 ### Phase 8 — Markdown editor dialog
 
-- [ ] Open a split-pane dialog when editing an overlay:
+- [x] Open a split-pane dialog when editing an overlay:
       left pane — editable markdown textarea; right pane — live rendered preview
-- [ ] Live preview calls `render_markdown_to_svg` with debounce (~300 ms) on each keystroke
-- [ ] Confirm/Save writes the updated `content` back to the overlay in config
-- [ ] Verify: edit markdown text, confirm preview updates and the change persists after reload
+- [x] Live preview calls `render_markdown_to_svg` with debounce (~300 ms) on each keystroke
+- [x] Confirm/Save writes the updated `content` back to the overlay in config
+- [x] Verify: edit markdown text, confirm preview updates and the change persists after reload
 
 ### Phase 9 — Bounds editing in EditingCanvas
 

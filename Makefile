@@ -1,4 +1,4 @@
-.PHONY: run-dev install-deps show-outdated-deps upgrade-deps build-release bundle-macos bundle-macos-dmg generate-icons preview-icon test
+.PHONY: run-dev install-deps show-outdated-deps upgrade-deps build-release bundle-macos bundle-macos-dmg generate-icons preview-icon check-versions test
 
 run-dev:
 	npm run tauri dev
@@ -49,8 +49,26 @@ bundle-macos-dmg: bundle-macos
 		src-tauri/target/release/bundle/macos/Presentator.dmg \
 		src-tauri/target/release/bundle/macos/Presentator.app
 
+check-versions:
+	@PKG=$$(node -p "require('./package.json').version"); \
+	TAURI=$$(node -p "require('./src-tauri/tauri.conf.json').version"); \
+	CARGO=$$(grep '^version' src-tauri/Cargo.toml | head -1 | cut -d'"' -f2); \
+	FAIL=0; \
+	if [ "$$TAURI" != "$$PKG" ]; then \
+		echo "ERROR: src-tauri/tauri.conf.json version ($$TAURI) != package.json ($$PKG)"; \
+		FAIL=1; \
+	fi; \
+	if [ "$$CARGO" != "$$PKG" ]; then \
+		echo "ERROR: src-tauri/Cargo.toml version ($$CARGO) != package.json ($$PKG)"; \
+		FAIL=1; \
+	fi; \
+	if [ $$FAIL -eq 0 ]; then \
+		echo "Versions in sync: $$PKG"; \
+	else \
+		exit 1; \
+	fi
 
-test:
+test: check-versions
 	npx tsc --noEmit # do type-checks explicitly, `npm test` won't report them
 	npm test
 	npm run test:e2e

@@ -8,12 +8,16 @@ pub struct CacheStats {
 }
 
 /// SHA-256 of all inputs that affect the rendered SVG output.
+/// `app_version` (pass `env!("CARGO_PKG_VERSION")`) ensures the cache is
+/// invalidated whenever the app is rebuilt with a new version, which should
+/// happen whenever rendering dependencies change.
 pub fn cache_key(
     content: &str,
     font_size_pt: f32,
     text_color: &str,
     font_family: &str,
     width: f64,
+    app_version: &str,
 ) -> String {
     let mut h = Sha256::new();
     h.update(content.as_bytes());
@@ -25,6 +29,8 @@ pub fn cache_key(
     h.update(font_family.as_bytes());
     h.update(b"\0");
     h.update(width.to_le_bytes());
+    h.update(b"\0");
+    h.update(app_version.as_bytes());
     h.finalize().iter().map(|b| format!("{b:02x}")).collect()
 }
 
@@ -98,50 +104,57 @@ mod tests {
 
     #[test]
     fn cache_key_is_deterministic() {
-        let k1 = cache_key("hello", 14.0, "#000", "Helvetica Neue", 280.0);
-        let k2 = cache_key("hello", 14.0, "#000", "Helvetica Neue", 280.0);
+        let k1 = cache_key("hello", 14.0, "#000", "Helvetica Neue", 280.0, "1.0.0");
+        let k2 = cache_key("hello", 14.0, "#000", "Helvetica Neue", 280.0, "1.0.0");
         assert_eq!(k1, k2);
     }
 
     #[test]
     fn cache_key_is_64_hex_chars() {
-        let k = cache_key("x", 14.0, "#000", "Arial", 100.0);
+        let k = cache_key("x", 14.0, "#000", "Arial", 100.0, "1.0.0");
         assert_eq!(k.len(), 64);
         assert!(k.chars().all(|c| c.is_ascii_hexdigit()));
     }
 
     #[test]
     fn cache_key_changes_with_content() {
-        let k1 = cache_key("foo", 14.0, "#000", "Arial", 100.0);
-        let k2 = cache_key("bar", 14.0, "#000", "Arial", 100.0);
+        let k1 = cache_key("foo", 14.0, "#000", "Arial", 100.0, "1.0.0");
+        let k2 = cache_key("bar", 14.0, "#000", "Arial", 100.0, "1.0.0");
         assert_ne!(k1, k2);
     }
 
     #[test]
     fn cache_key_changes_with_width() {
-        let k1 = cache_key("foo", 14.0, "#000", "Arial", 100.0);
-        let k2 = cache_key("foo", 14.0, "#000", "Arial", 200.0);
+        let k1 = cache_key("foo", 14.0, "#000", "Arial", 100.0, "1.0.0");
+        let k2 = cache_key("foo", 14.0, "#000", "Arial", 200.0, "1.0.0");
         assert_ne!(k1, k2);
     }
 
     #[test]
     fn cache_key_changes_with_font_size() {
-        let k1 = cache_key("foo", 13.0, "#000", "Arial", 100.0);
-        let k2 = cache_key("foo", 14.0, "#000", "Arial", 100.0);
+        let k1 = cache_key("foo", 13.0, "#000", "Arial", 100.0, "1.0.0");
+        let k2 = cache_key("foo", 14.0, "#000", "Arial", 100.0, "1.0.0");
         assert_ne!(k1, k2);
     }
 
     #[test]
     fn cache_key_changes_with_color() {
-        let k1 = cache_key("foo", 14.0, "#000", "Arial", 100.0);
-        let k2 = cache_key("foo", 14.0, "#fff", "Arial", 100.0);
+        let k1 = cache_key("foo", 14.0, "#000", "Arial", 100.0, "1.0.0");
+        let k2 = cache_key("foo", 14.0, "#fff", "Arial", 100.0, "1.0.0");
         assert_ne!(k1, k2);
     }
 
     #[test]
     fn cache_key_changes_with_font_family() {
-        let k1 = cache_key("foo", 14.0, "#000", "Arial", 100.0);
-        let k2 = cache_key("foo", 14.0, "#000", "Menlo", 100.0);
+        let k1 = cache_key("foo", 14.0, "#000", "Arial", 100.0, "1.0.0");
+        let k2 = cache_key("foo", 14.0, "#000", "Menlo", 100.0, "1.0.0");
+        assert_ne!(k1, k2);
+    }
+
+    #[test]
+    fn cache_key_changes_with_app_version() {
+        let k1 = cache_key("foo", 14.0, "#000", "Arial", 100.0, "1.0.0");
+        let k2 = cache_key("foo", 14.0, "#000", "Arial", 100.0, "1.0.1");
         assert_ne!(k1, k2);
     }
 

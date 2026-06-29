@@ -9,11 +9,14 @@ import { useOverlaySvgs } from "./hooks/useOverlaySvgs";
 import { sidecarPath } from "./utils/configSidecar";
 import { parseSvgViewBox, parseAspectRatio } from "./utils/svgViewBox";
 import { extractNamedElements } from "./utils/svgElements";
+import type { SVGElementNode } from "./utils/svgElements";
 import { matchesBinding, DEFAULT_KEY_BINDINGS } from "./utils/keyBinding";
 import { EditingCanvas } from "./components/EditingCanvas";
 import type { EditingCanvasHandle } from "./components/EditingCanvas";
 import { StepList } from "./components/StepList";
 import type { CopyAspectsOptions } from "./components/StepList";
+import { OverlayList } from "./components/OverlayList";
+import { MarkdownEditorDialog } from "./components/MarkdownEditorDialog";
 import { ElementPicker } from "./components/ElementPicker";
 import { PendingReloadIndicator } from "./components/PendingReloadIndicator";
 import { ReloadNotification } from "./components/ReloadNotification";
@@ -22,9 +25,13 @@ import { SettingsDialog } from "./components/SettingsDialog";
 import type { AppSettings } from "./components/SettingsDialog";
 import { PresentationCanvas } from "./components/PresentationCanvas";
 import type { AppMode } from "./types/mode";
-import type { Step, TransitionConfig, Viewport } from "./types/config";
+import type { MarkdownOverlay, Step, TransitionConfig, Viewport } from "./types/config";
 import { DEFAULT_TRANSITION } from "./types/config";
 import "./App.css";
+
+function collectSvgIds(nodes: SVGElementNode[]): string[] {
+  return nodes.flatMap((n) => [n.id, ...collectSvgIds(n.children)]);
+}
 
 // Returns the full transitions array for `config`, length = steps.length - 1.
 // Missing entries are filled with the config-level default or DEFAULT_TRANSITION.
@@ -44,6 +51,7 @@ function App() {
   const [showReloadNotification, setShowReloadNotification] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [editingOverlayId, setEditingOverlayId] = useState<string | null>(null);
   const [appSettings, setAppSettings] = useState<AppSettings>({
     fullscreen_on_presentation: true,
     pointer_linger_ms: 3000,
@@ -64,6 +72,10 @@ function App() {
   const namedElements = useMemo(
     () => (svgFile ? extractNamedElements(svgFile.content, config?.exclude_id_pattern) : []),
     [svgFile, config?.exclude_id_pattern]
+  );
+  const occupiedOverlayIds = useMemo(
+    () => new Set([...collectSvgIds(namedElements), ...(config?.overlays ?? []).map((o) => o.id)]),
+    [namedElements, config?.overlays]
   );
 
   // Reset to editing mode and clear selection whenever a new file is opened.
@@ -363,6 +375,80 @@ function App() {
     updateConfig({ ...config, steps });
   }
 
+  // --- Overlay editing handlers ---
+  function handleAddOverlay() {
+    if (!config || !viewBox) return;
+    const vb = viewBox;
+    const cv = canvasRef.current?.getCanvasViewport();
+    const width = vb.width / 5;
+    let x: number, y: number;
+    if (cv) {
+      x = cv.left + cv.width / 2 - width / 2;
+      y = cv.top + cv.height / 2;
+    } else {
+      x = vb.x + vb.width / 2 - width / 2;
+      y = vb.y + vb.height / 2;
+    }
+
+    const usedIds = new Set([
+      ...collectSvgIds(namedElements),
+      ...(config.overlays ?? []).map((o) => o.id),
+    ]);
+    let n = 1;
+    while (usedIds.has(`snippet-${n}`)) n++;
+
+    const newOverlay: MarkdownOverlay = {
+      id: `snippet-${n}`,
+      content: "**New snippet**",
+      x,
+      y,
+      width,
+    };
+    updateConfig({ ...config, overlays: [...(config.overlays ?? []), newOverlay] });
+    setEditingOverlayId(newOverlay.id);
+  }
+
+  function handleDeleteOverlay(id: string) {
+    if (!config) return;
+    const overlays = (config.overlays ?? []).filter((o) => o.id !== id);
+    const steps = config.steps.map((s) =>
+      s.hidden_overlays?.includes(id)
+        ? { ...s, hidden_overlays: s.hidden_overlays.filter((oid) => oid !== id) }
+        : s
+    );
+    updateConfig({ ...config, overlays, steps });
+  }
+
+  function handleRenameOverlay(oldId: string, newId: string) {
+    if (!config) return;
+    const overlays = (config.overlays ?? []).map((o) =>
+      o.id === oldId ? { ...o, id: newId } : o
+    );
+    const steps = config.steps.map((s) =>
+      s.hidden_overlays?.includes(oldId)
+        ? { ...s, hidden_overlays: s.hidden_overlays.map((oid) => (oid === oldId ? newId : oid)) }
+        : s
+    );
+    updateConfig({ ...config, overlays, steps });
+  }
+
+  function handleSaveOverlayContent(id: string, content: string) {
+    if (!config) return;
+    const overlays = (config.overlays ?? []).map((o) =>
+      o.id === id ? { ...o, content } : o
+    );
+    updateConfig({ ...config, overlays });
+    setEditingOverlayId(null);
+  }
+
+  function handleQuickSaveOverlayContent(id: string, content: string) {
+    if (!config) return;
+    const overlays = (config.overlays ?? []).map((o) =>
+      o.id === id ? { ...o, content } : o
+    );
+    updateConfig({ ...config, overlays });
+  }
+
   function handleTransitionChange(gapIndex: number, tc: TransitionConfig) {
     if (!config) return;
     const transitions = getTransitions(config);
@@ -392,10 +478,21 @@ function App() {
   }, [selectedStepIndex, mode]);
 
   const selectedStep = config && selectedStepIndex !== null ? config.steps[selectedStepIndex] ?? null : null;
+  const editingOverlay = editingOverlayId
+    ? config?.overlays?.find((o) => o.id === editingOverlayId)
+    : undefined;
 
   return (
     <main className="app">
       {showAbout && <AboutDialog onClose={() => setShowAbout(false)} />}
+      {editingOverlay && (
+        <MarkdownEditorDialog
+          overlay={editingOverlay}
+          onSave={(content) => handleSaveOverlayContent(editingOverlay.id, content)}
+          onQuickSave={(content) => handleQuickSaveOverlayContent(editingOverlay.id, content)}
+          onCancel={() => setEditingOverlayId(null)}
+        />
+      )}
       {showSettings && (
         <SettingsDialog
           settings={appSettings}
@@ -431,8 +528,8 @@ function App() {
                   <div className="overlay-render-status">
                     <span className="overlay-render-spinner" />
                     {overlaysPending === 1
-                      ? "Rendering overlay…"
-                      : `Rendering ${overlaysPending} overlays…`}
+                      ? "Rendering snippet…"
+                      : `Rendering ${overlaysPending} snippets…`}
                   </div>
                 )}
                 <StepList
@@ -452,6 +549,14 @@ function App() {
                   onFitAllToView={() => canvasRef.current?.fitAllSteps(config.steps)}
                   onCopyAspects={handleCopyAspects}
                   onTransitionChange={handleTransitionChange}
+                />
+                <OverlayList
+                  overlays={config.overlays ?? []}
+                  occupiedIds={occupiedOverlayIds}
+                  onAdd={handleAddOverlay}
+                  onDelete={handleDeleteOverlay}
+                  onRename={handleRenameOverlay}
+                  onEdit={setEditingOverlayId}
                 />
                 {selectedStep && (
                   <ElementPicker

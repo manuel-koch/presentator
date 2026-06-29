@@ -61,7 +61,8 @@ pub fn markdown_to_typst(content: &str, opts: &RenderOptions) -> String {
     let mut out = format!(
         "#set page(width: {}pt, height: auto, margin: 1em, fill: none)\n\
          #set text(font: (\"{}\", \"Arial\"), size: {}pt, fill: rgb(\"{}\"))\n\
-         #show raw: set text(font: (\"Menlo\", \"Courier New\", \"Consolas\"))\n\n",
+         #show raw: set text(font: (\"Menlo\", \"Courier New\", \"Consolas\"))\n\
+         #show link: underline\n\n",
         PAGE_WIDTH_PT,
         escape_typst_str(&opts.font_family),
         opts.font_size_pt,
@@ -73,6 +74,7 @@ pub fn markdown_to_typst(content: &str, opts: &RenderOptions) -> String {
     let mut code_lang = String::new();
     let mut code_content = String::new();
     let mut list_stack: Vec<bool> = Vec::new(); // true = ordered
+    let mut in_table_head = false;
 
     for event in parser {
         match event {
@@ -95,6 +97,34 @@ pub fn markdown_to_typst(content: &str, opts: &RenderOptions) -> String {
             Event::End(TagEnd::Emphasis) => out.push('_'),
             Event::Start(Tag::Strong) => out.push('*'),
             Event::End(TagEnd::Strong) => out.push('*'),
+            Event::Start(Tag::Strikethrough) => out.push_str("#strike["),
+            Event::End(TagEnd::Strikethrough) => out.push(']'),
+            Event::Start(Tag::BlockQuote(_)) => out.push_str("#block(inset: (left: 0.75em), stroke: (left: 2pt + luma(160)))[\n"),
+            Event::End(TagEnd::BlockQuote(_)) => out.push_str("]\n\n"),
+            Event::Start(Tag::Table(alignments)) => {
+                out.push_str(&format!("#table(columns: {},\n", alignments.len()));
+            }
+            Event::End(TagEnd::Table) => out.push_str(")\n\n"),
+            Event::Start(Tag::TableHead) => { in_table_head = true; }
+            Event::End(TagEnd::TableHead) => { in_table_head = false; }
+            Event::Start(Tag::TableRow) | Event::End(TagEnd::TableRow) => {}
+            Event::Start(Tag::TableCell) => {
+                out.push('[');
+                if in_table_head { out.push('*'); }
+            }
+            Event::End(TagEnd::TableCell) => {
+                if in_table_head { out.push('*'); }
+                out.push_str("], ");
+            }
+            Event::Start(Tag::Image { .. }) => out.push_str("\\[image: "),
+            Event::End(TagEnd::Image) => out.push_str("\\]"),
+            Event::TaskListMarker(checked) => {
+                if checked {
+                    out.push_str("#box(stroke: 0.6pt, width: 0.65em, height: 0.65em)[#place(center + horizon)[#text(size: 0.7em)[×]]] ");
+                } else {
+                    out.push_str("#box(stroke: 0.6pt, width: 0.65em, height: 0.65em)[] ");
+                }
+            }
             Event::Start(Tag::List(start)) => list_stack.push(start.is_some()),
             Event::End(TagEnd::List(_)) => {
                 list_stack.pop();
@@ -146,10 +176,61 @@ pub fn markdown_to_typst(content: &str, opts: &RenderOptions) -> String {
             Event::SoftBreak => out.push(' '),
             Event::HardBreak => out.push_str("\\\n"),
             Event::Rule => out.push_str("\n#line(length: 100%)\n\n"),
+            // Inline HTML: <br/> → hard line break; other tags are dropped (their
+            // text content still arrives via Event::Text and is not lost).
+            Event::InlineHtml(tag) => {
+                if html_tag_name(&tag) == "br" {
+                    out.push_str("\\\n");
+                }
+            }
+            // Block HTML: <hr/> → horizontal rule. For everything else, strip the
+            // tags and emit the remaining plain text so that content CommonMark
+            // absorbed into the HTML block is not silently lost.
+            Event::Html(block) => {
+                let first_tag = block.lines()
+                    .next()
+                    .map(|l| html_tag_name(l.trim()))
+                    .unwrap_or_default();
+                if first_tag == "hr" {
+                    out.push_str("\n#line(length: 100%)\n\n");
+                }
+                let text = strip_html_tags(&block);
+                let text = text.trim();
+                if !text.is_empty() {
+                    out.push_str(&escape_typst_markup(text));
+                    out.push_str("\n\n");
+                }
+            }
             _ => {}
         }
     }
 
+    out
+}
+
+/// Extracts the lowercase tag name from a raw HTML token such as `<br/>`, `<HR >`, `</div>`.
+fn html_tag_name(raw: &str) -> String {
+    raw.trim()
+        .trim_start_matches('<')
+        .trim_start_matches('/')
+        .split(|c: char| !c.is_ascii_alphabetic())
+        .next()
+        .unwrap_or("")
+        .to_ascii_lowercase()
+}
+
+/// Strips all HTML tags from `s`, returning the plain text content.
+fn strip_html_tags(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut in_tag = false;
+    for c in s.chars() {
+        match c {
+            '<' => in_tag = true,
+            '>' => in_tag = false,
+            _ if !in_tag => out.push(c),
+            _ => {}
+        }
+    }
     out
 }
 
@@ -190,6 +271,12 @@ mod tests {
     }
 
     // ── Preamble ──────────────────────────────────────────────────────────────
+
+    #[test]
+    fn preamble_adds_link_underline_show_rule() {
+        let out = markdown_to_typst("x", &opts());
+        assert!(out.contains("#show link: underline"), "missing link underline show rule");
+    }
 
     #[test]
     fn preamble_contains_page_width_and_auto_height() {
@@ -274,6 +361,111 @@ mod tests {
     #[test]
     fn inline_code_emits_raw_function() {
         assert!(body("`code`").contains("#raw(\"code\")"));
+    }
+
+    #[test]
+    fn strikethrough_emits_strike_function() {
+        assert!(body("~~deleted~~").contains("#strike[deleted]"));
+    }
+
+    // ── Blockquotes ───────────────────────────────────────────────────────────
+
+    #[test]
+    fn blockquote_emits_left_border_block() {
+        let out = body("> wisdom");
+        assert!(out.contains("#block(inset: (left: 0.75em), stroke: (left: 2pt + luma(160)))[\n"), "expected block with left stroke");
+        assert!(out.contains("wisdom"), "expected quoted text");
+    }
+
+    #[test]
+    fn blockquote_renders_to_svg() {
+        render_markdown_to_svg("> a wise saying", &RenderOptions::default())
+            .expect("blockquote render failed");
+    }
+
+    // ── Tables ────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn table_emits_typst_table_with_column_count() {
+        let md = "| A | B | C |\n|---|---|---|\n| 1 | 2 | 3 |";
+        let out = body(md);
+        assert!(out.contains("#table(columns: 3,"), "expected 3-column table");
+    }
+
+    #[test]
+    fn table_header_cells_are_bold() {
+        let md = "| Head |\n|---|\n| cell |";
+        let out = body(md);
+        assert!(out.contains("[*Head*]"), "header cell should be bold");
+        assert!(out.contains("[cell]"), "body cell should not be bold");
+    }
+
+    #[test]
+    fn table_renders_to_svg() {
+        let md = "| A | B |\n|---|---|\n| 1 | 2 |";
+        render_markdown_to_svg(md, &RenderOptions::default())
+            .expect("table render failed");
+    }
+
+    // ── Task lists ────────────────────────────────────────────────────────────
+
+    #[test]
+    fn task_list_unchecked_emits_empty_box() {
+        let out = body("- [ ] todo");
+        assert!(out.contains("#box(stroke: 0.6pt, width: 0.65em, height: 0.65em)[]"), "expected empty box for unchecked task");
+    }
+
+    #[test]
+    fn task_list_checked_emits_box_with_cross() {
+        let out = body("- [x] done");
+        assert!(out.contains("#box(stroke: 0.6pt, width: 0.65em, height: 0.65em)[#place(center + horizon)[#text(size: 0.7em)[×]]]"), "expected box with × for checked task");
+    }
+
+    #[test]
+    fn task_list_renders_to_svg() {
+        let md = "- [ ] pending\n- [x] done";
+        render_markdown_to_svg(md, &RenderOptions::default())
+            .expect("task list render failed");
+    }
+
+    // ── Images ────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn image_emits_placeholder_with_alt_text() {
+        let out = body("![my diagram](diagram.png)");
+        assert!(out.contains("\\[image: "), "expected image placeholder prefix");
+        assert!(out.contains("my diagram"), "expected alt text in placeholder");
+    }
+
+    #[test]
+    fn image_renders_to_svg() {
+        render_markdown_to_svg("![alt](img.png)", &RenderOptions::default())
+            .expect("image placeholder render failed");
+    }
+
+    // ── Links ─────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn link_text_is_underlined_via_show_rule() {
+        // The show rule is in the preamble; the link function is in the body.
+        let md = "[visit](https://example.com)";
+        let out = markdown_to_typst(md, &opts());
+        assert!(out.contains("#show link: underline"), "missing show rule");
+        assert!(out.contains("#link(\"https://example.com\")[visit]"), "missing link call");
+    }
+
+    #[test]
+    fn link_renders_to_svg() {
+        render_markdown_to_svg("[text](https://example.com)", &RenderOptions::default())
+            .expect("link render failed");
+    }
+
+    #[test]
+    fn strikethrough_renders_to_svg_differently_from_plain_text() {
+        let opts = RenderOptions::default();
+        let plain = render_markdown_to_svg("deleted", &opts).expect("plain render failed");
+        let struck = render_markdown_to_svg("~~deleted~~", &opts).expect("strikethrough render failed");
+        assert_ne!(plain, struck, "strikethrough SVG must differ from plain text SVG (strike line missing)");
     }
 
     // ── Code blocks ───────────────────────────────────────────────────────────
@@ -367,6 +559,67 @@ mod tests {
     #[test]
     fn backslash_in_plain_text_is_escaped() {
         assert!(body("path\\to\\file").contains("\\\\"));
+    }
+
+    // ── HTML in markdown ──────────────────────────────────────────────────────
+
+    #[test]
+    fn inline_br_produces_hard_break() {
+        // pulldown-cmark emits InlineHtml("<br/>") between the two text events.
+        let out = body("Hello<br/>World");
+        assert!(out.contains("Hello\\\nWorld"), "inline <br/> should produce a hard line break");
+    }
+
+    #[test]
+    fn inline_br_uppercase_is_recognised() {
+        let out = body("A<BR/>B");
+        assert!(out.contains("A\\\nB"));
+    }
+
+    #[test]
+    fn inline_br_with_space_is_recognised() {
+        let out = body("A<br />B");
+        assert!(out.contains("A\\\nB"));
+    }
+
+    #[test]
+    fn block_hr_produces_line_function() {
+        // <hr/> on its own line is a CommonMark type-6 HTML block.
+        let out = body("<hr/>");
+        assert!(out.contains("#line(length: 100%)"), "block <hr/> should produce Typst line");
+    }
+
+    #[test]
+    fn block_hr_uppercase_is_recognised() {
+        let out = body("<HR/>");
+        assert!(out.contains("#line(length: 100%)"));
+    }
+
+    #[test]
+    fn block_hr_with_absorbed_text_preserves_text() {
+        // CommonMark HTML blocks extend to the next blank line, so "Extra" would
+        // be swallowed into the Html event. We must not lose that text.
+        let out = body("<hr/>\nExtra text");
+        assert!(out.contains("#line(length: 100%)"), "hr should still produce rule");
+        assert!(out.contains("Extra text"), "text absorbed into HTML block must not be lost");
+    }
+
+    #[test]
+    fn block_html_preserves_inner_text() {
+        // Unsupported block tags: strip tags, keep text content.
+        let out = body("<div>\nSome content\n</div>");
+        assert!(out.contains("Some content"), "text inside block HTML must be preserved");
+    }
+
+    #[test]
+    fn inline_unknown_tag_is_dropped_without_losing_surrounding_text() {
+        // pulldown-cmark emits Text events for the words; InlineHtml for the tag.
+        // The tag should be silently dropped; the words must survive.
+        let out = body("Hello <b>World</b> done");
+        assert!(out.contains("Hello"), "text before inline tag must survive");
+        assert!(out.contains("World"), "text between inline tags must survive");
+        assert!(out.contains("done"), "text after inline tag must survive");
+        assert!(!out.contains("<b>"), "inline tag markup must not appear in output");
     }
 
     // ── Integration: full Typst compile (requires system fonts) ──────────────
