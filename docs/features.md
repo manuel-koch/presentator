@@ -21,7 +21,7 @@
 * The config file is automatically loaded when opening an SVG file (created empty if absent)
 * Config changes are automatically saved back to the sidecar file
 * Configuration includes presentation steps, viewport settings, and show/hide elements per step
-* TypeScript data models define the structure for presentation config and steps (see [config-schema.md](config-schema.md))
+* TypeScript data models define the structure for presentation config and steps (see [sidecar-config-schema.json](sidecar-config-schema.json))
 
 ## Tooling
 
@@ -72,13 +72,23 @@ A transparent SVG overlay on top of the presentation viewport captures pointer e
 * **Indicator color** — a single color applies to both click ripples and draw strokes; default: semi-transparent red (`rgba(255, 40, 40, 0.85)`); configurable in the Presentation tab of Application Settings and persisted in the sidecar config as `pointer_color`
 * **Line width** — configurable stroke width for drawn lines; default: 3 px; configured in Application Settings (Playback tab)
 
+### Markdown overlays
+
+Markdown text blocks can be positioned on the presentation canvas as visual overlays defined in the sidecar YAML config (see `overlays` array in [sidecar-config-schema.json](sidecar-config-schema.json)):
+
+* Each overlay is placed at an (x, y) position in SVG coordinate space with a fixed width; height derives from the rendered content
+* An optional rotation (degrees) is applied around the overlay's center point
+* Text style is configurable per overlay: font size (pt), font family, and text color; defaults are 14 pt, Helvetica Neue, #000000
+* Rendering pipeline: Markdown → Typst → SVG via the Rust backend; rendered SVGs are cached to disk by content+style hash to avoid recompilation on reload
+* Overlay visibility is controlled per step via the step's `hidden_overlays` list (mirrors the existing `hidden` field for SVG elements)
+
 ### Animated transitions
 
 * viewport center, zoom, and rotation are interpolated in a `requestAnimationFrame` loop for each step transition
   * zoom is interpolated in log-space for a constant multiplicative rate of change
   * center is compensated so the destination moves in a straight line on screen regardless of zoom change
 * optional element blending: elements entering or leaving visibility cross-fade during the transition instead of appearing/disappearing instantly
-* transitions are configured per inter-step gap (between step i and step i+1); a global default applies when no per-gap override is set (see [config-schema.md](config-schema.md))
+* transitions are configured per inter-step gap (between step i and step i+1); a global default applies when no per-gap override is set (see [sidecar-config-schema.json](sidecar-config-schema.json))
 
 ## Editing Mode
 

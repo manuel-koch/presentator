@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "global-config-schema.json",
+  "title": "Presentator Global Config",
+  "description": "Application-level settings stored at ~/Library/Application Support/com.presentator/config.yaml. These are user preferences independent of any specific presentation file. Missing fields fall back to their defaults, so the file may be sparse or absent.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "fullscreen_on_presentation": {
+      "type": "boolean",
+      "description": "Automatically enter fullscreen when switching to presentation mode. Exiting presentation mode returns to windowed mode.",
+      "default": true
+    },
+    "pointer_linger_ms": {
+      "type": "integer",
+      "description": "Milliseconds after the last draw stroke in a group is released before the stroke group begins fading out.",
+      "default": 3000,
+      "minimum": 0,
+      "examples": [1000, 3000, 5000]
+    },
+    "pointer_stroke_width": {
+      "type": "integer",
+      "description": "Stroke width in pixels for draw strokes in presentation mode.",
+      "default": 3,
+      "minimum": 1,
+      "examples": [2, 3, 5]
+    },
+    "key_bindings": {
+      "type": "object",
+      "description": "Key bindings per action. Each key is an action name; each value is an ordered list of binding strings. Bindings use human-readable format: optional modifiers (shift, alt, ctrl, cmd) joined by hyphens, followed by the key name. Named keys: space, esc, enter, tab, arrow-left, arrow-right, arrow-up, arrow-down.",
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "examples": ["arrow-right", "space", "shift-n", "cmd-enter"]
+        }
+      },
+      "default": {
+        "presentation-next-step": ["arrow-right", "arrow-down", "space"],
+        "presentation-prev-step": ["arrow-left", "arrow-up"]
+      },
+      "examples": [
+        {
+          "presentation-next-step": ["arrow-right", "arrow-down", "space"],
+          "presentation-prev-step": ["arrow-left", "arrow-up"]
+        }
+      ]
+    }
+  }
+}

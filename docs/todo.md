@@ -26,7 +26,7 @@ removing the finished tasks from the todo in favor of updated feature descriptio
   - [AGENTS](../AGENTS.md) — only if a development workflow rule or constraint changed
   - [architecture](./architecture.md) — if an architectural pattern or key constraint changed
   - [features](./features.md) — primary target of the merge (always)
-  - [config schema](./config-schema.md) — if config fields were added, removed, or renamed
+  - [sidecar config schema](./sidecar-config-schema.json) or [global config schema](./global-config-schema.json) — if config fields were added, removed, or renamed
 - When a task changes a specific feature or visual appearance, then only note the current
   implementation in the features document. Don't mention any former implementation state
   or migration guide unless user explicitly requested it.

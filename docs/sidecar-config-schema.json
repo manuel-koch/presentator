@@ -1,0 +1,220 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "sidecar-config-schema.json",
+  "title": "Presentator Sidecar Config",
+  "description": "Presentation configuration stored in <svgname>.presentator.yaml alongside the source SVG file.",
+  "type": "object",
+  "required": ["aspect_ratio", "background_color", "steps"],
+  "additionalProperties": false,
+  "properties": {
+    "aspect_ratio": {
+      "type": "string",
+      "description": "Viewport shape as \"width:height\" (e.g. \"16:9\"). Both components must be positive integers.",
+      "examples": ["16:9", "4:3", "1:1"]
+    },
+    "background_color": {
+      "type": "string",
+      "description": "CSS color shown in the letterbox area outside the SVG content region.",
+      "examples": ["#000000", "#ffffff", "rgba(30,30,30,1)"]
+    },
+    "pointer_color": {
+      "type": "string",
+      "description": "CSS color for pointer indicators (click ripples and draw strokes) in presentation mode.",
+      "default": "rgba(255, 40, 40, 0.85)",
+      "examples": ["rgba(255,40,40,0.85)", "#ff2828", "blue"]
+    },
+    "exclude_id_pattern": {
+      "type": "string",
+      "description": "Regexp applied to visual SVG element IDs after structural filtering. Matching IDs are excluded from the element picker but can still appear in a step's hidden list and will be hidden in the viewport. Invalid patterns are silently ignored.",
+      "examples": ["^(bg|helper[-_]).*", "^_"]
+    },
+    "transition": {
+      "$ref": "#/$defs/TransitionConfig",
+      "description": "Global default transition applied to all inter-step gaps that have no per-gap override."
+    },
+    "transitions": {
+      "type": "array",
+      "description": "Per-gap transition overrides. transitions[i] governs the transition between step i and step i+1. Length should equal steps.length - 1. Missing entries fall back to the global transition default.",
+      "items": {
+        "$ref": "#/$defs/TransitionConfig"
+      }
+    },
+    "steps": {
+      "type": "array",
+      "description": "Ordered list of presentation steps.",
+      "items": {
+        "$ref": "#/$defs/Step"
+      }
+    },
+    "overlays": {
+      "type": "array",
+      "description": "Markdown content overlays rendered onto the presentation canvas. Each overlay is positioned in SVG coordinate space and rendered via a Markdown→Typst→SVG pipeline. Visibility is controlled per step via the step's hidden_overlays field.",
+      "items": {
+        "$ref": "#/$defs/MarkdownOverlay"
+      }
+    }
+  },
+  "$defs": {
+    "TransitionConfig": {
+      "type": "object",
+      "description": "Animated transition between two consecutive steps.",
+      "required": ["duration_ms", "easing"],
+      "additionalProperties": false,
+      "properties": {
+        "duration_ms": {
+          "type": "integer",
+          "description": "Transition duration in milliseconds.",
+          "default": 800,
+          "minimum": 0,
+          "examples": [300, 500, 800]
+        },
+        "easing": {
+          "type": "string",
+          "description": "CSS easing function for the viewport interpolation.",
+          "default": "ease-in-out",
+          "examples": ["linear", "ease-in", "ease-out", "ease-in-out"]
+        },
+        "blend": {
+          "type": "boolean",
+          "description": "When true, elements entering or leaving visibility cross-fade instead of changing instantly.",
+          "default": false
+        },
+        "blend_easing": {
+          "type": "string",
+          "description": "CSS easing function for element cross-fading. Only applied when blend is true.",
+          "default": "ease-in-out",
+          "examples": ["linear", "ease-in", "ease-out", "ease-in-out"]
+        }
+      }
+    },
+    "Step": {
+      "type": "object",
+      "description": "A single presentation step with a named viewport and element/overlay visibility state.",
+      "required": ["name", "viewport"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Human-readable step name shown in the step list and as a label on the editing canvas.",
+          "examples": ["Overview", "Detail A", "Conclusion"]
+        },
+        "viewport": {
+          "$ref": "#/$defs/Viewport"
+        },
+        "hidden": {
+          "type": "array",
+          "description": "IDs of visual SVG elements to hide for this step. All other visual elements remain visible. See the Visual Elements section for which IDs are eligible.",
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "examples": [["layer-background", "label-group"], []]
+        },
+        "hidden_overlays": {
+          "type": "array",
+          "description": "IDs of markdown overlays (defined in the top-level overlays list) to hide for this step. Overlays not listed here remain visible.",
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "examples": [["callout-1", "caption-intro"]]
+        }
+      }
+    },
+    "Viewport": {
+      "type": "object",
+      "description": "Camera definition for a step: where to look and at what zoom and rotation.",
+      "required": ["center", "zoom", "rotation"],
+      "additionalProperties": false,
+      "properties": {
+        "center": {
+          "type": "array",
+          "description": "Center point as [x, y], normalized 0–1 relative to the SVG viewBox. [0,0] = top-left corner, [1,1] = bottom-right corner, [0.5,0.5] = center.",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 2,
+          "maxItems": 2,
+          "examples": [[0.5, 0.5], [0.25, 0.3]]
+        },
+        "zoom": {
+          "type": "number",
+          "description": "Scale factor. 1.0 fits the entire SVG into the viewport. Values greater than 1 zoom in.",
+          "exclusiveMinimum": 0,
+          "examples": [1.0, 2.5, 0.8]
+        },
+        "rotation": {
+          "type": "number",
+          "description": "Viewport rotation in degrees. Positive values rotate clockwise.",
+          "examples": [0, 15, -30]
+        }
+      }
+    },
+    "MarkdownOverlay": {
+      "type": "object",
+      "description": "A markdown text block rendered as an SVG overlay positioned in the SVG coordinate space. The markdown is compiled to SVG via a Markdown→Typst→SVG pipeline; the result is cached on disk by content and style hash.",
+      "required": ["id", "content", "x", "y", "width"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique overlay identifier. Referenced by step hidden_overlays lists to control per-step visibility.",
+          "examples": ["callout-1", "caption-intro", "slide-title"]
+        },
+        "content": {
+          "type": "string",
+          "description": "Markdown source text to render. Supports standard CommonMark syntax (headings, emphasis, lists, code spans).",
+          "examples": ["# Hello World", "Key point:\n- Item one\n- Item two"]
+        },
+        "x": {
+          "type": "number",
+          "description": "Horizontal position of the overlay's top-left corner in SVG coordinate units."
+        },
+        "y": {
+          "type": "number",
+          "description": "Vertical position of the overlay's top-left corner in SVG coordinate units."
+        },
+        "width": {
+          "type": "number",
+          "description": "Width of the overlay in SVG coordinate units. Height is derived automatically from the rendered content.",
+          "exclusiveMinimum": 0
+        },
+        "rotation": {
+          "type": "number",
+          "description": "Rotation in degrees applied around the overlay's center point.",
+          "default": 0,
+          "examples": [0, 15, -10]
+        },
+        "style": {
+          "$ref": "#/$defs/OverlayStyle"
+        }
+      }
+    },
+    "OverlayStyle": {
+      "type": "object",
+      "description": "Text rendering style for a markdown overlay.",
+      "additionalProperties": false,
+      "properties": {
+        "font_size_pt": {
+          "type": "number",
+          "description": "Base font size in typographic points.",
+          "default": 14.0,
+          "exclusiveMinimum": 0,
+          "examples": [10, 14, 18, 24]
+        },
+        "text_color": {
+          "type": "string",
+          "description": "CSS color for rendered text.",
+          "default": "#000000",
+          "examples": ["#000000", "#ffffff", "rgba(0,0,0,0.8)"]
+        },
+        "font_family": {
+          "type": "string",
+          "description": "Font family name passed to the Typst renderer. Must be available in the system font path.",
+          "default": "Helvetica Neue",
+          "examples": ["Helvetica Neue", "Georgia", "Monaco", "SF Pro"]
+        }
+      }
+    }
+  }
+}

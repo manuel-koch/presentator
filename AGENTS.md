@@ -4,7 +4,8 @@ Interactive / dynamic presentation app built from SVG input files, running on ma
 
 * Features: [docs/features.md](docs/features.md)
 * Architecture decisions: [docs/architecture.md](docs/architecture.md)
-* Config file schema: [docs/config-schema.md](docs/config-schema.md)
+* Sidecar config schema: [docs/sidecar-config-schema.json](docs/sidecar-config-schema.json)
+* Global config schema: [docs/global-config-schema.json](docs/global-config-schema.json)
 * Implementation tasks: [docs/todo.md](docs/todo.md)
 * App icon design: [docs/app-icon.md](docs/app-icon.md)
 

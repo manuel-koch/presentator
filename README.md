@@ -108,5 +108,6 @@ Uses [Playwright](https://playwright.dev) (Chromium) against the Vite dev server
 
 - [Features](docs/features.md)
 - [Architecture](docs/architecture.md)
-- [Config schema](docs/config-schema.md)
+- [Sidecar config schema](docs/sidecar-config-schema.json)
+- [Global config schema](docs/global-config-schema.json)
 - [Implementation tasks](docs/todo.md)
