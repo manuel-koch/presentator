@@ -142,11 +142,10 @@ editing mode so the author can see them while arranging steps.
 
 - [ ] Add an "Overlays" section below the step list in the editing sidebar
 - [ ] Each overlay row shows its `id`; includes a delete button
+  - [ ] prevent id collision between all markdown-overlays and existing IDs of the loaded SVG
 - [ ] "Add overlay" button creates a new overlay with default position (center of current
-      viewport) and opens the editor dialog (Phase 5)
+      viewport) and opens the editor dialog (Phase 8)
 - [ ] Verify: add and delete overlays via the UI; confirm sidecar YAML is updated
-- [ ] current overlay's bounds is visualized as rectangle, if the rectangle is outside the
-      current viewport then show the "outside" indicator like the step-viewport
 
 ### Phase 8 — Markdown editor dialog
 
@@ -161,7 +160,8 @@ editing mode so the author can see them while arranging steps.
 Functionality should be like the step-viewport editing: moving, resizing, rotating.
 
 - [ ] Draw overlay bounds as labelled rectangles in `EditingCanvas` (visually distinct from
-      step viewport rectangles)
+      step viewport rectangles); if the rectangle is outside the current viewport then show
+      the "outside" indicator like the step-viewport
 - [ ] hovering over rectangle edges shows move cursor; hovering over corners shows rotate cursor
 - [ ] rectangle can be moved via drag'n'drop on the edges
 - [ ] rectangle can be resized (maintaining its aspect ratio) via drag'n'drop on middle of edges
