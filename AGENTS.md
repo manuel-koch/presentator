@@ -9,6 +9,16 @@ Interactive / dynamic presentation app built from SVG input files, running on ma
 * Implementation tasks: [docs/todo.md](docs/todo.md)
 * App icon design: [docs/app-icon.md](docs/app-icon.md)
 
+## General guideline
+
+* Be concise.
+* Prefer bullets over prose.
+* Give concrete answers first.
+* No preamble.
+* No motivational filler.
+* No repetition.
+* Keep explanations to the minimum needed.
+
 ## Development Guideline
 
 * Features have dedicated tests to verify the functionality
@@ -27,16 +37,18 @@ Every code change must complete this cycle before the task is considered done:
 
 **When delegating to a sub-agent:**
 After a sub-agent returns, explicitly verify its output against this cycle before accepting the result:
-- Did it add tests for every new pure function, utility, or data model it introduced?
-- Do all existing tests still pass (`make test`)?
-- Are there TypeScript or Rust compile errors?
+
+* Did it add tests for every new pure function, utility, or data model it introduced?
+* Do all existing tests still pass (`make test`)?
+* Are there TypeScript or Rust compile errors?
 
 Sub-agents satisfy the checks they are given but are not aware of project-wide guidelines unless
 told. The delegating agent is responsible for the complete cycle, not just the build result.
 
 **When a test fails after a change:**
-- Check whether the failure is in the *code* or the *test*. Both are bugs.
-- If a component’s `data-testid`, prop type, or public interface changed, update all tests and
+
+* Check whether the failure is in the *code* or the *test*. Both are bugs.
+* If a component’s `data-testid`, prop type, or public interface changed, update all tests and
   fixtures that reference it — do not leave stale test expectations.
 
 **Lesson learned:** renaming or replacing a component without updating e2e selectors leaves tests
@@ -44,16 +56,17 @@ silently broken. Always grep for `data-testid` values and prop names when refact
 
 ### Design Principles
 
-- Avoid Code Smells
-- KISS — Keep It Simple
-- SOLID Principles
-- SSOT (Single Source of Truth)
-- YAGNI (You Aren’t Gonna Need It)
-- Clean Code
-- Clean Architecture
-- Minimum Viable Product (MVP)
-- Five Whys (Ohno) — find root cause before fixing
-- Chain of Thought (CoT)
-- Occam’s Razor
-- TDD, Chicago School
-- Test Double: Mock / Spy / Stub (Meszaros)
+* Avoid Code Smells
+* KISS — Keep It Simple
+* SOLID Principles
+* SSOT (Single Source of Truth)
+* YAGNI (You Aren’t Gonna Need It)
+* Clean Code (Uncle Bob)
+* Clean Architecture (Martin)
+* Minimum Viable Product (MVP)
+* Five Whys (Ohno) — find root cause before fixing
+* Chain of Thought (CoT)
+* Occam’s Razor
+* TDD, Chicago School
+* Test Double: Mock / Spy / Stub (Meszaros)
+* Testing Pyramid (Cohn), Testing Trophy (Dodds)
