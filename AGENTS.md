@@ -73,7 +73,8 @@ run `make test-coverage`.
 
 * Avoid Code Smells
 * KISS — Keep It Simple
-* SOLID Principles
+* SOLID Principles ( Single Responsibility, Open/Closed,
+  Liskov Substitution, Interface Segregation, Dependency Inversion )
 * SSOT (Single Source of Truth)
 * YAGNI (You Aren’t Gonna Need It)
 * Clean Code (Uncle Bob)
