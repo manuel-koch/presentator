@@ -47,8 +47,10 @@ accepting the result:
 * Do all existing tests still pass (`make test`)?
 * Are there TypeScript or Rust compile errors?
 
-Sub-agents satisfy the checks they are given but are not aware of project-wide guidelines unless
-told. The delegating agent is responsible for the complete cycle, not just the build result.
+Sub-agents satisfy the checks they are given but are not aware of project-wide
+guidelines unless
+told. The delegating agent is responsible for the complete cycle, not just
+the build result.
 
 **Mock only what you must:**
 
@@ -61,14 +63,11 @@ told. The delegating agent is responsible for the complete cycle, not just the b
   it creates false confidence. If a mock makes the test trivially pass for any
   implementation, the test is not verifying anything.
 
-**When a test fails after a change:**
+**When a test fails after a change:** Check whether the failure is in the *code*
+or the *test*. Both are bugs.
 
-* Check whether the failure is in the *code* or the *test*. Both are bugs.
-* If a component’s `data-testid`, prop type, or public interface changed, update all tests and
-  fixtures that reference it — do not leave stale test expectations.
-
-**Lesson learned:** renaming or replacing a component without updating e2e selectors leaves tests
-silently broken. Always grep for `data-testid` values and prop names when refactoring.
+**Test Coverage:** Aim to achieve **>80% line coverage** on testable files,
+run `make test-coverage`.
 
 ### Design Principles
 

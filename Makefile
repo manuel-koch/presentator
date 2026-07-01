@@ -1,4 +1,4 @@
-.PHONY: run-dev install-deps show-outdated-deps upgrade-deps build-release bundle-macos bundle-macos-dmg generate-icons preview-icon check-versions test
+.PHONY: run-dev install-deps show-outdated-deps upgrade-deps build-release bundle-macos bundle-macos-dmg generate-icons preview-icon check-versions set-version test
 
 run-dev:
 	npm run tauri dev
@@ -49,6 +49,13 @@ bundle-macos-dmg: bundle-macos
 		src-tauri/target/release/bundle/macos/Presentator.dmg \
 		src-tauri/target/release/bundle/macos/Presentator.app
 
+set-version:
+	@test -n "$(VERSION)" || { echo "Usage: make set-version VERSION=x.y.z"; exit 1; }
+	@npm pkg set version=$(VERSION)
+	@node -e "const fs=require('fs'),f='src-tauri/tauri.conf.json',c=JSON.parse(fs.readFileSync(f));c.version='$(VERSION)';fs.writeFileSync(f,JSON.stringify(c,null,2)+'\n');"
+	@node -e "const fs=require('fs'),f='src-tauri/Cargo.toml',c=fs.readFileSync(f,'utf8');fs.writeFileSync(f,c.replace(/^version = \"[^\"]*\"/m,'version = \"$(VERSION)\"'));"
+	@echo "Version set to $(VERSION)"
+
 check-versions:
 	@PKG=$$(node -p "require('./package.json').version"); \
 	TAURI=$$(node -p "require('./src-tauri/tauri.conf.json').version"); \
@@ -72,3 +79,12 @@ test: check-versions
 	npx tsc --noEmit # do type-checks explicitly, `npm test` won't report them
 	npm test
 	npm run test:e2e
+
+test-coverage: check-versions
+	npx tsc --noEmit # do type-checks explicitly, `npm test` won't report them
+	npm run test:coverage
+	cargo llvm-cov test \
+		--lib \
+	    --show-missing-lines \
+		--fail-under-lines 80 \
+		--manifest-path src-tauri/Cargo.toml
