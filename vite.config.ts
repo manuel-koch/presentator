@@ -47,6 +47,11 @@ export default defineConfig(async () => ({
     testTimeout: 5000,
     hookTimeout: 5000,
     forceExit: true,
+    coverage: {
+      thresholds: {
+        lines: 80,
+      },
+    },
   },
 
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`

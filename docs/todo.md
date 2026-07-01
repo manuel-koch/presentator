@@ -275,24 +275,20 @@ viewport, rotated to match the overlay's own rotation.
       are, e.g. that adjusting the step-viewport to an overlay requires that both are
       selected.
 
-- [ ] Need to refactor snapping on guidelines when moving step-viewport.
-      Use "shift" key while dragging the viewport-rect to disable guideline-snapping, likewise adjust the rotation-snap behavior (Rotation snap currently uses
-      Shift-to-enable; change to always-on with Shift-to-disable to match.)
-      Only snap to eligible element (edges) in the edit-mode viewport ( see below ),
-      snapping to some distant / invisble edge of a markdown-overlay-rect doesn't make
-      sense.
-  - Canvas-window visibility: the overlay's AABB must intersect the scrolled/zoomed
-    editing canvas area to be considered for snapping.
-  - Step visibility: the overlay must not be in the active step's hidden_overlays list.
-  - Other step viewport rectangles, useful for aligning consecutive steps' viewports.
-  - Background SVG bounding box: snapping to the document edge or a large SVG element.
-- [ ] Add a snap-to-center option alongside snap-to-edge
-  - Viewport center → overlay center
-  - Viewport edge → overlay center line (horizontal or vertical axis through overlay)
-  - When multiple candidates are within threshold, snap to the nearest one; prefer
-    center snaps over edge snaps at equal distance.
-- [ ] Snap guide line length: guide line should only run from one snapping element
-      through to the other (like an "alignment rail")
+- [x] Refactored snapping on guidelines when moving step-viewport.
+      Shift key while dragging disables guideline-snapping. Rotation snap is
+      always-on with Shift-to-disable (was Shift-to-enable).
+      Only snaps to eligible elements visible in the edit-mode canvas:
+  - Canvas-window visibility: overlay's AABB must intersect the visible canvas area.
+  - Step visibility: overlay must not be in the active step's hidden_overlays list.
+  - Other step viewport rectangles for aligning consecutive steps' viewports.
+  - Background SVG bounding box (document edge).
+- [x] Added snap-to-center alongside snap-to-edge:
+  - Viewport center → target center
+  - Viewport edge → target center line (horizontal or vertical axis through target)
+  - Center snaps preferred over edge snaps at equal distance.
+- [x] Snap guide line length: guide lines run as alignment rails between the two
+      snapping elements only (not full visible canvas width/height).
 
 - [x] Introduce an instant step transition without smooth viewport adjustment and blending
       in/out SVG elements.

@@ -852,7 +852,6 @@ export const EditingCanvas = forwardRef<EditingCanvasHandle, Props>(function Edi
       const rawCx = (drag.startViewport.center[0] + dx) * vb.width + vb.x;
       const rawCy = (drag.startViewport.center[1] + dy) * vb.height + vb.y;
 
-      // Snap to overlay AABB edges.
       const vpR = drag.startViewport.rotation * Math.PI / 180;
       const vpCosR = Math.abs(Math.cos(vpR));
       const vpSinR = Math.abs(Math.sin(vpR));
@@ -860,38 +859,105 @@ export const EditingCanvas = forwardRef<EditingCanvasHandle, Props>(function Edi
       const vpH = (drag.baseH ?? 0) / drag.startViewport.zoom;
       const vpHW = vpW / 2 * vpCosR + vpH / 2 * vpSinR;
       const vpHH = vpW / 2 * vpSinR + vpH / 2 * vpCosR;
-      const canvasZoomSnap = transformRef.current.zoom;
-      const snapThreshMove = 8 / canvasZoomSnap;
-      let snapDx = 0, snapDy = 0;
+      const vpLeft = rawCx - vpHW, vpRight = rawCx + vpHW;
+      const vpTop = rawCy - vpHH, vpBottom = rawCy + vpHH;
+
       const moveGuides: SnapLine[] = [];
-      if (overlays?.length) {
-        let bestXDelta = snapThreshMove, bestYDelta = snapThreshMove;
-        let bestXGuide: number | null = null, bestYGuide: number | null = null;
-        for (const overlay of overlays) {
+      let snapDx = 0, snapDy = 0;
+
+      if (!shiftKey) {
+        const canvasZoom = transformRef.current.zoom;
+        const snapThresh = 8 / canvasZoom;
+        const hiddenOverlays = selectedStep?.hidden_overlays ?? [];
+
+        let bestXDelta = snapThresh, bestXIsCenter = false;
+        let bestXGuide: number | null = null, bestXSnapDelta = 0;
+        let bestXSpanMin = 0, bestXSpanMax = 0;
+
+        let bestYDelta = snapThresh, bestYIsCenter = false;
+        let bestYGuide: number | null = null, bestYSnapDelta = 0;
+        let bestYSpanMin = 0, bestYSpanMax = 0;
+
+        const tryX = (vpEdge: number, targetX: number, isCenter: boolean, tTop: number, tBottom: number) => {
+          const d = Math.abs(vpEdge - targetX);
+          if (d < bestXDelta || (d <= bestXDelta && isCenter && !bestXIsCenter)) {
+            bestXDelta = d; bestXIsCenter = isCenter;
+            bestXSnapDelta = targetX - vpEdge;
+            bestXGuide = targetX;
+            bestXSpanMin = Math.min(vpTop, tTop);
+            bestXSpanMax = Math.max(vpBottom, tBottom);
+          }
+        };
+
+        const tryY = (vpEdge: number, targetY: number, isCenter: boolean, tLeft: number, tRight: number) => {
+          const d = Math.abs(vpEdge - targetY);
+          if (d < bestYDelta || (d <= bestYDelta && isCenter && !bestYIsCenter)) {
+            bestYDelta = d; bestYIsCenter = isCenter;
+            bestYSnapDelta = targetY - vpEdge;
+            bestYGuide = targetY;
+            bestYSpanMin = Math.min(vpLeft, tLeft);
+            bestYSpanMax = Math.max(vpRight, tRight);
+          }
+        };
+
+        const processTarget = (left: number, right: number, top: number, bottom: number, cx: number, cy: number) => {
+          // Edge-to-edge X snaps
+          for (const vpe of [vpLeft, vpRight]) {
+            for (const te of [left, right]) tryX(vpe, te, false, top, bottom);
+          }
+          // Center X snaps (prefer over edge)
+          for (const vpe of [rawCx, vpLeft, vpRight]) tryX(vpe, cx, true, top, bottom);
+          // Edge-to-edge Y snaps
+          for (const vpe of [vpTop, vpBottom]) {
+            for (const te of [top, bottom]) tryY(vpe, te, false, left, right);
+          }
+          // Center Y snaps (prefer over edge)
+          for (const vpe of [rawCy, vpTop, vpBottom]) tryY(vpe, cy, true, left, right);
+        };
+
+        // 1. Eligible overlays: canvas-visible and not hidden in active step
+        for (const overlay of (overlays ?? [])) {
+          if (hiddenOverlays.includes(overlay.id)) continue;
           const oAabb = computeOverlayAabb(overlay);
           if (!oAabb) continue;
-          const vpEdgesX = [rawCx - vpHW, rawCx + vpHW];
-          const oEdgesX = [oAabb.left, oAabb.right];
-          for (const vpe of vpEdgesX) {
-            for (const oe of oEdgesX) {
-              const d = Math.abs(vpe - oe);
-              if (d < bestXDelta) { bestXDelta = d; snapDx = oe - vpe; bestXGuide = oe; }
-            }
-          }
-          const vpEdgesY = [rawCy - vpHH, rawCy + vpHH];
-          const oEdgesY = [oAabb.top, oAabb.bottom];
-          for (const vpe of vpEdgesY) {
-            for (const oe of oEdgesY) {
-              const d = Math.abs(vpe - oe);
-              if (d < bestYDelta) { bestYDelta = d; snapDy = oe - vpe; bestYGuide = oe; }
-            }
+          if (oAabb.right < visibleLeft || oAabb.left > visibleLeft + visibleW ||
+              oAabb.bottom < visibleTop || oAabb.top > visibleTop + visibleH) continue;
+          processTarget(oAabb.left, oAabb.right, oAabb.top, oAabb.bottom,
+            (oAabb.left + oAabb.right) / 2, (oAabb.top + oAabb.bottom) / 2);
+        }
+
+        // 2. Other step viewport rects (canvas-visible)
+        for (let i = 0; i < steps.length; i++) {
+          if (i === selectedStepIndex) continue;
+          const step = steps[i];
+          const geom = computeViewportRectGeom(step, vb, aspectRatio);
+          const r = geom.rotation * Math.PI / 180;
+          const cosR = Math.abs(Math.cos(r)), sinR = Math.abs(Math.sin(r));
+          const aabbHW = geom.w / 2 * cosR + geom.h / 2 * sinR;
+          const aabbHH = geom.w / 2 * sinR + geom.h / 2 * cosR;
+          const sLeft = geom.cx - aabbHW, sRight = geom.cx + aabbHW;
+          const sTop = geom.cy - aabbHH, sBottom = geom.cy + aabbHH;
+          if (sRight < visibleLeft || sLeft > visibleLeft + visibleW ||
+              sBottom < visibleTop || sTop > visibleTop + visibleH) continue;
+          processTarget(sLeft, sRight, sTop, sBottom, geom.cx, geom.cy);
+        }
+
+        // 3. Background SVG bounding box (canvas-visible)
+        {
+          const sL = vb.x, sR = vb.x + vb.width, sT = vb.y, sB = vb.y + vb.height;
+          if (sR >= visibleLeft && sL <= visibleLeft + visibleW &&
+              sB >= visibleTop && sT <= visibleTop + visibleH) {
+            processTarget(sL, sR, sT, sB, sL + (sR - sL) / 2, sT + (sB - sT) / 2);
           }
         }
-        if (bestXGuide !== null) moveGuides.push({ x1: bestXGuide, y1: visibleTop, x2: bestXGuide, y2: visibleTop + visibleH });
-        if (bestYGuide !== null) moveGuides.push({ x1: visibleLeft, y1: bestYGuide, x2: visibleLeft + visibleW, y2: bestYGuide });
-      }
-      setSnapLines(moveGuides);
 
+        snapDx = bestXSnapDelta;
+        snapDy = bestYSnapDelta;
+        if (bestXGuide !== null) moveGuides.push({ x1: bestXGuide, y1: bestXSpanMin, x2: bestXGuide, y2: bestXSpanMax });
+        if (bestYGuide !== null) moveGuides.push({ x1: bestYSpanMin, y1: bestYGuide, x2: bestYSpanMax, y2: bestYGuide });
+      }
+
+      setSnapLines(moveGuides);
       const snappedCx = rawCx + snapDx;
       const snappedCy = rawCy + snapDy;
       onViewportChange({
@@ -908,7 +974,8 @@ export const EditingCanvas = forwardRef<EditingCanvasHandle, Props>(function Edi
       const startAngle = Math.atan2(startSvgY - cy, startSvgX - cx) * (180 / Math.PI);
       const curAngle = Math.atan2(svgY - cy, svgX - cx) * (180 / Math.PI);
       let totalRotation = drag.startViewport.rotation + (curAngle - startAngle);
-      if (shiftKey) totalRotation = Math.round(totalRotation / 5) * 5;
+      // Rotation snap is always-on; hold Shift to rotate freely.
+      if (!shiftKey) totalRotation = Math.round(totalRotation / 5) * 5;
       onViewportChange({ ...drag.startViewport, rotation: totalRotation });
     } else if (drag.mode === "resize" && drag.side && drag.startCx !== undefined && drag.startCy !== undefined && drag.baseW !== undefined && drag.baseH !== undefined) {
       const r = drag.startViewport.rotation * Math.PI / 180;
@@ -969,45 +1036,104 @@ export const EditingCanvas = forwardRef<EditingCanvasHandle, Props>(function Edi
         newCy = ry - (w1 / 2) * sin_r;
       }
 
-      // Compute snap for resize: snap the moving edge to overlay AABB edges.
-      const canvasZoomForSnap = transformRef.current.zoom;
-      const snapThresh = 8 / canvasZoomForSnap;
-      const vpNewR = drag.startViewport.rotation * Math.PI / 180;
-      const vpW = baseW / Math.max(0.01, newZoom);
-      const vpH = baseH / Math.max(0.01, newZoom);
-      const vpACosR = Math.abs(Math.cos(vpNewR));
-      const vpASinR = Math.abs(Math.sin(vpNewR));
-      const vpAabbHW = vpW / 2 * vpACosR + vpH / 2 * vpASinR;
-      const vpAabbHH = vpW / 2 * vpASinR + vpH / 2 * vpACosR;
       const snapGuides: SnapLine[] = [];
-      if (overlays?.length) {
-        let bestX: number | null = null, bestXDelta = snapThresh;
-        let bestY: number | null = null, bestYDelta = snapThresh;
-        for (const overlay of overlays) {
+      if (!shiftKey) {
+        const canvasZoomForSnap = transformRef.current.zoom;
+        const snapThresh = 8 / canvasZoomForSnap;
+        const hiddenOverlays = selectedStep?.hidden_overlays ?? [];
+        const vpNewR = drag.startViewport.rotation * Math.PI / 180;
+        const vpACosR = Math.abs(Math.cos(vpNewR));
+        const vpASinR = Math.abs(Math.sin(vpNewR));
+        // vpAabbHW/HH depend only on zoom and rotation — constant for a given newZoom.
+        // Shifting newCx/newCy does not change these, so a center-shift snap is safe.
+        const vpAabbHW = (baseW / 2 * vpACosR + baseH / 2 * vpASinR) / Math.max(0.01, newZoom);
+        const vpAabbHH = (baseW / 2 * vpASinR + baseH / 2 * vpACosR) / Math.max(0.01, newZoom);
+        const vpGLeft = newCx - vpAabbHW, vpGRight = newCx + vpAabbHW;
+        const vpGTop  = newCy - vpAabbHH, vpGBottom = newCy + vpAabbHH;
+
+        let snapCxDelta = 0, bestXDelta = snapThresh;
+        let bestX: number | null = null;
+        let bestXTargetTop = 0, bestXTargetBottom = 0;
+
+        let snapCyDelta = 0, bestYDelta = snapThresh;
+        let bestY: number | null = null;
+        let bestYTargetLeft = 0, bestYTargetRight = 0;
+
+        const tryResizeX = (vpEdge: number, targetX: number, tTop: number, tBottom: number) => {
+          const d = Math.abs(vpEdge - targetX);
+          if (d < bestXDelta) {
+            bestXDelta = d; bestX = targetX;
+            snapCxDelta = targetX - vpEdge;
+            bestXTargetTop = tTop; bestXTargetBottom = tBottom;
+          }
+        };
+        const tryResizeY = (vpEdge: number, targetY: number, tLeft: number, tRight: number) => {
+          const d = Math.abs(vpEdge - targetY);
+          if (d < bestYDelta) {
+            bestYDelta = d; bestY = targetY;
+            snapCyDelta = targetY - vpEdge;
+            bestYTargetLeft = tLeft; bestYTargetRight = tRight;
+          }
+        };
+
+        const processResizeTarget = (left: number, right: number, top: number, bottom: number, cx: number, cy: number) => {
+          for (const te of [left, right, cx]) {
+            tryResizeX(vpGLeft, te, top, bottom);
+            tryResizeX(vpGRight, te, top, bottom);
+          }
+          for (const te of [top, bottom, cy]) {
+            tryResizeY(vpGTop,    te, left, right);
+            tryResizeY(vpGBottom, te, left, right);
+          }
+        };
+
+        for (const overlay of (overlays ?? [])) {
+          if (hiddenOverlays.includes(overlay.id)) continue;
           const oAabb = computeOverlayAabb(overlay);
           if (!oAabb) continue;
-          const vpEdgesX = [newCx - vpAabbHW, newCx + vpAabbHW];
-          const oEdgesX = [oAabb.left, oAabb.right];
-          for (const vpe of vpEdgesX) {
-            for (const oe of oEdgesX) {
-              const d = Math.abs(vpe - oe);
-              if (d < bestXDelta) { bestXDelta = d; bestX = oe; }
-            }
-          }
-          const vpEdgesY = [newCy - vpAabbHH, newCy + vpAabbHH];
-          const oEdgesY = [oAabb.top, oAabb.bottom];
-          for (const vpe of vpEdgesY) {
-            for (const oe of oEdgesY) {
-              const d = Math.abs(vpe - oe);
-              if (d < bestYDelta) { bestYDelta = d; bestY = oe; }
-            }
+          if (oAabb.right < visibleLeft || oAabb.left > visibleLeft + visibleW ||
+              oAabb.bottom < visibleTop || oAabb.top > visibleTop + visibleH) continue;
+          processResizeTarget(oAabb.left, oAabb.right, oAabb.top, oAabb.bottom,
+            (oAabb.left + oAabb.right) / 2, (oAabb.top + oAabb.bottom) / 2);
+        }
+
+        for (let i = 0; i < steps.length; i++) {
+          if (i === selectedStepIndex) continue;
+          const step = steps[i];
+          const geom = computeViewportRectGeom(step, vb, aspectRatio);
+          const rg = geom.rotation * Math.PI / 180;
+          const cosR = Math.abs(Math.cos(rg)), sinR = Math.abs(Math.sin(rg));
+          const aabbHW = geom.w / 2 * cosR + geom.h / 2 * sinR;
+          const aabbHH = geom.w / 2 * sinR + geom.h / 2 * cosR;
+          const sLeft = geom.cx - aabbHW, sRight = geom.cx + aabbHW;
+          const sTop = geom.cy - aabbHH, sBottom = geom.cy + aabbHH;
+          if (sRight < visibleLeft || sLeft > visibleLeft + visibleW ||
+              sBottom < visibleTop || sTop > visibleTop + visibleH) continue;
+          processResizeTarget(sLeft, sRight, sTop, sBottom, geom.cx, geom.cy);
+        }
+
+        {
+          const sL = vb.x, sR = vb.x + vb.width, sT = vb.y, sB = vb.y + vb.height;
+          if (sR >= visibleLeft && sL <= visibleLeft + visibleW &&
+              sB >= visibleTop && sT <= visibleTop + visibleH) {
+            processResizeTarget(sL, sR, sT, sB, sL + (sR - sL) / 2, sT + (sB - sT) / 2);
           }
         }
+
+        // Apply snap: shift center so the closest AABB edge lands exactly on the target.
+        newCx += snapCxDelta;
+        newCy += snapCyDelta;
+
+        // Build guide lines using the snapped AABB positions.
         if (bestX !== null) {
-          snapGuides.push({ x1: bestX, y1: visibleTop, x2: bestX, y2: visibleTop + visibleH });
+          const snappedTop    = newCy - vpAabbHH;
+          const snappedBottom = newCy + vpAabbHH;
+          snapGuides.push({ x1: bestX, y1: Math.min(snappedTop, bestXTargetTop), x2: bestX, y2: Math.max(snappedBottom, bestXTargetBottom) });
         }
         if (bestY !== null) {
-          snapGuides.push({ x1: visibleLeft, y1: bestY, x2: visibleLeft + visibleW, y2: bestY });
+          const snappedLeft  = newCx - vpAabbHW;
+          const snappedRight = newCx + vpAabbHW;
+          snapGuides.push({ x1: Math.min(snappedLeft, bestYTargetLeft), y1: bestY, x2: Math.max(snappedRight, bestYTargetRight), y2: bestY });
         }
       }
       setSnapLines(snapGuides);
