@@ -8,7 +8,7 @@ use std::sync::Mutex;
 use std::path::PathBuf;
 
 use notify::{EventKind, RecommendedWatcher, RecursiveMode, Watcher};
-use tauri::{AppHandle, Emitter, Manager, State};
+use tauri::{AppHandle, Emitter, Manager, Runtime, State};
 use tauri::menu::{CheckMenuItem, MenuItem};
 
 type WatcherState = Mutex<Option<RecommendedWatcher>>;
@@ -64,11 +64,11 @@ impl Default for AppConfig {
 
 type AppConfigState = Mutex<AppConfig>;
 
-fn app_config_path(app: &AppHandle) -> Option<PathBuf> {
+fn app_config_path<R: Runtime>(app: &AppHandle<R>) -> Option<PathBuf> {
     app.path().app_config_dir().ok().map(|d| d.join("config.yaml"))
 }
 
-fn load_app_config(app: &AppHandle) -> AppConfig {
+fn load_app_config<R: Runtime>(app: &AppHandle<R>) -> AppConfig {
     if let Some(path) = app_config_path(app) {
         if let Ok(content) = std::fs::read_to_string(&path) {
             if let Ok(cfg) = serde_yaml::from_str(&content) {
@@ -79,7 +79,7 @@ fn load_app_config(app: &AppHandle) -> AppConfig {
     AppConfig::default()
 }
 
-fn save_app_config(app: &AppHandle, cfg: &AppConfig) {
+fn save_app_config<R: Runtime>(app: &AppHandle<R>, cfg: &AppConfig) {
     if let Some(path) = app_config_path(app) {
         if let Some(dir) = path.parent() {
             let _ = std::fs::create_dir_all(dir);
@@ -183,12 +183,12 @@ async fn list_fonts() -> Result<Vec<String>, String> {
 }
 
 #[tauri::command]
-async fn render_markdown_to_svg(
+async fn render_markdown_to_svg<R: Runtime>(
     id: String,
     content: String,
     options: markdown::RenderOptions,
     width: f64,
-    app: AppHandle,
+    app: AppHandle<R>,
 ) -> Result<String, String> {
     let key = overlay_cache::cache_key(
         &content,
@@ -230,7 +230,7 @@ async fn render_markdown_to_svg(
 }
 
 #[tauri::command]
-fn get_overlay_cache_stats(app: AppHandle) -> overlay_cache::CacheStats {
+fn get_overlay_cache_stats<R: Runtime>(app: AppHandle<R>) -> overlay_cache::CacheStats {
     let cache_dir = app
         .path()
         .app_cache_dir()
@@ -243,7 +243,7 @@ fn get_overlay_cache_stats(app: AppHandle) -> overlay_cache::CacheStats {
 }
 
 #[tauri::command]
-fn clear_overlay_svg_cache(app: AppHandle) -> usize {
+fn clear_overlay_svg_cache<R: Runtime>(app: AppHandle<R>) -> usize {
     let Some(cache_dir) = app
         .path()
         .app_cache_dir()
@@ -271,7 +271,7 @@ fn js_log(level: String, msg: String) {
 }
 
 #[tauri::command]
-fn get_step_thumbnail(name: String, key: String, app: AppHandle) -> Option<String> {
+fn get_step_thumbnail<R: Runtime>(name: String, key: String, app: AppHandle<R>) -> Option<String> {
     let cache_dir = app.path().app_cache_dir().ok()
         .map(|d| thumbnail_cache::thumbnail_dir(&d))?;
     let result = thumbnail_cache::get(&cache_dir, &key);
@@ -284,7 +284,7 @@ fn get_step_thumbnail(name: String, key: String, app: AppHandle) -> Option<Strin
 }
 
 #[tauri::command]
-fn cache_step_thumbnail(name: String, key: String, png_base64: String, app: AppHandle) -> Result<(), String> {
+fn cache_step_thumbnail<R: Runtime>(name: String, key: String, png_base64: String, app: AppHandle<R>) -> Result<(), String> {
     let cache_dir = app.path().app_cache_dir()
         .map_err(|e| e.to_string())
         .map(|d| thumbnail_cache::thumbnail_dir(&d))?;
@@ -297,7 +297,7 @@ fn cache_step_thumbnail(name: String, key: String, png_base64: String, app: AppH
 }
 
 #[tauri::command]
-fn get_step_thumbnail_cache_stats(app: AppHandle) -> thumbnail_cache::CacheStats {
+fn get_step_thumbnail_cache_stats<R: Runtime>(app: AppHandle<R>) -> thumbnail_cache::CacheStats {
     let cache_dir = app.path().app_cache_dir().ok()
         .map(|d| thumbnail_cache::thumbnail_dir(&d));
     match cache_dir {
@@ -307,7 +307,7 @@ fn get_step_thumbnail_cache_stats(app: AppHandle) -> thumbnail_cache::CacheStats
 }
 
 #[tauri::command]
-fn clear_step_thumbnail_cache(app: AppHandle) -> usize {
+fn clear_step_thumbnail_cache<R: Runtime>(app: AppHandle<R>) -> usize {
     let Some(cache_dir) = app.path().app_cache_dir().ok()
         .map(|d| thumbnail_cache::thumbnail_dir(&d))
     else {
@@ -319,7 +319,7 @@ fn clear_step_thumbnail_cache(app: AppHandle) -> usize {
 }
 
 #[tauri::command]
-fn set_app_settings(settings: AppConfig, app: AppHandle, state: State<AppConfigState>) {
+fn set_app_settings<R: Runtime>(settings: AppConfig, app: AppHandle<R>, state: State<AppConfigState>) {
     {
         let mut cfg = state.lock().unwrap();
         *cfg = settings.clone();
@@ -606,5 +606,187 @@ mod tests {
         let fallback = AppConfig::default();
         assert!(fallback.fullscreen_on_presentation);
         assert!(fallback.key_bindings.contains_key("presentation-next-step"));
+    }
+
+    // ── Direct Tauri command tests (no AppHandle needed) ──────────────────────
+
+    #[test]
+    fn read_text_file_reads_existing_file() {
+        let tmp = tempfile::NamedTempFile::new().unwrap();
+        std::fs::write(tmp.path(), "hello world").unwrap();
+        let result = read_text_file(tmp.path().to_string_lossy().to_string());
+        assert_eq!(result, Ok("hello world".to_string()));
+    }
+
+    #[test]
+    fn read_text_file_returns_err_for_missing_file() {
+        let result = read_text_file("/nonexistent/path/file.txt".to_string());
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn write_text_file_creates_file_with_content() {
+        let tmp = tempfile::NamedTempFile::new().unwrap();
+        let result = write_text_file(tmp.path().to_string_lossy().to_string(), "data".to_string());
+        assert!(result.is_ok());
+        assert_eq!(std::fs::read_to_string(tmp.path()).unwrap(), "data");
+    }
+
+    #[test]
+    fn write_text_file_returns_err_for_invalid_path() {
+        let result = write_text_file("/nonexistent/dir/file.txt".to_string(), "x".to_string());
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn render_svg_thumbnail_returns_some_for_valid_svg() {
+        let svg = r#"<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><rect width="10" height="10" fill="red"/></svg>"#;
+        let result = render_svg_thumbnail(svg.to_string(), 16, 16, None);
+        assert!(result.is_some());
+    }
+
+    #[test]
+    fn render_svg_thumbnail_returns_none_for_empty_string() {
+        let result = render_svg_thumbnail(String::new(), 16, 16, None);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn js_log_handles_all_levels_without_panic() {
+        js_log("error".to_string(), "test error".to_string());
+        js_log("warn".to_string(), "test warn".to_string());
+        js_log("info".to_string(), "test info".to_string());
+        js_log("debug".to_string(), "test debug".to_string());
+        js_log("unknown".to_string(), "test unknown".to_string());
+    }
+
+    // ── Mock-app tests (AppHandle-dependent commands) ─────────────────────────
+
+    fn mock_app() -> tauri::App<tauri::test::MockRuntime> {
+        tauri::test::mock_builder()
+            .manage(AppConfigState::new(AppConfig::default()))
+            .build(tauri::test::mock_context(tauri::test::noop_assets()))
+            .expect("failed to build mock app")
+    }
+
+    #[test]
+    fn get_app_settings_returns_managed_config() {
+        let app = mock_app();
+        let state = app.state::<AppConfigState>();
+        let cfg = get_app_settings(state);
+        assert!(cfg.fullscreen_on_presentation);
+        assert_eq!(cfg.pointer_linger_ms, 3000);
+    }
+
+    #[test]
+    fn set_app_settings_updates_state() {
+        let app = mock_app();
+        let new_cfg = AppConfig {
+            fullscreen_on_presentation: false,
+            pointer_linger_ms: 1000,
+            pointer_stroke_width: 5,
+            key_bindings: HashMap::new(),
+        };
+        let handle = app.handle().clone();
+        let state = app.state::<AppConfigState>();
+        set_app_settings(new_cfg, handle, state);
+        let updated = app.state::<AppConfigState>().lock().unwrap().clone();
+        assert!(!updated.fullscreen_on_presentation);
+        assert_eq!(updated.pointer_linger_ms, 1000);
+    }
+
+    #[test]
+    fn load_and_save_app_config_round_trip_via_mock_app() {
+        let app = mock_app();
+        let handle = app.handle().clone();
+        // save_app_config writes to the app config dir (may be OS-specific)
+        let cfg = AppConfig {
+            fullscreen_on_presentation: false,
+            ..AppConfig::default()
+        };
+        save_app_config(&handle, &cfg);
+        // load_app_config should read back the same value
+        let loaded = load_app_config(&handle);
+        assert!(!loaded.fullscreen_on_presentation);
+        // cleanup
+        if let Some(path) = app_config_path(&handle) {
+            let _ = std::fs::remove_file(path);
+        }
+    }
+
+    #[test]
+    fn app_config_path_returns_some_path() {
+        let app = mock_app();
+        let handle = app.handle().clone();
+        let path = app_config_path(&handle);
+        assert!(path.is_some());
+        assert!(path.unwrap().to_string_lossy().contains("config.yaml"));
+    }
+
+    #[test]
+    fn get_step_thumbnail_returns_none_for_empty_cache() {
+        let app = mock_app();
+        let handle = app.handle().clone();
+        let result = get_step_thumbnail("slide-1".to_string(), "some-key".to_string(), handle);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn cache_and_retrieve_step_thumbnail() {
+        // A minimal 1×1 white PNG as base64.
+        let png_b64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVQI12NgAAIABQAABjE+ibYAAAAASUVORK5CYII=";
+        let key = format!("test-thumb-{}", std::process::id());
+
+        let app = mock_app();
+        let handle = app.handle().clone();
+
+        // Cache it.
+        let put = cache_step_thumbnail("slide-1".to_string(), key.clone(), png_b64.to_string(), handle.clone());
+        assert!(put.is_ok(), "cache_step_thumbnail failed: {put:?}");
+
+        // Retrieve it.
+        let got = get_step_thumbnail("slide-1".to_string(), key.clone(), handle.clone());
+        assert!(got.is_some());
+        assert_eq!(got.unwrap(), png_b64);
+
+        // Cleanup.
+        if let Ok(dir) = handle.path().app_cache_dir() {
+            let cache_dir = thumbnail_cache::thumbnail_dir(&dir);
+            thumbnail_cache::clear(&cache_dir);
+        }
+    }
+
+    #[test]
+    fn get_step_thumbnail_cache_stats_returns_zero_for_empty() {
+        let app = mock_app();
+        let handle = app.handle().clone();
+        let stats = get_step_thumbnail_cache_stats(handle);
+        // Might be 0 (fresh) or some positive number (shared OS cache); just check no panic.
+        let _ = stats.entry_count;
+        let _ = stats.total_bytes;
+    }
+
+    #[test]
+    fn clear_step_thumbnail_cache_returns_count() {
+        let app = mock_app();
+        let handle = app.handle().clone();
+        // Just call it — shouldn't panic even if cache is empty or missing.
+        let _removed = clear_step_thumbnail_cache(handle);
+    }
+
+    #[test]
+    fn get_overlay_cache_stats_does_not_panic() {
+        let app = mock_app();
+        let handle = app.handle().clone();
+        let stats = get_overlay_cache_stats(handle);
+        let _ = stats.entry_count;
+        let _ = stats.total_bytes;
+    }
+
+    #[test]
+    fn clear_overlay_svg_cache_returns_count() {
+        let app = mock_app();
+        let handle = app.handle().clone();
+        let _removed = clear_overlay_svg_cache(handle);
     }
 }

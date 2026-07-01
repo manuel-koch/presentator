@@ -78,6 +78,7 @@ check-versions:
 test: check-versions
 	npx tsc --noEmit # do type-checks explicitly, `npm test` won't report them
 	npm test
+	cargo test --manifest-path src-tauri/Cargo.toml
 	npm run test:e2e
 
 test-coverage: check-versions
@@ -85,6 +86,6 @@ test-coverage: check-versions
 	npm run test:coverage
 	cargo llvm-cov test \
 		--lib \
-	    --show-missing-lines \
+		--show-missing-lines \
 		--fail-under-lines 80 \
 		--manifest-path src-tauri/Cargo.toml

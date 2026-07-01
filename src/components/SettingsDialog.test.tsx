@@ -1,9 +1,23 @@
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { vi, describe, it, expect } from "vitest";
+import { vi, describe, it, expect, beforeEach } from "vitest";
+
+vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
+import { invoke } from "@tauri-apps/api/core";
+
 import { SettingsDialog } from "./SettingsDialog";
 import type { AppSettings } from "./SettingsDialog";
 import type { PresentationConfig } from "../types/config";
+
+beforeEach(() => {
+  vi.mocked(invoke).mockImplementation((cmd: string) => {
+    if (cmd === "get_overlay_cache_stats") return Promise.resolve({ entry_count: 3, total_bytes: 1536 });
+    if (cmd === "get_step_thumbnail_cache_stats") return Promise.resolve({ entry_count: 5, total_bytes: 2621440 });
+    if (cmd === "clear_overlay_svg_cache") return Promise.resolve(undefined);
+    if (cmd === "clear_step_thumbnail_cache") return Promise.resolve(undefined);
+    return Promise.resolve(undefined);
+  });
+});
 
 const BASE_SETTINGS: AppSettings = {
   fullscreen_on_presentation: true,
@@ -157,5 +171,158 @@ describe("SettingsDialog — Save and Cancel", () => {
     const { onCancel } = renderDialog();
     await userEvent.click(screen.getByRole("dialog"));
     expect(onCancel).toHaveBeenCalledOnce();
+  });
+
+  it("closes dialog with Escape key when not in learn mode", async () => {
+    const { onCancel } = renderDialog();
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+    });
+    expect(onCancel).toHaveBeenCalledOnce();
+  });
+});
+
+// --- Caches tab ---
+
+describe("SettingsDialog — Caches tab", () => {
+  async function openCaches() {
+    const props = renderDialog();
+    await userEvent.click(screen.getByRole("button", { name: "Caches" }));
+    return props;
+  }
+
+  it("shows the Caches tab with cache stat labels", async () => {
+    await openCaches();
+    expect(screen.getByText("Overlay render cache")).toBeInTheDocument();
+    expect(screen.getByText("Step preview cache")).toBeInTheDocument();
+  });
+
+  it("displays cache entry counts after stats load", async () => {
+    await openCaches();
+    await waitFor(() => expect(screen.getByText(/3 entr/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/5 entr/)).toBeInTheDocument());
+  });
+
+  it("displays sizes in KB/MB for larger caches", async () => {
+    await openCaches();
+    // 1536 B = 1.5 KB; 2621440 B = 2.5 MB
+    await waitFor(() => expect(screen.getByText(/1\.5 KB/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/2\.5 MB/)).toBeInTheDocument());
+  });
+
+  it("calls clear_overlay_svg_cache and refreshes when Clear is clicked", async () => {
+    await openCaches();
+    await waitFor(() => expect(screen.getByLabelText("Clear overlay render cache")).not.toBeDisabled());
+    await userEvent.click(screen.getByLabelText("Clear overlay render cache"));
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("clear_overlay_svg_cache")
+    );
+    expect(invoke).toHaveBeenCalledWith("get_overlay_cache_stats");
+  });
+
+  it("calls clear_step_thumbnail_cache and refreshes when Clear is clicked", async () => {
+    await openCaches();
+    await waitFor(() => expect(screen.getByLabelText("Clear step preview cache")).not.toBeDisabled());
+    await userEvent.click(screen.getByLabelText("Clear step preview cache"));
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("clear_step_thumbnail_cache")
+    );
+    expect(invoke).toHaveBeenCalledWith("get_step_thumbnail_cache_stats");
+  });
+});
+
+// --- Key Bindings tab ---
+
+describe("SettingsDialog — Key Bindings tab", () => {
+  async function openKeybindings(overrides: Partial<Parameters<typeof renderDialog>[0]> = {}) {
+    const props = renderDialog(overrides);
+    await userEvent.click(screen.getByRole("button", { name: "Key Bindings" }));
+    return props;
+  }
+
+  it("shows the Key Bindings tab with Learn buttons", async () => {
+    await openKeybindings();
+    const learnButtons = screen.getAllByRole("button", { name: "Learn" });
+    expect(learnButtons.length).toBeGreaterThan(0);
+  });
+
+  it("shows Reset buttons for each binding row", async () => {
+    await openKeybindings();
+    const resetButtons = screen.getAllByRole("button", { name: "Reset" });
+    expect(resetButtons.length).toBeGreaterThan(0);
+  });
+
+  it("entering learn mode shows 'Press a key…' chip", async () => {
+    await openKeybindings();
+    const learnBtn = screen.getAllByRole("button", { name: "Learn" })[0];
+    await userEvent.click(learnBtn);
+    expect(screen.getByText("Press a key…")).toBeInTheDocument();
+    // The learn button itself changes to "Cancel" (the row-level cancel)
+    const cancelBtns = screen.getAllByRole("button", { name: "Cancel" });
+    expect(cancelBtns.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("pressing a key in learn mode adds a new binding chip", async () => {
+    // Start with empty bindings to avoid "already included" short-circuit at line 96
+    await openKeybindings({ settings: { ...BASE_SETTINGS, key_bindings: {} } });
+    const learnButtons = screen.getAllByRole("button", { name: "Learn" });
+    await userEvent.click(learnButtons[0]);
+
+    // Single character key → normalizeKey returns "n" (lowercase)
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent("keydown", {
+        key: "n", code: "KeyN", bubbles: true, cancelable: true
+      }));
+    });
+
+    await waitFor(() => expect(screen.getByText("n")).toBeInTheDocument());
+    // Learn mode should exit after the binding is added
+    expect(screen.queryByText("Press a key…")).toBeNull();
+  });
+
+  it("Reset button restores default bindings for that action", async () => {
+    await openKeybindings({ settings: { ...BASE_SETTINGS, key_bindings: {} } });
+    const resetButtons = screen.getAllByRole("button", { name: "Reset" });
+    await userEvent.click(resetButtons[0]);
+    // After reset, default bindings appear as chips
+    const chips = document.querySelectorAll(".keybinding-chip");
+    expect(chips.length).toBeGreaterThan(0);
+  });
+
+  it("removing a binding chip calls no onSave yet but allows saving without it", async () => {
+    const { onSave } = await openKeybindings({
+      settings: { ...BASE_SETTINGS, key_bindings: { "presentation-next-step": ["ArrowRight"] } },
+    });
+    const removeBtn = screen.getByRole("button", { name: "Remove ArrowRight" });
+    await userEvent.click(removeBtn);
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(onSave).toHaveBeenCalledWith(
+      expect.objectContaining({ key_bindings: expect.objectContaining({ "presentation-next-step": [] }) })
+    );
+  });
+
+  it("shows conflict notice when two actions share the same binding", async () => {
+    // Create a conflict: presentation-next-step and presentation-prev-step both bound to "ArrowRight"
+    const conflictSettings: AppSettings = {
+      ...BASE_SETTINGS,
+      key_bindings: {
+        "presentation-next-step": ["ArrowRight"],
+        "presentation-prev-step": ["ArrowRight"],
+      },
+    };
+    await openKeybindings({ settings: conflictSettings });
+    expect(screen.getByText(/Conflicting key bindings detected/)).toBeInTheDocument();
+  });
+
+  it("Save is disabled when there are conflicts", async () => {
+    const conflictSettings: AppSettings = {
+      ...BASE_SETTINGS,
+      key_bindings: {
+        "presentation-next-step": ["ArrowRight"],
+        "presentation-prev-step": ["ArrowRight"],
+      },
+    };
+    await openKeybindings({ settings: conflictSettings });
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
   });
 });

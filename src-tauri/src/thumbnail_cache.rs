@@ -71,3 +71,123 @@ pub fn clear(cache_dir: &Path) -> usize {
     }
     removed
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+
+    fn tmp_dir() -> PathBuf {
+        let n = COUNTER.fetch_add(1, Ordering::SeqCst);
+        let pid = std::process::id();
+        let dir = std::env::temp_dir().join(format!("thumb_cache_test_{pid}_{n}"));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    // Minimal 1×1 white PNG encoded as base64.
+    const PNG_B64: &str = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVQI12NgAAIABQAABjE+ibYAAAAASUVORK5CYII=";
+
+    #[test]
+    fn thumbnail_dir_appends_step_thumbnail() {
+        let root = std::path::Path::new("/tmp/cache");
+        assert_eq!(thumbnail_dir(root), root.join("step-thumbnail"));
+    }
+
+    #[test]
+    fn get_returns_none_for_missing_key() {
+        let dir = tmp_dir();
+        assert!(get(&dir, "nonexistent").is_none());
+    }
+
+    #[test]
+    fn put_then_get_returns_same_png() {
+        let dir = tmp_dir();
+        put(&dir, "key1", PNG_B64).unwrap();
+        let retrieved = get(&dir, "key1").unwrap();
+        assert_eq!(retrieved, PNG_B64);
+    }
+
+    #[test]
+    fn put_overwrites_existing_entry() {
+        let dir = tmp_dir();
+        let png2 = "AAAA"; // not a real PNG but base64-decodable
+        put(&dir, "key2", PNG_B64).unwrap();
+        put(&dir, "key2", png2).unwrap();
+        let got = get(&dir, "key2").unwrap();
+        assert_eq!(got, png2);
+    }
+
+    #[test]
+    fn put_creates_cache_dir_if_absent() {
+        let parent = tmp_dir();
+        let dir = parent.join("nested_new");
+        // The nested dir must not exist yet — parent was just freshly created.
+        assert!(!dir.exists());
+        put(&dir, "k", PNG_B64).unwrap();
+        assert!(dir.exists());
+    }
+
+    #[test]
+    fn put_returns_err_for_invalid_base64() {
+        let dir = tmp_dir();
+        let result = put(&dir, "bad", "not!valid!base64!!!");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn stats_returns_zeros_for_missing_dir() {
+        let dir = std::path::Path::new("/tmp/nonexistent_thumb_cache_xyz");
+        let s = stats(dir);
+        assert_eq!(s.entry_count, 0);
+        assert_eq!(s.total_bytes, 0);
+    }
+
+    #[test]
+    fn stats_counts_png_files_and_bytes() {
+        let dir = tmp_dir();
+        put(&dir, "a", PNG_B64).unwrap();
+        put(&dir, "b", PNG_B64).unwrap();
+        let s = stats(&dir);
+        assert_eq!(s.entry_count, 2);
+        assert!(s.total_bytes > 0);
+    }
+
+    #[test]
+    fn stats_ignores_non_png_files() {
+        let dir = tmp_dir();
+        std::fs::write(dir.join("file.tmp"), b"tmp").unwrap();
+        std::fs::write(dir.join("file.txt"), b"txt").unwrap();
+        put(&dir, "real", PNG_B64).unwrap();
+        let s = stats(&dir);
+        assert_eq!(s.entry_count, 1);
+    }
+
+    #[test]
+    fn clear_removes_all_png_files_and_returns_count() {
+        let dir = tmp_dir();
+        put(&dir, "x", PNG_B64).unwrap();
+        put(&dir, "y", PNG_B64).unwrap();
+        let removed = clear(&dir);
+        assert_eq!(removed, 2);
+        assert_eq!(stats(&dir).entry_count, 0);
+    }
+
+    #[test]
+    fn clear_on_missing_dir_returns_zero() {
+        let dir = std::path::Path::new("/tmp/nonexistent_thumb_clear_xyz");
+        assert_eq!(clear(dir), 0);
+    }
+
+    #[test]
+    fn clear_does_not_remove_non_png_files() {
+        let dir = tmp_dir();
+        std::fs::write(dir.join("keep.tmp"), b"x").unwrap();
+        put(&dir, "gone", PNG_B64).unwrap();
+        let removed = clear(&dir);
+        assert_eq!(removed, 1);
+        assert!(dir.join("keep.tmp").exists());
+    }
+}

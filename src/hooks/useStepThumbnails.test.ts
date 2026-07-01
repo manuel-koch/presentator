@@ -114,6 +114,38 @@ describe("useStepThumbnails", () => {
     expect(result.current.get(1)).toMatch(/^data:image\/png;base64,/);
   });
 
+  it("returns empty string when render_svg_thumbnail throws (catch block)", async () => {
+    vi.mocked(invoke).mockImplementation((cmd: string) => {
+      if (cmd === "get_step_thumbnail") return Promise.resolve(null);
+      if (cmd === "render_svg_thumbnail") return Promise.reject(new Error("GPU error"));
+      if (cmd === "js_log") return Promise.resolve(null);
+      return Promise.resolve(null);
+    });
+
+    const { result } = renderHook(() =>
+      useStepThumbnails(ONE_STEP, SVG_INNER, FILE_PATH, VIEW_BOX, "16:9", "#ffffff", undefined, undefined)
+    );
+
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("render_svg_thumbnail", expect.anything())
+    );
+    // After error the map stays empty — thumbnail rendered to ""
+    expect(result.current.size).toBe(0);
+  });
+
+  it("uses overlaySvgs when provided for computing the step key", async () => {
+    const overlaySvgs = new Map([["snippet-1", "<svg viewBox='0 0 100 20'>x</svg>"]]);
+    const overlays = [{ id: "snippet-1", content: "Hello", x: 0, y: 0, width: 100 }];
+
+    const { result } = renderHook(() =>
+      useStepThumbnails(ONE_STEP, SVG_INNER, FILE_PATH, VIEW_BOX, "16:9", "#ffffff", overlays, overlaySvgs)
+    );
+
+    await waitFor(() => expect(result.current.size).toBe(1));
+    // Thumbnail generated with overlay content included in step key
+    expect(result.current.get(0)).toMatch(/^data:image\/png;base64,/);
+  });
+
   it("caches a rendered thumbnail in memory and skips re-render on re-render", async () => {
     const { result, rerender } = renderHook(() =>
       useStepThumbnails(ONE_STEP, SVG_INNER, FILE_PATH, VIEW_BOX, "16:9", "#ffffff", undefined, undefined)
