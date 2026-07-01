@@ -44,8 +44,8 @@ describe("useOverlaySvgs", () => {
     expect(invoke).toHaveBeenCalledWith("render_markdown_to_svg", {
       id: "o1",
       content: "# Hello",
-      options: { font_size_pt: 14.0, text_color: "#000000", font_family: "Helvetica Neue" },
-      width: 100,
+      options: { font_size_pt: 14.0, text_color: "#000000", font_family: "Helvetica Neue", text_align: "left" },
+      width: 400, // default render_width_pct=20 → 20*20=400pt
     });
   });
 
@@ -56,8 +56,8 @@ describe("useOverlaySvgs", () => {
     expect(invoke).toHaveBeenCalledWith("render_markdown_to_svg", {
       id: "o2",
       content: "## Styled",
-      options: { font_size_pt: 18, text_color: "#ff0000", font_family: "Monaco" },
-      width: 200,
+      options: { font_size_pt: 18, text_color: "#ff0000", font_family: "Monaco", text_align: "left" },
+      width: 400, // no render_width_pct in style → default 20 → 400pt
     });
   });
 
@@ -101,7 +101,22 @@ describe("useOverlaySvgs", () => {
     expect(invoke).toHaveBeenCalledTimes(2);
   });
 
-  it("invokes render again when overlay width changes", async () => {
+  it("does not invoke render again when only overlay display width changes", async () => {
+    vi.mocked(invoke).mockResolvedValue(SAMPLE_SVG);
+    const { rerender, result } = renderHook(
+      ({ overlays }: { overlays: MarkdownOverlay[] }) => useOverlaySvgs(overlays),
+      { initialProps: { overlays: [OVERLAY] } }
+    );
+    await waitFor(() => expect(result.current.svgMap.size).toBe(1));
+    expect(invoke).toHaveBeenCalledTimes(1);
+
+    // Changing overlay.width (display size via drag) must NOT trigger a re-render.
+    rerender({ overlays: [{ ...OVERLAY, width: 300 }] });
+    await waitFor(() => expect(result.current.svgMap.size).toBe(1));
+    expect(invoke).toHaveBeenCalledTimes(1);
+  });
+
+  it("invokes render again when render_width_pct in style changes", async () => {
     vi.mocked(invoke).mockResolvedValue(SAMPLE_SVG);
     const { rerender, result } = renderHook(
       ({ overlays }: { overlays: MarkdownOverlay[] }) => useOverlaySvgs(overlays),
@@ -111,9 +126,12 @@ describe("useOverlaySvgs", () => {
     expect(invoke).toHaveBeenCalledTimes(1);
 
     vi.mocked(invoke).mockResolvedValue(OTHER_SVG);
-    rerender({ overlays: [{ ...OVERLAY, width: 300 }] });
+    rerender({ overlays: [{ ...OVERLAY, style: { render_width_pct: 40 } }] });
     await waitFor(() => expect(result.current.svgMap.get("o1")).toBe(OTHER_SVG));
     expect(invoke).toHaveBeenCalledTimes(2);
+    expect(invoke).toHaveBeenLastCalledWith("render_markdown_to_svg", expect.objectContaining({
+      width: 800, // 40 * 20 = 800pt
+    }));
   });
 
   it("sets pendingCount to the number of uncached overlays then decrements to zero", async () => {
@@ -138,5 +156,39 @@ describe("useOverlaySvgs", () => {
       expect(result.current.pendingCount).toBe(0);
     });
     expect(result.current.svgMap.size).toBe(0);
+  });
+
+  it("does not cache the result of a render cancelled by overlays changing", async () => {
+    // When overlays change while a render is in-flight, the effect cleanup sets
+    // cancelled=true. The in-flight promise resolving later must NOT store its result
+    // in the cache — otherwise switching back to the original overlay would serve a
+    // stale cached value instead of requesting a fresh render.
+    let resolveCancelled: (svg: string) => void;
+    vi.mocked(invoke)
+      .mockReturnValueOnce(new Promise<string>((r) => { resolveCancelled = r; })) // slow first render
+      .mockResolvedValue(OTHER_SVG); // all subsequent renders resolve immediately
+
+    const { rerender, result } = renderHook(
+      ({ overlays }: { overlays: MarkdownOverlay[] }) => useOverlaySvgs(overlays),
+      { initialProps: { overlays: [OVERLAY] } },
+    );
+
+    // Change content — triggers effect cleanup (cancelled=true) and starts a new render.
+    const changedOverlay = { ...OVERLAY, content: "## Different" };
+    rerender({ overlays: [changedOverlay] });
+
+    // New render completes; map has one entry (changedOverlay result).
+    await waitFor(() => expect(result.current.svgMap.size).toBe(1));
+    expect(invoke).toHaveBeenCalledTimes(2);
+
+    // Resolve the cancelled first render after cleanup has already run.
+    resolveCancelled!(SAMPLE_SVG);
+
+    // Switch back to the original overlay. Because the first render was cancelled
+    // (not cached), a third invoke must be issued — not served from cache.
+    vi.mocked(invoke).mockResolvedValue(SAMPLE_SVG);
+    rerender({ overlays: [OVERLAY] });
+    await waitFor(() => expect(result.current.svgMap.get("o1")).toBe(SAMPLE_SVG));
+    expect(invoke).toHaveBeenCalledTimes(3);
   });
 });

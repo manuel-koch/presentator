@@ -253,13 +253,33 @@ button:active {
 .step-item {
   display: flex;
   align-items: center;
-  padding: 0.45rem 0.5rem 0.45rem 0.75rem;
+  padding: 0.45rem 0.5rem 0.45rem 0.25rem;
   cursor: pointer;
   color: var(--text-body);
   font-size: 0.875rem;
   user-select: none;
   border-left: 3px solid transparent;
   gap: 0.25rem;
+}
+
+.step-item-drag-handle {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  padding: 2px 3px;
+  color: var(--text-muted);
+  opacity: 0;
+  cursor: grab;
+  transition: opacity 0.1s;
+}
+
+.step-item:hover .step-item-drag-handle,
+.step-item.selected .step-item-drag-handle {
+  opacity: 0.5;
+}
+
+.step-item-drag-handle:hover {
+  opacity: 1 !important;
 }
 
 .step-item:hover {
@@ -1352,12 +1372,45 @@ button:active {
 .overlay-item {
   display: flex;
   align-items: center;
-  padding: 0.35rem 0.5rem 0.35rem 0.75rem;
+  padding: 0.35rem 0.5rem 0.35rem 0.25rem;
   color: var(--text-body);
   font-size: 0.8rem;
   user-select: none;
   gap: 0.25rem;
   border-left: 3px solid transparent;
+}
+
+.overlay-item-drag-handle {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  padding: 2px 3px;
+  color: var(--text-muted);
+  opacity: 0;
+  cursor: grab;
+  transition: opacity 0.1s;
+}
+
+.overlay-item:hover .overlay-item-drag-handle {
+  opacity: 0.5;
+}
+
+.overlay-item-drag-handle:hover {
+  opacity: 1 !important;
+}
+
+.overlay-item.dragging {
+  opacity: 0.35;
+}
+
+.overlay-drop-indicator {
+  height: 2px;
+  background: #f59e0b;
+  margin: 0 6px;
+  border-radius: 1px;
+  pointer-events: none;
+  list-style: none;
+  flex-shrink: 0;
 }
 
 .overlay-item:hover {
@@ -1435,6 +1488,31 @@ button:active {
   color: var(--red);
 }
 
+.overlay-item-goto-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  background: transparent;
+  border-color: transparent;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+
+.overlay-item:hover .overlay-item-goto-btn {
+  opacity: 1;
+}
+
+.overlay-item-goto-btn:hover {
+  background: var(--blue-bg-active);
+  border-color: var(--blue-border);
+  color: var(--blue-light);
+}
+
 .overlay-item-edit-btn {
   display: flex;
   align-items: center;
@@ -1458,6 +1536,151 @@ button:active {
   background: var(--blue-bg-active);
   border-color: var(--blue-border);
   color: var(--blue-light);
+}
+
+.overlay-item.selected {
+  border-left-color: #f59e0b;
+  background: rgba(245, 158, 11, 0.06);
+}
+
+.overlay-item.selected .overlay-item-id {
+  color: #fbbf24;
+}
+
+.overlay-item.selected .overlay-item-goto-btn,
+.overlay-item.selected .overlay-item-edit-btn,
+.overlay-item.selected .overlay-item-delete-btn {
+  opacity: 1;
+}
+
+/* Viewport → Overlay alignment panel */
+.overlay-align-panel {
+  padding: 0.5rem 0.75rem 0.6rem;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.overlay-align-header {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.overlay-align-grid-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.overlay-align-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 20px);
+  grid-template-rows: repeat(3, 20px);
+  gap: 2px;
+  width: fit-content;
+}
+
+.overlay-align-cell {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+  cursor: pointer;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.1s, border-color 0.1s;
+}
+
+.overlay-align-cell::after {
+  content: '';
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.18);
+  transition: width 0.1s, height 0.1s, background 0.1s;
+}
+
+.overlay-align-cell:hover {
+  background: rgba(245, 158, 11, 0.12);
+  border-color: rgba(245, 158, 11, 0.5);
+}
+
+.overlay-align-cell:hover::after {
+  width: 7px;
+  height: 7px;
+  background: rgba(245, 158, 11, 0.75);
+}
+
+.overlay-align-cell.active {
+  background: rgba(245, 158, 11, 0.18);
+  border-color: #f59e0b;
+}
+
+.overlay-align-cell.active::after {
+  width: 8px;
+  height: 8px;
+  background: #f59e0b;
+}
+
+.overlay-align-padding-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.overlay-align-label {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.overlay-align-range {
+  flex: 1;
+  min-width: 0;
+  accent-color: #f59e0b;
+}
+
+.overlay-align-pad-val {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  width: 2.5em;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.overlay-align-actions {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.overlay-align-btn {
+  flex: 1;
+  font-size: 0.75rem;
+  padding: 0.25rem 0.4rem;
+  background: var(--surface-hover);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.overlay-align-btn:hover:not(:disabled) {
+  background: rgba(245, 158, 11, 0.15);
+  border-color: #f59e0b;
+  color: #fbbf24;
+}
+
+.overlay-align-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
 /* Markdown editor dialog */
@@ -1504,6 +1727,137 @@ button:active {
 .markdown-editor-title code {
   font-family: monospace;
   color: var(--text-secondary);
+}
+
+.markdown-editor-style-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.4rem 1rem;
+  border-bottom: 1px solid var(--border-divider);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.markdown-editor-style-field {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.markdown-editor-style-label {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.markdown-editor-style-unit {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.markdown-editor-size-input {
+  width: 3.5rem;
+  padding: 0.2em 0.3em;
+  font-size: 0.8rem;
+  background: var(--surface-input, var(--surface-popover));
+  border: 1px solid var(--border-muted);
+  color: var(--text-body);
+  border-radius: 4px;
+  text-align: right;
+}
+
+.markdown-editor-font-picker {
+  position: relative;
+}
+
+.markdown-editor-font-input {
+  width: 10rem;
+  padding: 0.2em 0.4em;
+  font-size: 0.8rem;
+  background: var(--surface-input, var(--surface-popover));
+  border: 1px solid var(--border-muted);
+  color: var(--text-body);
+  border-radius: 4px;
+  cursor: text;
+}
+
+.markdown-editor-font-dropdown {
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 0;
+  z-index: 200;
+  min-width: 100%;
+  width: 14rem;
+  max-height: 14rem;
+  overflow-y: auto;
+  background: var(--surface-popover, #2a2a2a);
+  border: 1px solid var(--border-muted);
+  border-radius: 4px;
+  padding: 0.2rem 0;
+  list-style: none;
+  margin: 0;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.markdown-editor-font-option {
+  padding: 0.25em 0.6em;
+  font-size: 0.8rem;
+  color: var(--text-body);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.markdown-editor-font-option--highlighted {
+  background: var(--surface-hover, rgba(255, 255, 255, 0.08));
+}
+
+.markdown-editor-font-option--selected {
+  color: var(--accent-primary, #60a5fa);
+}
+
+.markdown-editor-font-option--empty {
+  color: var(--text-secondary);
+  cursor: default;
+  font-style: italic;
+}
+
+.markdown-editor-color-input {
+  width: 2rem;
+  height: 1.5rem;
+  padding: 0;
+  border: 1px solid var(--border-muted);
+  border-radius: 4px;
+  cursor: pointer;
+  background: none;
+}
+
+.markdown-editor-align-toggle {
+  display: flex;
+  gap: 2px;
+  margin-left: auto;
+}
+
+.markdown-editor-align-btn {
+  padding: 0.2em 0.55em;
+  font-size: 0.85rem;
+  background: transparent;
+  border: 1px solid var(--border-muted);
+  color: var(--text-secondary);
+  border-radius: 4px;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.markdown-editor-align-btn:hover {
+  background: var(--surface-hover);
+  color: var(--text-body);
+}
+
+.markdown-editor-align-btn--active {
+  background: var(--surface-selected, var(--surface-hover));
+  border-color: var(--border-control);
+  color: var(--text-body);
 }
 
 .markdown-editor-panes {

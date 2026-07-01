@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeBlendSets, buildBlendStyle, parseOverlayViewBox, buildOverlayEmbeds } from "./PresentationCanvas";
+import { computeBlendSets, buildBlendStyle, parseOverlayViewBox, buildOverlayEmbeds, extractSvgInner } from "./PresentationCanvas";
 import type { MarkdownOverlay } from "../types/config";
 
 describe("computeBlendSets", () => {
@@ -204,5 +204,85 @@ describe("buildOverlayEmbeds", () => {
     );
     expect(result).toContain('id="a-inner"');
     expect(result).toContain('id="b-inner"');
+  });
+
+  it("uses overlay.rotation directly — no viewport-rotation adjustment", () => {
+    // Regression: an earlier version subtracted viewport rotation from overlay rotation,
+    // producing double rotation in presentation mode. The SVG rotation must always
+    // equal overlay.rotation, regardless of the step's viewport rotation.
+    const overlay: MarkdownOverlay = { ...overlayA, rotation: -49.857 };
+    const result = buildOverlayEmbeds([overlay], new Map([["a", svgA]]), []);
+    // cx = 250, cy = 275 (same as overlayA)
+    expect(result).toContain('transform="rotate(-49.857, 250, 275)"');
+  });
+
+  it("handles a realistic Typst SVG with multiline opening tag and xmlns attributes", () => {
+    // Typst-generated SVGs have a long opening <svg> tag with class, xmlns:xlink, xmlns:h5,
+    // etc. None of those attributes should leak into the embedded content area.
+    const overlay: MarkdownOverlay = { id: "t", content: "text", x: 10, y: 20, width: 50 };
+    const typstSvg = [
+      '<svg class="typst-doc" viewBox="0 0 400 200" width="400pt" height="200pt"',
+      '     xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"',
+      '     xmlns:h5="http://www.w3.org/1999/xhtml">',
+      '    <g>',
+      '        <g class="typst-group" transform="matrix(1 0 0 1 14 14)">',
+      '            <path id="typst-path" d="M0,0 L100,0"/>',
+      '        </g>',
+      '    </g>',
+      '</svg>',
+    ].join("\n");
+
+    const result = buildOverlayEmbeds([overlay], new Map([["t", typstSvg]]), []);
+
+    // Inner content is embedded
+    expect(result).toContain('id="typst-path"');
+    expect(result).toContain('class="typst-group"');
+    // Outer SVG attributes must NOT appear as loose text in the embed output
+    expect(result).not.toContain('class="typst-doc"');
+    expect(result).not.toContain("xmlns:h5=");
+    // The wrapping <svg> carries the correct viewBox and overlay dimensions
+    expect(result).toContain('viewBox="0 0 400 200"');
+    expect(result).toContain('width="50"');
+    // embedH = 50 * (200 / 400) = 25
+    expect(result).toContain('height="25"');
+  });
+});
+
+describe("extractSvgInner", () => {
+  it("returns the content between the opening and closing svg tags", () => {
+    expect(extractSvgInner('<svg viewBox="0 0 400 200"><g id="x"/></svg>'))
+      .toBe('<g id="x"/>');
+  });
+
+  it("handles a multiline opening tag — content starts after the first closing >", () => {
+    // The opening tag may span multiple lines (as Typst SVG output does).
+    const svg = [
+      '<svg class="typst-doc" viewBox="0 0 400 100"',
+      '     xmlns="http://www.w3.org/2000/svg"',
+      '     xmlns:xlink="http://www.w3.org/1999/xlink">',
+      '<g class="typst-group">content</g>',
+      '</svg>',
+    ].join("\n");
+    const inner = extractSvgInner(svg);
+    expect(inner).toContain('<g class="typst-group">content</g>');
+    // Root SVG attributes must not appear in the extracted inner content
+    expect(inner).not.toContain('class="typst-doc"');
+    expect(inner).not.toContain("xmlns=");
+  });
+
+  it("falls back to all remaining content when there is no closing </svg>", () => {
+    // closeStart === -1 branch: substring from openEnd+1 to end of string
+    const result = extractSvgInner('<svg viewBox="0 0 400 200"><path d="M0,0"/>');
+    expect(result).toBe('<path d="M0,0"/>');
+  });
+
+  it("uses lastIndexOf so a nested <svg> closing tag is preserved in the inner content", () => {
+    // The outermost </svg> is the boundary; the inner </svg> belongs to the content.
+    const nested = '<svg viewBox="0 0 400 200"><g><svg viewBox="0 0 50 50"><circle/></svg></g></svg>';
+    expect(extractSvgInner(nested)).toBe('<g><svg viewBox="0 0 50 50"><circle/></svg></g>');
+  });
+
+  it("returns empty string when the opening tag has no closing >", () => {
+    expect(extractSvgInner('<svg incomplete')).toBe('');
   });
 });

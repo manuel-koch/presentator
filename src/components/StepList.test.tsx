@@ -121,24 +121,24 @@ describe("StepList", () => {
     expect(onSelect).not.toHaveBeenCalled();
   });
 
-  it("shows a go-to-viewport button for each step", () => {
+  it("shows a focus-in-viewport button for each step", () => {
     render(<StepList {...mkProps()} />);
-    expect(screen.getByRole("button", { name: "Go to viewport of Overview" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Go to viewport of Detail A" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Go to viewport of Close-up" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Focus Overview in viewport" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Focus Detail A in viewport" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Focus Close-up in viewport" })).toBeInTheDocument();
   });
 
   it("calls onGoToViewport with the correct index", async () => {
     const onGoToViewport = vi.fn();
     render(<StepList {...mkProps({ onGoToViewport })} />);
-    await userEvent.click(screen.getByRole("button", { name: "Go to viewport of Detail A" }));
+    await userEvent.click(screen.getByRole("button", { name: "Focus Detail A in viewport" }));
     expect(onGoToViewport).toHaveBeenCalledWith(1);
   });
 
-  it("does not call onSelect when the go-to-viewport button is clicked", async () => {
+  it("does not call onSelect when the focus-in-viewport button is clicked", async () => {
     const onSelect = vi.fn();
     render(<StepList {...mkProps({ onSelect })} />);
-    await userEvent.click(screen.getByRole("button", { name: "Go to viewport of Overview" }));
+    await userEvent.click(screen.getByRole("button", { name: "Focus Overview in viewport" }));
     expect(onSelect).not.toHaveBeenCalled();
   });
 

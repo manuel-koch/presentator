@@ -70,6 +70,19 @@ function FitViewportIcon() {
   );
 }
 
+function GripIcon() {
+  return (
+    <svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor" aria-hidden>
+      <circle cx="3" cy="3" r="1.2"/>
+      <circle cx="7" cy="3" r="1.2"/>
+      <circle cx="3" cy="7" r="1.2"/>
+      <circle cx="7" cy="7" r="1.2"/>
+      <circle cx="3" cy="11" r="1.2"/>
+      <circle cx="7" cy="11" r="1.2"/>
+    </svg>
+  );
+}
+
 function CopyHiddenIcon() {
   return (
     <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" aria-hidden>
@@ -277,6 +290,9 @@ export function StepList({ steps, selectedIndex, transitions, defaultTransition,
               onDoubleClick={(e) => startEditing(index, e)}
               onMouseDown={(e) => handleItemMouseDown(index, e)}
             >
+              <span className="step-item-drag-handle" aria-hidden>
+                <GripIcon />
+              </span>
               {editingIndex === index ? (
                 <input
                   autoFocus
@@ -298,8 +314,8 @@ export function StepList({ steps, selectedIndex, transitions, defaultTransition,
               )}
               <button
                 className="step-item-goto-btn"
-                aria-label={`Go to viewport of ${step.name}`}
-                title="Go to viewport"
+                aria-label={`Focus ${step.name} in viewport`}
+                title="Focus in viewport"
                 onClick={(e) => { e.stopPropagation(); onGoToViewport(index); }}
               >
                 <FrameIcon />

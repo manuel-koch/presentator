@@ -8,6 +8,7 @@ import { useFileWatcher } from "./hooks/useFileWatcher";
 import { useOverlaySvgs } from "./hooks/useOverlaySvgs";
 import { sidecarPath } from "./utils/configSidecar";
 import { parseSvgViewBox, parseAspectRatio } from "./utils/svgViewBox";
+import { computeFitViewport } from "./utils/fitViewportToOverlay";
 import { extractNamedElements } from "./utils/svgElements";
 import type { SVGElementNode } from "./utils/svgElements";
 import { matchesBinding, DEFAULT_KEY_BINDINGS } from "./utils/keyBinding";
@@ -23,9 +24,9 @@ import { ReloadNotification } from "./components/ReloadNotification";
 import { AboutDialog } from "./components/AboutDialog";
 import { SettingsDialog } from "./components/SettingsDialog";
 import type { AppSettings } from "./components/SettingsDialog";
-import { PresentationCanvas } from "./components/PresentationCanvas";
+import { PresentationCanvas, parseOverlayViewBox } from "./components/PresentationCanvas";
 import type { AppMode } from "./types/mode";
-import type { MarkdownOverlay, Step, TransitionConfig, Viewport } from "./types/config";
+import type { MarkdownOverlay, OverlayStyle, Step, TransitionConfig, Viewport } from "./types/config";
 import { DEFAULT_TRANSITION } from "./types/config";
 import "./App.css";
 
@@ -45,13 +46,17 @@ function getTransitions(config: { steps: Step[]; transition?: TransitionConfig; 
 function App() {
   const { svgFile, error, pickFile, reloadFile } = useSvgFile();
   const { config, updateConfig, reloadConfig } = useSidecarConfig(svgFile?.path ?? null);
-  const { svgMap: overlaySvgs, pendingCount: overlaysPending } = useOverlaySvgs(config?.overlays);
   const [mode, setMode] = useState<AppMode>("editing");
   const [pendingReload, setPendingReload] = useState(false);
   const [showReloadNotification, setShowReloadNotification] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [editingOverlayId, setEditingOverlayId] = useState<string | null>(null);
+  const [selectedOverlayId, setSelectedOverlayId] = useState<string | null>(null);
+  const [hoveredOverlayId, setHoveredOverlayId] = useState<string | null>(null);
+  const [overlayAlignH, setOverlayAlignH] = useState<"left" | "center" | "right">("center");
+  const [overlayAlignV, setOverlayAlignV] = useState<"top" | "center" | "bottom">("center");
+  const [overlayPadding, setOverlayPadding] = useState(0.05);
   const [appSettings, setAppSettings] = useState<AppSettings>({
     fullscreen_on_presentation: true,
     pointer_linger_ms: 3000,
@@ -69,6 +74,7 @@ function App() {
     () => (svgFile ? parseSvgViewBox(svgFile.content) : null),
     [svgFile]
   );
+  const { svgMap: overlaySvgs, pendingCount: overlaysPending } = useOverlaySvgs(config?.overlays);
   const namedElements = useMemo(
     () => (svgFile ? extractNamedElements(svgFile.content, config?.exclude_id_pattern) : []),
     [svgFile, config?.exclude_id_pattern]
@@ -389,7 +395,6 @@ function App() {
       x = vb.x + vb.width / 2 - width / 2;
       y = vb.y + vb.height / 2;
     }
-
     const usedIds = new Set([
       ...collectSvgIds(namedElements),
       ...(config.overlays ?? []).map((o) => o.id),
@@ -419,6 +424,14 @@ function App() {
     updateConfig({ ...config, overlays, steps });
   }
 
+  function handleReorderOverlay(fromIndex: number, toIndex: number) {
+    if (!config?.overlays) return;
+    const overlays = [...config.overlays];
+    const [item] = overlays.splice(fromIndex, 1);
+    overlays.splice(toIndex, 0, item);
+    updateConfig({ ...config, overlays });
+  }
+
   function handleRenameOverlay(oldId: string, newId: string) {
     if (!config) return;
     const overlays = (config.overlays ?? []).map((o) =>
@@ -432,21 +445,125 @@ function App() {
     updateConfig({ ...config, overlays, steps });
   }
 
-  function handleSaveOverlayContent(id: string, content: string) {
+  function handleSaveOverlayContent(id: string, content: string, style: Partial<OverlayStyle>) {
     if (!config) return;
     const overlays = (config.overlays ?? []).map((o) =>
-      o.id === id ? { ...o, content } : o
+      o.id === id ? { ...o, content, style: { ...o.style, ...style } } : o
     );
     updateConfig({ ...config, overlays });
     setEditingOverlayId(null);
   }
 
-  function handleQuickSaveOverlayContent(id: string, content: string) {
+  function handleQuickSaveOverlayContent(id: string, content: string, style: Partial<OverlayStyle>) {
     if (!config) return;
     const overlays = (config.overlays ?? []).map((o) =>
-      o.id === id ? { ...o, content } : o
+      o.id === id ? { ...o, content, style: { ...o.style, ...style } } : o
     );
     updateConfig({ ...config, overlays });
+  }
+
+  function handleOverlayChange(id: string, x: number, y: number, width: number, rotation: number) {
+    if (!config) return;
+    const overlays = (config.overlays ?? []).map((o) =>
+      o.id === id ? { ...o, x, y, width, rotation } : o
+    );
+    updateConfig({ ...config, overlays });
+  }
+
+  function handleGoToOverlay(id: string) {
+    if (!config?.overlays || !overlaySvgs) return;
+    const overlay = config.overlays.find((o) => o.id === id);
+    if (!overlay) return;
+    const svgStr = overlaySvgs.get(id);
+    if (!svgStr) return;
+    const ovb = parseOverlayViewBox(svgStr);
+    if (!ovb || ovb.w === 0) return;
+    const w = overlay.width;
+    const h = w * (ovb.h / ovb.w);
+    const cx = overlay.x + w / 2;
+    const cy = overlay.y + h / 2;
+    const r = (overlay.rotation ?? 0) * Math.PI / 180;
+    const cosR = Math.abs(Math.cos(r));
+    const sinR = Math.abs(Math.sin(r));
+    canvasRef.current?.goToRect(cx, cy, w * cosR + h * sinR, w * sinR + h * cosR);
+  }
+
+  function handleFitViewportToOverlay() {
+    if (!config || selectedStepIndex === null || !selectedOverlayId || !viewBox) return;
+    const overlay = config.overlays?.find((o) => o.id === selectedOverlayId);
+    if (!overlay) return;
+    const svg = overlaySvgs.get(overlay.id);
+    if (!svg) return;
+    const ovb = parseOverlayViewBox(svg);
+    if (!ovb || ovb.w === 0) return;
+    const newViewport = computeFitViewport({
+      overlay,
+      overlayHPerW: ovb.h / ovb.w,
+      svgViewBox: viewBox,
+      presentationAR: parseAspectRatio(config.aspect_ratio),
+      alignH: overlayAlignH,
+      alignV: overlayAlignV,
+      padding: overlayPadding,
+    });
+    const steps = config.steps.map((s, i) =>
+      i === selectedStepIndex ? { ...s, viewport: newViewport } : s
+    );
+    updateConfig({ ...config, steps });
+  }
+
+  function handleFitAllOverlaysToViewport() {
+    if (!config || selectedStepIndex === null || !viewBox) return;
+    const activeStep = config.steps[selectedStepIndex];
+    if (!activeStep) return;
+    const hiddenSet = new Set(activeStep.hidden_overlays ?? []);
+    const visibleOverlays = (config.overlays ?? []).filter((o) => !hiddenSet.has(o.id));
+    if (!visibleOverlays.length) return;
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const overlay of visibleOverlays) {
+      const svg = overlaySvgs.get(overlay.id);
+      if (!svg) continue;
+      const m = svg.match(/viewBox="([^"]+)"/);
+      if (!m) continue;
+      const parts = m[1].trim().split(/[\s,]+/).map(Number);
+      if (parts.length < 4 || parts[2] === 0) continue;
+      const hPerW = parts[3] / parts[2];
+      const w = overlay.width;
+      const h = w * hPerW;
+      const cx = overlay.x + w / 2;
+      const cy = overlay.y + h / 2;
+      const r = (overlay.rotation ?? 0) * Math.PI / 180;
+      const cosR = Math.abs(Math.cos(r));
+      const sinR = Math.abs(Math.sin(r));
+      const aabbHW = w / 2 * cosR + h / 2 * sinR;
+      const aabbHH = w / 2 * sinR + h / 2 * cosR;
+      minX = Math.min(minX, cx - aabbHW); maxX = Math.max(maxX, cx + aabbHW);
+      minY = Math.min(minY, cy - aabbHH); maxY = Math.max(maxY, cy + aabbHH);
+    }
+    if (!isFinite(minX)) return;
+    const vb = viewBox;
+    const pAR = parseAspectRatio(config.aspect_ratio);
+    const svgAR = vb.width / vb.height;
+    let baseW: number, baseH: number;
+    if (svgAR >= pAR) { baseW = vb.width; baseH = vb.width / pAR; }
+    else { baseH = vb.height; baseW = vb.height * pAR; }
+    const pad = 0.05;
+    const totalW = maxX - minX;
+    const totalH = maxY - minY;
+    const newZoom = Math.max(0.01, Math.min(baseW / (totalW / (1 - 2 * pad)), baseH / (totalH / (1 - 2 * pad))));
+    const centerCx = (minX + maxX) / 2;
+    const centerCy = (minY + maxY) / 2;
+    const newViewport = {
+      center: [
+        Math.max(0, Math.min(1, (centerCx - vb.x) / vb.width)),
+        Math.max(0, Math.min(1, (centerCy - vb.y) / vb.height)),
+      ] as [number, number],
+      zoom: newZoom,
+      rotation: activeStep.viewport.rotation,
+    };
+    const steps = config.steps.map((s, i) =>
+      i === selectedStepIndex ? { ...s, viewport: newViewport } : s
+    );
+    updateConfig({ ...config, steps });
   }
 
   function handleTransitionChange(gapIndex: number, tc: TransitionConfig) {
@@ -488,8 +605,8 @@ function App() {
       {editingOverlay && (
         <MarkdownEditorDialog
           overlay={editingOverlay}
-          onSave={(content) => handleSaveOverlayContent(editingOverlay.id, content)}
-          onQuickSave={(content) => handleQuickSaveOverlayContent(editingOverlay.id, content)}
+          onSave={(content, style) => handleSaveOverlayContent(editingOverlay.id, content, style)}
+          onQuickSave={(content, style) => handleQuickSaveOverlayContent(editingOverlay.id, content, style)}
           onCancel={() => setEditingOverlayId(null)}
         />
       )}
@@ -553,11 +670,59 @@ function App() {
                 <OverlayList
                   overlays={config.overlays ?? []}
                   occupiedIds={occupiedOverlayIds}
+                  selectedId={selectedOverlayId}
+                  onSelect={setSelectedOverlayId}
+                  onHoverChange={setHoveredOverlayId}
+                  onGoToOverlay={handleGoToOverlay}
+                  onReorder={handleReorderOverlay}
                   onAdd={handleAddOverlay}
                   onDelete={handleDeleteOverlay}
                   onRename={handleRenameOverlay}
                   onEdit={setEditingOverlayId}
                 />
+                {(config.overlays ?? []).length > 0 && selectedStepIndex !== null && (
+                  <div className="overlay-align-panel">
+                    <div className="overlay-align-header">Viewport → Snippet</div>
+                    <div className="overlay-align-grid-row">
+                      <span className="overlay-align-label">Anchor</span>
+                      <div className="overlay-align-grid">
+                        {(["top", "center", "bottom"] as const).flatMap((v) =>
+                          (["left", "center", "right"] as const).map((h) => (
+                            <button
+                              key={`${v}-${h}`}
+                              title={`Anchor: ${h} / ${v}`}
+                              className={`overlay-align-cell${overlayAlignH === h && overlayAlignV === v ? " active" : ""}`}
+                              onClick={() => { setOverlayAlignH(h); setOverlayAlignV(v); }}
+                            />
+                          ))
+                        )}
+                      </div>
+                    </div>
+                    <div className="overlay-align-padding-row">
+                      <label className="overlay-align-label">Padding</label>
+                      <input
+                        type="range" min={0} max={0.4} step={0.01}
+                        value={overlayPadding}
+                        onChange={(e) => setOverlayPadding(parseFloat(e.target.value))}
+                        className="overlay-align-range"
+                      />
+                      <span className="overlay-align-pad-val">{Math.round(overlayPadding * 100)}%</span>
+                    </div>
+                    <div className="overlay-align-actions">
+                      <button
+                        className="overlay-align-btn"
+                        disabled={!selectedOverlayId}
+                        onClick={handleFitViewportToOverlay}
+                        title="Fit viewport to selected snippet"
+                      >Fit to snippet</button>
+                      <button
+                        className="overlay-align-btn"
+                        onClick={handleFitAllOverlaysToViewport}
+                        title="Fit viewport to all visible snippets"
+                      >Fit all visible</button>
+                    </div>
+                  </div>
+                )}
                 {selectedStep && (
                   <ElementPicker
                     elements={namedElements}
@@ -590,6 +755,10 @@ function App() {
                 hoveredElementId={hoveredElementId}
                 overlays={config?.overlays}
                 overlaySvgs={overlaySvgs}
+                onOverlayChange={handleOverlayChange}
+                selectedOverlayId={selectedOverlayId}
+                onOverlaySelect={setSelectedOverlayId}
+                hoveredOverlayId={hoveredOverlayId}
               />
             ) : (
               <div className="svg-viewport" data-testid="svg-viewport">

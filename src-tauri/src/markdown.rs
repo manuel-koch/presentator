@@ -1,8 +1,6 @@
 use pulldown_cmark::{CodeBlockKind, Event, HeadingLevel, Options, Parser, Tag, TagEnd};
 use serde::{Deserialize, Serialize};
 
-const PAGE_WIDTH_PT: u32 = 400;
-
 fn default_font_size_pt() -> f32 {
     14.0
 }
@@ -11,6 +9,9 @@ fn default_text_color() -> String {
 }
 fn default_font_family() -> String {
     "Helvetica Neue".to_string()
+}
+fn default_text_align() -> String {
+    "left".to_string()
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -21,6 +22,8 @@ pub struct RenderOptions {
     pub text_color: String,
     #[serde(default = "default_font_family")]
     pub font_family: String,
+    #[serde(default = "default_text_align")]
+    pub text_align: String,
 }
 
 impl Default for RenderOptions {
@@ -29,12 +32,14 @@ impl Default for RenderOptions {
             font_size_pt: default_font_size_pt(),
             text_color: default_text_color(),
             font_family: default_font_family(),
+            text_align: default_text_align(),
         }
     }
 }
 
-pub fn render_markdown_to_svg(content: &str, opts: &RenderOptions) -> Result<String, String> {
-    let typst_source = markdown_to_typst(content, opts);
+pub fn render_markdown_to_svg(content: &str, opts: &RenderOptions, width_pt: f64) -> Result<String, String> {
+    let page_width_pt = (width_pt.max(20.0).round() as u32).max(20);
+    let typst_source = markdown_to_typst(content, opts, page_width_pt);
     compile_typst_to_svg(&typst_source)
 }
 
@@ -56,14 +61,20 @@ fn compile_typst_to_svg(source: &str) -> Result<String, String> {
 }
 
 /// Converts CommonMark markdown to Typst source with a page/text preamble
-/// derived from `opts`. Used by `render_markdown_to_svg` and directly testable.
-pub fn markdown_to_typst(content: &str, opts: &RenderOptions) -> String {
+/// derived from `opts` and `page_width_pt`. Used by `render_markdown_to_svg` and directly testable.
+pub fn markdown_to_typst(content: &str, opts: &RenderOptions, page_width_pt: u32) -> String {
+    let align_line = match opts.text_align.as_str() {
+        "center" => "#set align(center)\n",
+        "right"  => "#set align(right)\n",
+        _        => "",
+    };
     let mut out = format!(
         "#set page(width: {}pt, height: auto, margin: 1em, fill: none)\n\
          #set text(font: (\"{}\", \"Arial\"), size: {}pt, fill: rgb(\"{}\"))\n\
          #show raw: set text(font: (\"Menlo\", \"Courier New\", \"Consolas\"))\n\
-         #show link: underline\n\n",
-        PAGE_WIDTH_PT,
+         #show link: underline\n\
+         {align_line}\n",
+        page_width_pt,
         escape_typst_str(&opts.font_family),
         opts.font_size_pt,
         escape_typst_str(&opts.text_color),
@@ -263,9 +274,12 @@ mod tests {
         RenderOptions::default()
     }
 
-    /// Returns only the body of the Typst output (strips the two-line preamble).
+    const DEFAULT_WIDTH_PT: u32 = 400;
+    const DEFAULT_WIDTH: f64 = 400.0;
+
+    /// Returns only the body of the Typst output (strips the preamble).
     fn body(md: &str) -> String {
-        let full = markdown_to_typst(md, &opts());
+        let full = markdown_to_typst(md, &opts(), DEFAULT_WIDTH_PT);
         // preamble ends at the first \n\n; everything after is the converted content
         full.splitn(2, "\n\n").nth(1).unwrap_or("").to_string()
     }
@@ -274,26 +288,26 @@ mod tests {
 
     #[test]
     fn preamble_adds_link_underline_show_rule() {
-        let out = markdown_to_typst("x", &opts());
+        let out = markdown_to_typst("x", &opts(), DEFAULT_WIDTH_PT);
         assert!(out.contains("#show link: underline"), "missing link underline show rule");
     }
 
     #[test]
     fn preamble_contains_page_width_and_auto_height() {
-        let out = markdown_to_typst("x", &opts());
+        let out = markdown_to_typst("x", &opts(), DEFAULT_WIDTH_PT);
         assert!(out.contains("width: 400pt"), "missing page width");
         assert!(out.contains("height: auto"), "missing auto height");
     }
 
     #[test]
     fn preamble_sets_transparent_page_background() {
-        let out = markdown_to_typst("x", &opts());
+        let out = markdown_to_typst("x", &opts(), DEFAULT_WIDTH_PT);
         assert!(out.contains("fill: none"), "page background must be transparent");
     }
 
     #[test]
     fn preamble_sets_monospace_font_for_raw_blocks() {
-        let out = markdown_to_typst("x", &opts());
+        let out = markdown_to_typst("x", &opts(), DEFAULT_WIDTH_PT);
         assert!(
             out.contains("#show raw: set text(font:"),
             "missing monospace font show-set rule for raw blocks"
@@ -303,7 +317,7 @@ mod tests {
 
     #[test]
     fn preamble_injects_default_font_size_and_color() {
-        let out = markdown_to_typst("x", &opts());
+        let out = markdown_to_typst("x", &opts(), DEFAULT_WIDTH_PT);
         assert!(out.contains("size: 14pt"), "missing default font size");
         assert!(out.contains("fill: rgb(\"#000000\")"), "missing default fill color");
     }
@@ -314,8 +328,9 @@ mod tests {
             font_size_pt: 18.0,
             text_color: "#ff0000".to_string(),
             font_family: "Monaco".to_string(),
+            text_align: "left".to_string(),
         };
-        let out = markdown_to_typst("x", &opts);
+        let out = markdown_to_typst("x", &opts, DEFAULT_WIDTH_PT);
         assert!(out.contains("size: 18pt"));
         assert!(out.contains("fill: rgb(\"#ff0000\")"));
         assert!(out.contains("\"Monaco\""));
@@ -327,6 +342,39 @@ mod tests {
         assert_eq!(opts.font_size_pt, 14.0);
         assert_eq!(opts.text_color, "#000000");
         assert_eq!(opts.font_family, "Helvetica Neue");
+        assert_eq!(opts.text_align, "left");
+    }
+
+    #[test]
+    fn preamble_omits_align_directive_for_left() {
+        let out = markdown_to_typst("x", &opts(), DEFAULT_WIDTH_PT);
+        assert!(!out.contains("#set align("), "left alignment must not emit an align directive");
+    }
+
+    #[test]
+    fn preamble_emits_center_align_directive() {
+        let opts = RenderOptions { text_align: "center".to_string(), ..RenderOptions::default() };
+        let out = markdown_to_typst("x", &opts, DEFAULT_WIDTH_PT);
+        assert!(out.contains("#set align(center)"), "center alignment must emit align directive");
+    }
+
+    #[test]
+    fn preamble_emits_right_align_directive() {
+        let opts = RenderOptions { text_align: "right".to_string(), ..RenderOptions::default() };
+        let out = markdown_to_typst("x", &opts, DEFAULT_WIDTH_PT);
+        assert!(out.contains("#set align(right)"), "right alignment must emit align directive");
+    }
+
+    #[test]
+    fn centered_render_differs_from_left_render() {
+        let left = render_markdown_to_svg("# Hello world", &RenderOptions::default(), DEFAULT_WIDTH)
+            .expect("left render failed");
+        let centered = render_markdown_to_svg(
+            "# Hello world",
+            &RenderOptions { text_align: "center".to_string(), ..RenderOptions::default() },
+            DEFAULT_WIDTH,
+        ).expect("center render failed");
+        assert_ne!(left, centered, "centered SVG must differ from left-aligned SVG");
     }
 
     // ── Headings ──────────────────────────────────────────────────────────────
@@ -379,7 +427,7 @@ mod tests {
 
     #[test]
     fn blockquote_renders_to_svg() {
-        render_markdown_to_svg("> a wise saying", &RenderOptions::default())
+        render_markdown_to_svg("> a wise saying", &RenderOptions::default(), DEFAULT_WIDTH)
             .expect("blockquote render failed");
     }
 
@@ -403,7 +451,7 @@ mod tests {
     #[test]
     fn table_renders_to_svg() {
         let md = "| A | B |\n|---|---|\n| 1 | 2 |";
-        render_markdown_to_svg(md, &RenderOptions::default())
+        render_markdown_to_svg(md, &RenderOptions::default(), DEFAULT_WIDTH)
             .expect("table render failed");
     }
 
@@ -424,7 +472,7 @@ mod tests {
     #[test]
     fn task_list_renders_to_svg() {
         let md = "- [ ] pending\n- [x] done";
-        render_markdown_to_svg(md, &RenderOptions::default())
+        render_markdown_to_svg(md, &RenderOptions::default(), DEFAULT_WIDTH)
             .expect("task list render failed");
     }
 
@@ -439,7 +487,7 @@ mod tests {
 
     #[test]
     fn image_renders_to_svg() {
-        render_markdown_to_svg("![alt](img.png)", &RenderOptions::default())
+        render_markdown_to_svg("![alt](img.png)", &RenderOptions::default(), DEFAULT_WIDTH)
             .expect("image placeholder render failed");
     }
 
@@ -449,22 +497,22 @@ mod tests {
     fn link_text_is_underlined_via_show_rule() {
         // The show rule is in the preamble; the link function is in the body.
         let md = "[visit](https://example.com)";
-        let out = markdown_to_typst(md, &opts());
+        let out = markdown_to_typst(md, &opts(), DEFAULT_WIDTH_PT);
         assert!(out.contains("#show link: underline"), "missing show rule");
         assert!(out.contains("#link(\"https://example.com\")[visit]"), "missing link call");
     }
 
     #[test]
     fn link_renders_to_svg() {
-        render_markdown_to_svg("[text](https://example.com)", &RenderOptions::default())
+        render_markdown_to_svg("[text](https://example.com)", &RenderOptions::default(), DEFAULT_WIDTH)
             .expect("link render failed");
     }
 
     #[test]
     fn strikethrough_renders_to_svg_differently_from_plain_text() {
         let opts = RenderOptions::default();
-        let plain = render_markdown_to_svg("deleted", &opts).expect("plain render failed");
-        let struck = render_markdown_to_svg("~~deleted~~", &opts).expect("strikethrough render failed");
+        let plain = render_markdown_to_svg("deleted", &opts, DEFAULT_WIDTH).expect("plain render failed");
+        let struck = render_markdown_to_svg("~~deleted~~", &opts, DEFAULT_WIDTH).expect("strikethrough render failed");
         assert_ne!(plain, struck, "strikethrough SVG must differ from plain text SVG (strike line missing)");
     }
 
@@ -634,7 +682,7 @@ mod tests {
 
     #[test]
     fn render_returns_valid_svg() {
-        let svg = render_markdown_to_svg("# Hello", &RenderOptions::default())
+        let svg = render_markdown_to_svg("# Hello", &RenderOptions::default(), DEFAULT_WIDTH)
             .expect("render failed");
         assert!(svg.starts_with("<svg"), "output should be an SVG element");
         assert!(svg.contains("</svg>"), "output should close the SVG element");
@@ -643,7 +691,7 @@ mod tests {
     #[test]
     fn fenced_code_block_renders_to_svg() {
         let md = "# Title\n\n```python\nimport math\n\nx = math.sin(0.358654)\n```\n";
-        let svg = render_markdown_to_svg(md, &RenderOptions::default())
+        let svg = render_markdown_to_svg(md, &RenderOptions::default(), DEFAULT_WIDTH)
             .expect("render with fenced code block failed");
         assert!(svg.starts_with("<svg"), "output should be SVG");
     }
@@ -651,9 +699,9 @@ mod tests {
     #[test]
     fn longer_content_produces_taller_svg() {
         let opts = RenderOptions::default();
-        let short = render_markdown_to_svg("# Hi", &opts).expect("short render failed");
+        let short = render_markdown_to_svg("# Hi", &opts, DEFAULT_WIDTH).expect("short render failed");
         let long_md = format!("# Title\n\n{}", "A line of paragraph text.\n\n".repeat(20));
-        let long = render_markdown_to_svg(&long_md, &opts).expect("long render failed");
+        let long = render_markdown_to_svg(&long_md, &opts, DEFAULT_WIDTH).expect("long render failed");
 
         assert!(short.starts_with("<svg"), "expected SVG output for short content");
         let short_h = parse_svg_height(&short);

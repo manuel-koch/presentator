@@ -2,14 +2,13 @@ import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type { MarkdownOverlay } from "../types/config";
 
+// render_width_pct is a percentage of a 2000pt canvas, so 20% = 400pt (the old fixed default).
+export function overlayTypstWidthPt(renderWidthPct: number): number {
+  return Math.max(20, renderWidthPct * 20);
+}
+
 function cacheKey(overlay: MarkdownOverlay): string {
-  return (
-    overlay.content +
-    "\0" +
-    overlay.width +
-    "\0" +
-    JSON.stringify(overlay.style ?? {})
-  );
+  return overlay.content + "\0" + JSON.stringify(overlay.style ?? {});
 }
 
 function overlaysSig(overlays: MarkdownOverlay[] | undefined): string {
@@ -23,7 +22,6 @@ export function useOverlaySvgs(
   const [svgMap, setSvgMap] = useState<Map<string, string>>(() => new Map());
   const [pendingCount, setPendingCount] = useState(0);
   const cache = useRef<Map<string, string>>(new Map());
-  // Keep a ref so the effect can read the latest overlays without it being a dependency.
   const overlaysRef = useRef(overlays);
   overlaysRef.current = overlays;
 
@@ -49,7 +47,6 @@ export function useOverlaySvgs(
       return m;
     }
 
-    // Show already-cached overlays immediately.
     setSvgMap(buildMap());
 
     const uncached = current.filter((o) => !cache.current.has(cacheKey(o)));
@@ -75,12 +72,13 @@ export function useOverlaySvgs(
         font_size_pt: overlay.style?.font_size_pt ?? 14.0,
         text_color: overlay.style?.text_color ?? "#000000",
         font_family: overlay.style?.font_family ?? "Helvetica Neue",
+        text_align: overlay.style?.text_align ?? "left",
       };
       invoke<string>("render_markdown_to_svg", {
         id: overlay.id,
         content: overlay.content,
         options,
-        width: overlay.width,
+        width: overlayTypstWidthPt(overlay.style?.render_width_pct ?? 20),
       })
         .then((svg) => {
           if (!cancelled) cache.current.set(key, svg);
@@ -94,8 +92,6 @@ export function useOverlaySvgs(
     return () => {
       cancelled = true;
     };
-    // sig is a stable string derived from overlay ids + content + width + style; it changes
-    // only when overlay data actually changes, preventing re-runs on mere reference changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sig]);
 

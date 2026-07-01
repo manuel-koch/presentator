@@ -24,6 +24,8 @@ export interface OverlayStyle {
   font_size_pt?: number;
   text_color?: string;
   font_family?: string;
+  text_align?: "left" | "center" | "right";
+  render_width_pct?: number;
 }
 
 export interface MarkdownOverlay {

@@ -17,8 +17,8 @@ export function parseOverlayViewBox(svg: string): ParsedViewBox | null {
   return { x: parts[0], y: parts[1], w: parts[2], h: parts[3] };
 }
 
-function extractSvgInner(svg: string): string {
-  const openEnd = svg.indexOf(">");
+export function extractSvgInner(svg: string): string {
+  const openEnd = svg.indexOf(">", svg.indexOf("<svg"));
   if (openEnd === -1) return "";
   const closeStart = svg.lastIndexOf("</svg>");
   return closeStart === -1 ? svg.substring(openEnd + 1) : svg.substring(openEnd + 1, closeStart);
@@ -42,10 +42,10 @@ export function buildOverlayEmbeds(
       const cy = o.y + embedH / 2;
       const inner = extractSvgInner(svg);
       const rotation = o.rotation ?? 0;
-      const transform = rotation !== 0
-        ? ` transform="rotate(${rotation}, ${cx}, ${cy})"`
-        : "";
-      return `<svg x="${o.x}" y="${o.y}" width="${o.width}" height="${embedH}" viewBox="${vb.x} ${vb.y} ${vb.w} ${vb.h}"${transform}>${inner}</svg>`;
+      const svgEl = `<svg x="${o.x}" y="${o.y}" width="${o.width}" height="${embedH}" viewBox="${vb.x} ${vb.y} ${vb.w} ${vb.h}">${inner}</svg>`;
+      return rotation !== 0
+        ? `<g transform="rotate(${rotation}, ${cx}, ${cy})">${svgEl}</g>`
+        : svgEl;
     })
     .join("");
 }
@@ -146,7 +146,7 @@ export function PresentationCanvas({ svgContent, viewBox: vb, step, transition, 
   }, []);
 
   const svgInner = useMemo(() => {
-    const openEnd = svgContent.indexOf(">");
+    const openEnd = svgContent.indexOf(">", svgContent.indexOf("<svg"));
     if (openEnd === -1) return "";
     const closeStart = svgContent.lastIndexOf("</svg>");
     const raw = closeStart === -1
@@ -341,12 +341,13 @@ export function PresentationCanvas({ svgContent, viewBox: vb, step, transition, 
             top: svgTop,
             display: "block",
             transformOrigin: `${originX}px ${originY}px`,
-            transform: `rotate(${rotation}deg)`,
+            transform: `rotate(${-rotation}deg)`,
             userSelect: "none",
           }}
           width={svgPixelW}
           height={svgPixelH}
           viewBox={`${vb.x} ${vb.y} ${vb.width} ${vb.height}`}
+          overflow="visible"
           dangerouslySetInnerHTML={{ __html: liveHiddenStyle + svgInner + overlayHtml }}
         />
       )}

@@ -33,6 +33,7 @@ async function loadFileWithOverlay(page: Page) {
         (args as { path: string }).path.endsWith(".yaml") ? sidecar : svgContent
       );
       mock("render_markdown_to_svg", () => overlaySvg);
+      mock("list_fonts", () => []);
       mock("write_text_file", (args: unknown) => {
         (window as unknown as Record<string, unknown>).__lastWritten__ =
           (args as { content: string }).content;

@@ -157,6 +157,30 @@ fn get_app_settings(state: State<AppConfigState>) -> AppConfig {
 }
 
 #[tauri::command]
+async fn list_fonts() -> Result<Vec<String>, String> {
+    tokio::task::spawn_blocking(|| {
+        use typst::World;
+        use typst_as_lib::{TypstEngine, typst_kit_options::TypstKitFontOptions};
+        let engine = TypstEngine::builder()
+            .main_file(" ")
+            .search_fonts_with(TypstKitFontOptions::default())
+            .build();
+        let mut families = engine
+            .with_world(|world| {
+                world.book().families()
+                    .map(|(name, _)| name.to_string())
+                    .collect::<Vec<_>>()
+            })
+            .map_err(|e| e.to_string())?;
+        families.sort_unstable_by(|a, b| a.to_lowercase().cmp(&b.to_lowercase()));
+        Ok(families)
+    })
+    .await
+    .map_err(|e| format!("task join error: {e}"))
+    .and_then(|r| r)
+}
+
+#[tauri::command]
 async fn render_markdown_to_svg(
     id: String,
     content: String,
@@ -169,6 +193,7 @@ async fn render_markdown_to_svg(
         options.font_size_pt,
         &options.text_color,
         &options.font_family,
+        &options.text_align,
         width,
         env!("CARGO_PKG_VERSION"),
     );
@@ -191,7 +216,7 @@ async fn render_markdown_to_svg(
     // Typst compilation is CPU-intensive; offload it (and the subsequent cache
     // write) to the blocking thread pool so async executor threads stay free.
     tokio::task::spawn_blocking(move || -> Result<String, String> {
-        let svg = markdown::render_markdown_to_svg(&content, &options)?;
+        let svg = markdown::render_markdown_to_svg(&content, &options, width)?;
         if let Some(ref dir) = cache_dir {
             let _ = overlay_cache::put(dir, &key, &svg);
         }
@@ -385,6 +410,7 @@ pub fn run() {
             update_mode_menu,
             get_app_settings,
             set_app_settings,
+            list_fonts,
             render_markdown_to_svg,
             get_overlay_cache_stats,
             clear_overlay_svg_cache

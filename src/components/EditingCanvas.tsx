@@ -1,7 +1,7 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { MarkdownOverlay, Step, Viewport } from "../types/config";
 import type { ViewBox } from "../utils/svgViewBox";
-import { buildOverlayEmbeds } from "./PresentationCanvas";
+import { buildOverlayEmbeds, parseOverlayViewBox } from "./PresentationCanvas";
 import { parseAspectRatio } from "../utils/svgViewBox";
 
 interface Props {
@@ -18,11 +18,16 @@ interface Props {
   hoveredElementId?: string | null;
   overlays?: MarkdownOverlay[];
   overlaySvgs?: Map<string, string>;
+  onOverlayChange?: (id: string, x: number, y: number, width: number, rotation: number) => void;
+  selectedOverlayId?: string | null;
+  onOverlaySelect?: (id: string | null) => void;
+  hoveredOverlayId?: string | null;
 }
 
 export interface EditingCanvasHandle {
   goToStep: (step: Step) => void;
   goToElement: (id: string) => void;
+  goToRect: (cx: number, cy: number, w: number, h: number) => void;
   getCanvasViewport: () => { left: number; top: number; width: number; height: number } | null;
   fitAllSteps: (steps: Step[]) => void;
 }
@@ -41,6 +46,11 @@ const OTHER_RECT_STROKE = "rgba(160,160,160,0.55)";
 const OTHER_RECT_FILL = "rgba(128,128,128,0.04)";
 const HOVER_RECT_STROKE = "#4ade80";
 const HOVER_RECT_FILL = "rgba(74,222,128,0.08)";
+
+const OVERLAY_RECT_STROKE = "#f59e0b";
+const OVERLAY_RECT_FILL = "rgba(245,158,11,0.08)";
+const OVERLAY_SELECTED_STROKE = "#fbbf24";
+const SNAP_GUIDE_COLOR = "#e879f9";
 
 const LABEL_SIZE_PX = 13;
 const LABEL_PAD_PX = 5;
@@ -242,8 +252,29 @@ interface DragState {
   baseH?: number;
 }
 
+interface OverlayDragState {
+  mode: DragMode;
+  overlayId: string;
+  startMouseX: number;
+  startMouseY: number;
+  startX: number;
+  startY: number;
+  startWidth: number;
+  startCx: number;
+  startCy: number;
+  startRotation: number;
+  hPerW: number;
+  side?: EdgeSide;
+  // Live values for resize — updated each frame, committed to config on mouseup.
+  liveX?: number;
+  liveY?: number;
+  liveWidth?: number;
+}
+
+interface SnapLine { x1: number; y1: number; x2: number; y2: number; }
+
 export const EditingCanvas = forwardRef<EditingCanvasHandle, Props>(function EditingCanvas(
-  { svgContent, viewBox: vb, steps, selectedStepIndex, hoveredStepIndex = null, aspectRatio, backgroundColor, onViewportChange, onSelectStep, hidden, hoveredElementId = null, overlays, overlaySvgs },
+  { svgContent, viewBox: vb, steps, selectedStepIndex, hoveredStepIndex = null, aspectRatio, backgroundColor, onViewportChange, onSelectStep, hidden, hoveredElementId = null, overlays, overlaySvgs, onOverlayChange, selectedOverlayId = null, onOverlaySelect, hoveredOverlayId = null },
   ref
 ) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -252,6 +283,18 @@ export const EditingCanvas = forwardRef<EditingCanvasHandle, Props>(function Edi
   transformRef.current = transform;
   const dragRef = useRef<DragState | null>(null);
   const dragMoveRef = useRef<(mx: number, my: number, shiftKey: boolean) => void>(() => {});
+  const overlayDragRef = useRef<OverlayDragState | null>(null);
+  const overlayDragMoveRef = useRef<(mx: number, my: number, shiftKey: boolean) => void>(() => {});
+  // Transient resize geometry: keeps the amber rect and content SVG live during drag without
+  // touching the config (and therefore without invalidating the useOverlaySvgs cache).
+  const [overlayDragGeom, setOverlayDragGeom] = useState<{
+    id: string; x: number; y: number; width: number; rotation: number;
+  } | null>(null);
+  // Always-current ref so the mouseup handler (captured once by the effect) can call
+  // the latest onOverlayChange without the value going stale.
+  const onOverlayChangeRef = useRef(onOverlayChange);
+  onOverlayChangeRef.current = onOverlayChange;
+  const [snapLines, setSnapLines] = useState<SnapLine[]>([]);
   const animationIdRef = useRef<number | null>(null);
   const isAnimatingRef = useRef(false);
   // Viewport change history for prev/next navigation (not persisted).
@@ -314,7 +357,7 @@ export const EditingCanvas = forwardRef<EditingCanvasHandle, Props>(function Edi
 
   // Extract SVG inner content (between the root <svg> tags) for embedding as a nested SVG.
   const svgInner = useMemo(() => {
-    const openEnd = svgContent.indexOf('>');
+    const openEnd = svgContent.indexOf('>', svgContent.indexOf('<svg'));
     if (openEnd === -1) return '';
     const closeStart = svgContent.lastIndexOf('</svg>');
     const raw = closeStart === -1
@@ -327,8 +370,13 @@ export const EditingCanvas = forwardRef<EditingCanvasHandle, Props>(function Edi
 
   const overlayHtml = useMemo(() => {
     if (!overlays?.length || !overlaySvgs) return "";
-    return buildOverlayEmbeds(overlays, overlaySvgs, selectedStep?.hidden_overlays ?? []);
-  }, [overlays, overlaySvgs, selectedStep?.hidden_overlays]);
+    const liveOverlays = overlayDragGeom
+      ? overlays.map(o => o.id === overlayDragGeom.id
+          ? { ...o, x: overlayDragGeom.x, y: overlayDragGeom.y, width: overlayDragGeom.width, rotation: overlayDragGeom.rotation }
+          : o)
+      : overlays;
+    return buildOverlayEmbeds(liveOverlays, overlaySvgs, selectedStep?.hidden_overlays ?? []);
+  }, [overlays, overlaySvgs, selectedStep?.hidden_overlays, overlayDragGeom]);
 
   // Fit SVG to canvas on first render / when viewBox changes.
   useEffect(() => {
@@ -477,6 +525,19 @@ export const EditingCanvas = forwardRef<EditingCanvasHandle, Props>(function Edi
         panY: ch / 2 - (bboxCy - vbRef.current.y) * newZoom,
       });
     },
+    goToRect(cx, cy, w, h) {
+      const el = containerRef.current;
+      if (!el) return;
+      const cw = el.clientWidth;
+      const ch = el.clientHeight;
+      if (!cw || !ch) return;
+      const newZoom = clamp(Math.min(cw / w, ch / h) * 0.85, MIN_ZOOM, MAX_ZOOM);
+      animateTo({
+        zoom: newZoom,
+        panX: cw / 2 - (cx - vbRef.current.x) * newZoom,
+        panY: ch / 2 - (cy - vbRef.current.y) * newZoom,
+      });
+    },
     getCanvasViewport() {
       const el = containerRef.current;
       if (!el) return null;
@@ -592,10 +653,20 @@ export const EditingCanvas = forwardRef<EditingCanvasHandle, Props>(function Edi
       if (dragRef.current) {
         dragMoveRef.current(e.clientX, e.clientY, e.shiftKey);
       }
+      if (overlayDragRef.current) {
+        overlayDragMoveRef.current(e.clientX, e.clientY, e.shiftKey);
+      }
     }
     function onMouseUp() {
       panDragRef.current = null;
       dragRef.current = null;
+      const od = overlayDragRef.current;
+      if (od?.mode === "resize" && od.liveX !== undefined && od.liveY !== undefined && od.liveWidth !== undefined) {
+        onOverlayChangeRef.current?.(od.overlayId, od.liveX, od.liveY, od.liveWidth, od.startRotation);
+      }
+      overlayDragRef.current = null;
+      setOverlayDragGeom(null);
+      setSnapLines([]);
     }
     window.addEventListener("mousemove", onMouseMove);
     window.addEventListener("mouseup", onMouseUp);
@@ -638,6 +709,138 @@ export const EditingCanvas = forwardRef<EditingCanvasHandle, Props>(function Edi
     panDragRef.current = null;
   }
 
+  // --- Overlay geometry helpers ---
+  function computeOverlayRectGeom(overlay: MarkdownOverlay): {
+    cx: number; cy: number; w: number; h: number; rotation: number; hPerW: number;
+  } | null {
+    if (!overlaySvgs) return null;
+    const svg = overlaySvgs.get(overlay.id);
+    if (!svg) return null;
+    const ovb = parseOverlayViewBox(svg);
+    if (!ovb || ovb.w === 0) return null;
+    const hPerW = ovb.h / ovb.w;
+    const embedH = overlay.width * hPerW;
+    return {
+      cx: overlay.x + overlay.width / 2,
+      cy: overlay.y + embedH / 2,
+      w: overlay.width,
+      h: embedH,
+      rotation: overlay.rotation ?? 0,
+      hPerW,
+    };
+  }
+
+  function computeOverlayAabb(overlay: MarkdownOverlay): { left: number; right: number; top: number; bottom: number } | null {
+    const geom = computeOverlayRectGeom(overlay);
+    if (!geom) return null;
+    const r = geom.rotation * Math.PI / 180;
+    const cosR = Math.abs(Math.cos(r));
+    const sinR = Math.abs(Math.sin(r));
+    const aabbHW = geom.w / 2 * cosR + geom.h / 2 * sinR;
+    const aabbHH = geom.w / 2 * sinR + geom.h / 2 * cosR;
+    return {
+      left: geom.cx - aabbHW,
+      right: geom.cx + aabbHW,
+      top: geom.cy - aabbHH,
+      bottom: geom.cy + aabbHH,
+    };
+  }
+
+  function startOverlayDrag(mode: DragMode, e: React.MouseEvent, overlay: MarkdownOverlay, geom: { cx: number; cy: number; w: number; h: number; rotation: number; hPerW: number }, side?: EdgeSide) {
+    e.stopPropagation();
+    cancelAnimation();
+    containerRef.current?.focus({ preventScroll: true });
+    onOverlaySelect?.(overlay.id);
+    overlayDragRef.current = {
+      mode,
+      overlayId: overlay.id,
+      startMouseX: e.clientX,
+      startMouseY: e.clientY,
+      startX: overlay.x,
+      startY: overlay.y,
+      startWidth: overlay.width,
+      startCx: geom.cx,
+      startCy: geom.cy,
+      startRotation: geom.rotation,
+      hPerW: geom.hPerW,
+      side,
+    };
+    panDragRef.current = null;
+    dragRef.current = null;
+  }
+
+  function handleOverlayDragMove(mx: number, my: number, shiftKey: boolean) {
+    const drag = overlayDragRef.current!;
+    const [svgX, svgY] = screenToSvg(mx, my);
+    const [startSvgX, startSvgY] = screenToSvg(drag.startMouseX, drag.startMouseY);
+    const { startX, startY, startWidth, startCx, startCy, startRotation, hPerW } = drag;
+    const startH = startWidth * hPerW;
+
+    if (drag.mode === "move") {
+      const dx = svgX - startSvgX;
+      const dy = svgY - startSvgY;
+      onOverlayChange?.(drag.overlayId, startX + dx, startY + dy, startWidth, startRotation);
+    } else if (drag.mode === "rotate") {
+      const startAngle = Math.atan2(startSvgY - startCy, startSvgX - startCx) * (180 / Math.PI);
+      const curAngle = Math.atan2(svgY - startCy, svgX - startCx) * (180 / Math.PI);
+      let totalRotation = startRotation + (curAngle - startAngle);
+      if (shiftKey) totalRotation = Math.round(totalRotation / 5) * 5;
+      onOverlayChange?.(drag.overlayId, startX, startY, startWidth, totalRotation);
+    } else if (drag.mode === "resize" && drag.side) {
+      const r = startRotation * Math.PI / 180;
+      const cos_r = Math.cos(r);
+      const sin_r = Math.sin(r);
+      const dmx = svgX - startSvgX;
+      const dmy = svgY - startSvgY;
+      const minW = (CORNER_HIT * 2) / transformRef.current.zoom;
+      const minH = minW * hPerW;
+
+      let newW: number, newCx: number, newCy: number;
+
+      if (drag.side === "right") {
+        const delta = dmx * cos_r + dmy * sin_r;
+        newW = Math.max(minW, startWidth + delta);
+        const lx = startCx - cos_r * startWidth / 2;
+        const ly = startCy - sin_r * startWidth / 2;
+        newCx = lx + cos_r * newW / 2;
+        newCy = ly + sin_r * newW / 2;
+      } else if (drag.side === "left") {
+        const delta = dmx * (-cos_r) + dmy * (-sin_r);
+        newW = Math.max(minW, startWidth + delta);
+        const rx = startCx + cos_r * startWidth / 2;
+        const ry = startCy + sin_r * startWidth / 2;
+        newCx = rx - cos_r * newW / 2;
+        newCy = ry - sin_r * newW / 2;
+      } else if (drag.side === "bottom") {
+        const delta = dmx * (-sin_r) + dmy * cos_r;
+        const newH = Math.max(minH, startH + delta);
+        newW = newH / hPerW;
+        const topCx = startCx + sin_r * startH / 2;
+        const topCy = startCy - cos_r * startH / 2;
+        newCx = topCx - sin_r * newH / 2;
+        newCy = topCy + cos_r * newH / 2;
+      } else { // top
+        const delta = dmx * sin_r + dmy * (-cos_r);
+        const newH = Math.max(minH, startH + delta);
+        newW = newH / hPerW;
+        const bottomCx = startCx - sin_r * startH / 2;
+        const bottomCy = startCy + cos_r * startH / 2;
+        newCx = bottomCx + sin_r * newH / 2;
+        newCy = bottomCy - cos_r * newH / 2;
+      }
+
+      const newH = newW * hPerW;
+      const newX = newCx - newW / 2;
+      const newY = newCy - newH / 2;
+      // Store in the drag ref so mouseup can commit synchronously (state update is async).
+      overlayDragRef.current!.liveX = newX;
+      overlayDragRef.current!.liveY = newY;
+      overlayDragRef.current!.liveWidth = newW;
+      setOverlayDragGeom({ id: drag.overlayId, x: newX, y: newY, width: newW, rotation: startRotation });
+    }
+  }
+  overlayDragMoveRef.current = handleOverlayDragMove;
+
   function handleViewportDragMove(mx: number, my: number, shiftKey: boolean) {
     const drag = dragRef.current!;
     const [svgX, svgY] = screenToSvg(mx, my);
@@ -646,14 +849,60 @@ export const EditingCanvas = forwardRef<EditingCanvasHandle, Props>(function Edi
     if (drag.mode === "move") {
       const dx = (svgX - startSvgX) / vb.width;
       const dy = (svgY - startSvgY) / vb.height;
+      const rawCx = (drag.startViewport.center[0] + dx) * vb.width + vb.x;
+      const rawCy = (drag.startViewport.center[1] + dy) * vb.height + vb.y;
+
+      // Snap to overlay AABB edges.
+      const vpR = drag.startViewport.rotation * Math.PI / 180;
+      const vpCosR = Math.abs(Math.cos(vpR));
+      const vpSinR = Math.abs(Math.sin(vpR));
+      const vpW = (drag.baseW ?? 0) / drag.startViewport.zoom;
+      const vpH = (drag.baseH ?? 0) / drag.startViewport.zoom;
+      const vpHW = vpW / 2 * vpCosR + vpH / 2 * vpSinR;
+      const vpHH = vpW / 2 * vpSinR + vpH / 2 * vpCosR;
+      const canvasZoomSnap = transformRef.current.zoom;
+      const snapThreshMove = 8 / canvasZoomSnap;
+      let snapDx = 0, snapDy = 0;
+      const moveGuides: SnapLine[] = [];
+      if (overlays?.length) {
+        let bestXDelta = snapThreshMove, bestYDelta = snapThreshMove;
+        let bestXGuide: number | null = null, bestYGuide: number | null = null;
+        for (const overlay of overlays) {
+          const oAabb = computeOverlayAabb(overlay);
+          if (!oAabb) continue;
+          const vpEdgesX = [rawCx - vpHW, rawCx + vpHW];
+          const oEdgesX = [oAabb.left, oAabb.right];
+          for (const vpe of vpEdgesX) {
+            for (const oe of oEdgesX) {
+              const d = Math.abs(vpe - oe);
+              if (d < bestXDelta) { bestXDelta = d; snapDx = oe - vpe; bestXGuide = oe; }
+            }
+          }
+          const vpEdgesY = [rawCy - vpHH, rawCy + vpHH];
+          const oEdgesY = [oAabb.top, oAabb.bottom];
+          for (const vpe of vpEdgesY) {
+            for (const oe of oEdgesY) {
+              const d = Math.abs(vpe - oe);
+              if (d < bestYDelta) { bestYDelta = d; snapDy = oe - vpe; bestYGuide = oe; }
+            }
+          }
+        }
+        if (bestXGuide !== null) moveGuides.push({ x1: bestXGuide, y1: visibleTop, x2: bestXGuide, y2: visibleTop + visibleH });
+        if (bestYGuide !== null) moveGuides.push({ x1: visibleLeft, y1: bestYGuide, x2: visibleLeft + visibleW, y2: bestYGuide });
+      }
+      setSnapLines(moveGuides);
+
+      const snappedCx = rawCx + snapDx;
+      const snappedCy = rawCy + snapDy;
       onViewportChange({
         ...drag.startViewport,
         center: [
-          clamp(drag.startViewport.center[0] + dx, 0, 1),
-          clamp(drag.startViewport.center[1] + dy, 0, 1),
+          (snappedCx - vb.x) / vb.width,
+          (snappedCy - vb.y) / vb.height,
         ],
       });
     } else if (drag.mode === "rotate") {
+      setSnapLines([]);
       const cx = drag.startCx!;
       const cy = drag.startCy!;
       const startAngle = Math.atan2(startSvgY - cy, startSvgX - cx) * (180 / Math.PI);
@@ -720,6 +969,49 @@ export const EditingCanvas = forwardRef<EditingCanvasHandle, Props>(function Edi
         newCy = ry - (w1 / 2) * sin_r;
       }
 
+      // Compute snap for resize: snap the moving edge to overlay AABB edges.
+      const canvasZoomForSnap = transformRef.current.zoom;
+      const snapThresh = 8 / canvasZoomForSnap;
+      const vpNewR = drag.startViewport.rotation * Math.PI / 180;
+      const vpW = baseW / Math.max(0.01, newZoom);
+      const vpH = baseH / Math.max(0.01, newZoom);
+      const vpACosR = Math.abs(Math.cos(vpNewR));
+      const vpASinR = Math.abs(Math.sin(vpNewR));
+      const vpAabbHW = vpW / 2 * vpACosR + vpH / 2 * vpASinR;
+      const vpAabbHH = vpW / 2 * vpASinR + vpH / 2 * vpACosR;
+      const snapGuides: SnapLine[] = [];
+      if (overlays?.length) {
+        let bestX: number | null = null, bestXDelta = snapThresh;
+        let bestY: number | null = null, bestYDelta = snapThresh;
+        for (const overlay of overlays) {
+          const oAabb = computeOverlayAabb(overlay);
+          if (!oAabb) continue;
+          const vpEdgesX = [newCx - vpAabbHW, newCx + vpAabbHW];
+          const oEdgesX = [oAabb.left, oAabb.right];
+          for (const vpe of vpEdgesX) {
+            for (const oe of oEdgesX) {
+              const d = Math.abs(vpe - oe);
+              if (d < bestXDelta) { bestXDelta = d; bestX = oe; }
+            }
+          }
+          const vpEdgesY = [newCy - vpAabbHH, newCy + vpAabbHH];
+          const oEdgesY = [oAabb.top, oAabb.bottom];
+          for (const vpe of vpEdgesY) {
+            for (const oe of oEdgesY) {
+              const d = Math.abs(vpe - oe);
+              if (d < bestYDelta) { bestYDelta = d; bestY = oe; }
+            }
+          }
+        }
+        if (bestX !== null) {
+          snapGuides.push({ x1: bestX, y1: visibleTop, x2: bestX, y2: visibleTop + visibleH });
+        }
+        if (bestY !== null) {
+          snapGuides.push({ x1: visibleLeft, y1: bestY, x2: visibleLeft + visibleW, y2: bestY });
+        }
+      }
+      setSnapLines(snapGuides);
+
       onViewportChange({
         ...drag.startViewport,
         zoom: Math.max(0.01, newZoom),
@@ -746,6 +1038,160 @@ export const EditingCanvas = forwardRef<EditingCanvasHandle, Props>(function Edi
 
   const fontSize = LABEL_SIZE_PX / zoom;
   const labelPad = LABEL_PAD_PX / zoom;
+  const cornerHitSvg = CORNER_HIT / zoom;
+
+  // Overlay bounds rectangles — drawn below step viewport rects.
+  const overlayRectEls: React.ReactNode[] = [];
+  const overlayArrowEls: React.ReactNode[] = [];
+  if (overlays && overlaySvgs) {
+    for (const overlay of overlays) {
+      // During a resize drag, substitute live geometry so the amber rect tracks the mouse.
+      const liveOverlay = overlayDragGeom?.id === overlay.id
+        ? { ...overlay, x: overlayDragGeom.x, y: overlayDragGeom.y, width: overlayDragGeom.width, rotation: overlayDragGeom.rotation }
+        : overlay;
+      const geom = computeOverlayRectGeom(liveOverlay);
+      if (!geom) continue;
+      const { cx, cy, w, h, rotation } = geom;
+      const hw = w / 2;
+      const hh = h / 2;
+      const isSelected = overlay.id === selectedOverlayId;
+      const isHovered = overlay.id === hoveredOverlayId;
+      const stroke = isHovered ? HOVER_RECT_STROKE : isSelected ? OVERLAY_SELECTED_STROKE : OVERLAY_RECT_STROKE;
+      const strokeWidth = isHovered ? 2 / zoom : isSelected ? 2.5 / zoom : 1.5 / zoom;
+      const dashLen = 5 / zoom;
+      const isSmallOverlay = w < cornerHitSvg * 3 || h < cornerHitSvg * 3;
+
+      const overlayLabel = (
+        <svg x={-hw} y={-hh} width={w} height={h} overflow="hidden" style={{ pointerEvents: "none" } as React.CSSProperties}>
+          <text
+            x={labelPad} y={labelPad + fontSize}
+            fontSize={fontSize} fill="rgba(251,191,36,0.85)"
+            style={{ userSelect: "none" } as React.CSSProperties}
+          >{overlay.id}</text>
+        </svg>
+      );
+
+      let interactionEls: React.ReactNode;
+      if (!isSelected) {
+        interactionEls = null;
+      } else if (isSmallOverlay) {
+        interactionEls = (
+          <rect
+            x={-hw} y={-hh} width={w} height={h}
+            fill="transparent" style={{ cursor: "move" }}
+            onMouseDown={(e) => startOverlayDrag("move", e, overlay, geom)}
+          />
+        );
+      } else {
+        // Edge midpoint resize handles (on top of move area)
+        const edgeMidHandles = (["top", "right", "bottom", "left"] as const).map((side) => {
+          const isH = side === "top" || side === "bottom";
+          const ex = side === "right" ? hw : side === "left" ? -hw : 0;
+          const ey = side === "bottom" ? hh : side === "top" ? -hh : 0;
+          const ew = isH ? cornerHitSvg : cornerHitSvg;
+          const eh = cornerHitSvg;
+          return (
+            <rect
+              key={`mid-${side}`}
+              x={ex - ew / 2} y={ey - eh / 2} width={ew} height={eh}
+              fill="transparent"
+              style={{ cursor: isH ? "ns-resize" : "ew-resize" }}
+              onMouseDown={(e) => startOverlayDrag("resize", e, overlay, geom, side)}
+            />
+          );
+        });
+
+        // Corner rotate handles
+        const cornerHandles = ([-1, 1] as const).flatMap((sx) =>
+          ([-1, 1] as const).map((sy) => (
+            <rect
+              key={`corner-${sx},${sy}`}
+              x={sx * hw - cornerHitSvg / 2} y={sy * hh - cornerHitSvg / 2}
+              width={cornerHitSvg} height={cornerHitSvg}
+              fill="transparent" style={{ cursor: ROTATE_CURSOR }}
+              onMouseDown={(e) => startOverlayDrag("rotate", e, overlay, geom)}
+            />
+          ))
+        );
+
+        // Interior move area
+        const moveArea = w > cornerHitSvg * 2 && h > cornerHitSvg * 2 ? (
+          <rect
+            x={-hw + cornerHitSvg / 2} y={-hh + cornerHitSvg / 2}
+            width={w - cornerHitSvg} height={h - cornerHitSvg}
+            fill="transparent" style={{ cursor: "move" }}
+            onMouseDown={(e) => startOverlayDrag("move", e, overlay, geom)}
+          />
+        ) : null;
+
+        interactionEls = <>{moveArea}{edgeMidHandles}{cornerHandles}</>;
+      }
+
+      overlayRectEls.push(
+        <g
+          key={overlay.id}
+          transform={`translate(${cx},${cy}) rotate(${rotation})`}
+          data-testid={`overlay-rect-${overlay.id}`}
+        >
+          <rect
+            x={-hw} y={-hh} width={w} height={h}
+            fill={OVERLAY_RECT_FILL} stroke={stroke}
+            strokeWidth={strokeWidth}
+            strokeDasharray={isSelected || isHovered ? undefined : `${dashLen} ${dashLen * 0.6}`}
+            style={{ pointerEvents: "none" } as React.CSSProperties}
+          />
+          {overlayLabel}
+          {interactionEls}
+        </g>
+      );
+
+      // Outside-viewport indicator arrow — for the selected or hovered overlay.
+      const centerVisible =
+        cx >= visibleLeft && cx <= visibleLeft + visibleW &&
+        cy >= visibleTop  && cy <= visibleTop  + visibleH;
+      if (!centerVisible && (isSelected || isHovered)) {
+        const visCx = visibleLeft + visibleW / 2;
+        const visCy = visibleTop  + visibleH / 2;
+        const dx = cx - visCx;
+        const dy = cy - visCy;
+        const len = Math.hypot(dx, dy);
+        if (len > 0) {
+          const ux = dx / len;
+          const uy = dy / len;
+          const edge = rayToRectEdge(visCx, visCy, ux, uy, visibleLeft, visibleTop, visibleLeft + visibleW, visibleTop + visibleH);
+          const margin    = 22 / zoom;
+          const arrowLen  = 48 / zoom;
+          const arrowHead = 15 / zoom;
+          const strokeW   =  5 / zoom;
+          const wobble    = 10 / zoom;
+          const tipX = edge.x - ux * margin;
+          const tipY = edge.y - uy * margin;
+          const angleDeg = Math.atan2(uy, ux) * 180 / Math.PI;
+          overlayArrowEls.push(
+            <g
+              key={`arrow-${overlay.id}`}
+              data-testid={`overlay-arrow-${overlay.id}`}
+              transform={`translate(${tipX},${tipY}) rotate(${angleDeg})`}
+              style={{ pointerEvents: "none" } as React.CSSProperties}
+            >
+              <g>
+                <animateTransform
+                  attributeName="transform"
+                  type="translate"
+                  values={`0 0; ${wobble} 0; 0 0; ${-wobble * 0.25} 0; 0 0`}
+                  keyTimes="0; 0.35; 0.6; 0.8; 1"
+                  dur="0.85s"
+                  repeatCount="indefinite"
+                />
+                <line x1={-arrowLen} y1={0} x2={-arrowHead * 0.8} y2={0} stroke={stroke} strokeWidth={strokeW} strokeLinecap="round" />
+                <polygon points={`0,0 ${-arrowHead},${-arrowHead * 0.5} ${-arrowHead},${arrowHead * 0.5}`} fill={stroke} />
+              </g>
+            </g>
+          );
+        }
+      }
+    }
+  }
 
   // Non-selected step viewport rects (behind selected rect).
   const otherRects = steps.flatMap((step, index) => {
@@ -787,10 +1233,11 @@ export const EditingCanvas = forwardRef<EditingCanvasHandle, Props>(function Edi
     // When the rect is too small to fit corners without overlap, collapse to a single move handle.
     // Threshold: 3 × CORNER_HIT screen pixels in either dimension (two corners + minimal inner zone).
     const isSmall = geom.w < cornerHit * 3 || geom.h < cornerHit * 3;
+    const isSelectedHovered = hoveredStepIndex !== null && hoveredStepIndex === selectedStepIndex;
 
     selectedRectEl = (
       <g transform={`translate(${geom.cx},${geom.cy}) rotate(${geom.rotation})`} data-testid="viewport-rect">
-        <rect x={-hw} y={-hh} width={geom.w} height={geom.h} fill={RECT_FILL} stroke={RECT_STROKE} strokeWidth={2 / zoom} />
+        <rect x={-hw} y={-hh} width={geom.w} height={geom.h} fill={isSelectedHovered ? HOVER_RECT_FILL : RECT_FILL} stroke={isSelectedHovered ? HOVER_RECT_STROKE : RECT_STROKE} strokeWidth={2 / zoom} />
         <svg x={-hw} y={-hh} width={geom.w} height={geom.h} overflow="hidden" style={{ pointerEvents: "none" } as React.CSSProperties}>
           <text
             x={labelPad} y={labelPad + fontSize}
@@ -1006,11 +1453,11 @@ export const EditingCanvas = forwardRef<EditingCanvasHandle, Props>(function Edi
               height={vb.height * zoom}
               viewBox={`${vb.x} ${vb.y} ${vb.width} ${vb.height}`}
               dangerouslySetInnerHTML={{
-                __html: (hidden && hidden.length > 0
+                __html: hidden && hidden.length > 0
                   ? `<style>${hidden.map(id =>
                       `#${CSS.escape(id)}{${id === hoveredElementId ? "opacity:0.15" : "display:none"}}`
                     ).join("")}</style>${svgInner}`
-                  : svgInner) + overlayHtml,
+                  : svgInner,
               }}
             />
           </div>
@@ -1030,8 +1477,21 @@ export const EditingCanvas = forwardRef<EditingCanvasHandle, Props>(function Edi
               </clipPath>
             </defs>
             <g clipPath={`url(#${clipId})`}>
+              {overlayHtml && <g dangerouslySetInnerHTML={{ __html: overlayHtml }} />}
               {otherRects}
               {selectedRectEl}
+              {overlayRectEls}
+              {overlayArrowEls}
+              {snapLines.map((l, i) => (
+                <line
+                  key={i}
+                  x1={l.x1} y1={l.y1} x2={l.x2} y2={l.y2}
+                  stroke={SNAP_GUIDE_COLOR}
+                  strokeWidth={1.5 / zoom}
+                  strokeDasharray={`${6 / zoom} ${3 / zoom}`}
+                  style={{ pointerEvents: "none" } as React.CSSProperties}
+                />
+              ))}
               {hoverArrowEl}
               {elementHighlightEl}
               {elementHoverArrowEl}

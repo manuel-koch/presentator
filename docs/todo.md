@@ -33,6 +33,12 @@ removing the finished tasks from the todo in favor of updated feature descriptio
   Clarify with user when the change contradicts or significantly narrows an
   existing feature description.
 
+## Bugs
+
+- [ ] When doing drag'n'drop of a step in the step-list, then text under the mouse-move
+      gets selected. This looks strange and is unexpected, since user just wants to re-position
+      the step in the list and not select some visible text in the step-list.
+
 ## Markdown Overlay Content
 
 Overlays are markdown snippets attached to a presentation and embedded in the SVG coordinate
@@ -162,36 +168,38 @@ editing mode so the author can see them while arranging steps.
 
 Functionality should be like the step-viewport editing: moving, resizing, rotating.
 
-- [ ] Draw overlay bounds as labelled rectangles in `EditingCanvas` (visually distinct from
+- [x] Draw overlay bounds as labelled rectangles in `EditingCanvas` (visually distinct from
       step viewport rectangles); if the rectangle is outside the current viewport then show
       the "outside" indicator like the step-viewport
-- [ ] hovering over rectangle edges shows move cursor; hovering over corners shows rotate cursor
-- [ ] rectangle can be moved via drag'n'drop on the edges
-- [ ] rectangle can be resized (maintaining its aspect ratio) via drag'n'drop on middle of edges
-- [ ] rectangle can be rotated via drag'n'drop on a corner of the rectangle
-- [ ] holding Shift while rotating snaps the angle at 5° steps
-- [ ] Verify: drag and resize an overlay, confirm new bounds are saved and the rendered
+- [x] hovering over rectangle edges shows resize cursor; hovering over corners shows rotate cursor
+- [x] rectangle can be moved via drag'n'drop on the interior
+- [x] rectangle can be resized (maintaining its aspect ratio) via drag'n'drop on middle of edges
+- [x] rectangle can be rotated via drag'n'drop on a corner of the rectangle
+- [x] holding Shift while rotating snaps the angle at 5° steps
+- [x] Verify: drag and resize an overlay, confirm new bounds are saved and the rendered
       overlay moves/resizes in presentation mode
 
 #### Viewport alignment to overlay
 
-- [ ] Add "Fit viewport to overlay" button in the editing panel; active only when exactly one
-      overlay is selected — operates on that overlay, not all visible overlays
-- [ ] Pair the button with a 3×3 alignment picker (horizontal: left/center/right ×
-      vertical: top/center/bottom) and a configurable padding (fraction of viewport size);
-      compute and write the step's viewport (center + zoom + rotation) so the viewport rotation
-      matches the overlay's rotation and the overlay is placed at the chosen alignment position
-- [ ] Add a separate "Fit all visible overlays" button that computes the AABB union of all
-      overlays not in `hidden_overlays` for the active step and fits the viewport to that;
-      no alignment picker and no rotation change — fits as tightly as possible with padding
-- [ ] Verify: apply "fit to overlay" on two steps referencing the same overlay with identical
-      alignment and padding settings; confirm the overlay appears at an identical screen
+A "Viewport → Snippet" panel appears in the editing sidebar whenever overlays exist and a step
+is selected. It contains a 3×3 anchor picker (left/center/right × top/center/bottom), a
+padding slider (0–40% of viewport size), and a "Fit to snippet" button. Clicking the button
+computes and writes the active step's viewport (center, zoom, rotation) so the selected
+overlay is placed at the chosen anchor position within the viewport, rotated to match the
+overlay's own rotation.
+
+- [x] "Fit to snippet" button is active only when an overlay is selected; disabled otherwise
+- [x] 3×3 anchor picker and padding slider control how the overlay is positioned within the
+      fitted viewport
+- [x] Viewport rotation is set to match the overlay's rotation so the snippet appears axis-aligned
+- [x] Verify: apply "fit to snippet" on two steps referencing the same overlay with identical
+      anchor and padding settings; confirm the overlay appears at an identical screen
       position in both steps with no visual jump during transition
-- [ ] Show snap guide lines at overlay AABB edges (top, bottom, left, right) while the step
+- [x] Show snap guide lines at overlay AABB edges (top, bottom, left, right) while the step
       viewport rectangle is being dragged or resized in `EditingCanvas`; snap the viewport
       rectangle to these guides when within a small pixel threshold;
       use AABB edges even for rotated overlays to keep snap logic simple
-- [ ] Verify: drag a step viewport near an overlay edge; confirm it snaps and the guide line
+- [x] Verify: drag a step viewport near an overlay edge; confirm it snaps and the guide line
       is visible
 
 ### Phase 10 — Per-step visibility toggle
@@ -201,10 +209,17 @@ Functionality should be like the step-viewport editing: moving, resizing, rotati
 - [ ] Verify: toggle an overlay off for one step; confirm it is absent in that step and
       present in adjacent steps during presentation
 
+### Phase 11 — Cache cleanup
+
+- [ ] Maintain a max total size of cached markdown-to-svg files, remove oldest files until
+      the limit is not exhausted
+- [ ] At configurable size limit to settings dialog
+
 ## Presentation Mode (basic)
 
+- [x] Keyboard shortcuts are configurable via Application Settings
+
 - [ ] Step navigation UI (next / previous)
-  - Keyboard shortcuts are configurable via Application Settings (done)
   - No HUD for now: need to investigate how to show a sidecar window that acts as
     remote-control for the presentation.
 
@@ -234,3 +249,25 @@ Functionality should be like the step-viewport editing: moving, resizing, rotati
 ## Testing
 
 - [ ] Show test coverage when running tests, to detect blind spots that are not tested enough
+
+## UI
+
+- [ ] Main menu option to quit app should be in the "Presentator" menu, not under "File" menu.
+
+- [ ] The app icon is bigger in MacOS tab-switcher than any other app.
+      What could be the cause for it ?
+      E.g. while moving thru the apps with cmd-tab I can see a dark border around all
+      other app icons, but there is no such border around the presentator app-icon.
+      The same happens in the app-bar on lower screen edge, presentator app-icon looks
+      bigger than the other app-icons.
+  - Likely need to revise `docs/app-icon.md` to create correct icon
+
+- [ ] Need to refactor the left area with step-list, element-hidden-list, overlay-list,
+      options to adjust step-viewport to overlay.
+      The layout looks cluttered and it is not clear what the relations of those lists
+      are, e.g. that adjusting the step-viewport to an overlay requires that both are
+      selected.
+
+- [ ] Introduce an instant step transition without smooth viewport adjustment and blending
+      in/out SVG elements.
+      Add a "instant" to the dropdown and disable the transition duration input field when "instant" is selected.

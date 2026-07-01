@@ -3,7 +3,7 @@ import { render, screen, fireEvent, act } from "@testing-library/react";
 import { vi, describe, it, expect, beforeEach } from "vitest";
 import { EditingCanvas } from "./EditingCanvas";
 import type { EditingCanvasHandle } from "./EditingCanvas";
-import type { Step } from "../types/config";
+import type { MarkdownOverlay, Step } from "../types/config";
 import type { ViewBox } from "../utils/svgViewBox";
 
 const VB: ViewBox = { x: 0, y: 0, width: 800, height: 600 };
@@ -560,6 +560,46 @@ describe("EditingCanvas", () => {
       expect(screen.getByLabelText("Current step")).toHaveTextContent("Overview");
       rerender(canvas({ steps: [STEP, STEP2], selectedStepIndex: 1 }));
       expect(screen.getByLabelText("Current step")).toHaveTextContent("Detail");
+    });
+  });
+
+  describe("overlay hover highlighting", () => {
+    const OVERLAY_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 200"><text>Hello</text></svg>`;
+    const OVERLAY: MarkdownOverlay = { id: "snippet-1", content: "# Hello", x: 200, y: 200, width: 200 };
+    // Center at SVG (-5000, -5000) — always outside the visible canvas area.
+    const OVERLAY_FAR: MarkdownOverlay = { id: "snippet-far", content: "# Far", x: -5100, y: -5100, width: 200 };
+    const overlaySvgs = new Map([
+      ["snippet-1", OVERLAY_SVG],
+      ["snippet-far", OVERLAY_SVG],
+    ]);
+
+    it("renders the hovered overlay rect with green stroke", () => {
+      render(canvas({ overlays: [OVERLAY], overlaySvgs, hoveredOverlayId: "snippet-1" }));
+      const rectGroup = screen.getByTestId("overlay-rect-snippet-1");
+      expect(rectGroup.querySelector("rect")?.getAttribute("stroke")).toBe("#4ade80");
+    });
+
+    it("does not apply hover stroke to a non-hovered overlay", () => {
+      render(canvas({ overlays: [OVERLAY], overlaySvgs }));
+      const rectGroup = screen.getByTestId("overlay-rect-snippet-1");
+      expect(rectGroup.querySelector("rect")?.getAttribute("stroke")).toBe("#f59e0b");
+    });
+
+    it("applies hover stroke even when hoveredOverlayId matches the selected overlay", () => {
+      render(canvas({ overlays: [OVERLAY], overlaySvgs, selectedOverlayId: "snippet-1", hoveredOverlayId: "snippet-1" }));
+      const rectGroup = screen.getByTestId("overlay-rect-snippet-1");
+      // Hover takes priority over selection — green stroke gives visible feedback from the list.
+      expect(rectGroup.querySelector("rect")?.getAttribute("stroke")).toBe("#4ade80");
+    });
+
+    it("does not show overlay arrow when hovered overlay center is inside the viewport", () => {
+      render(canvas({ overlays: [OVERLAY], overlaySvgs, hoveredOverlayId: "snippet-1" }));
+      expect(screen.queryByTestId("overlay-arrow-snippet-1")).toBeNull();
+    });
+
+    it("shows overlay arrow when hovered overlay center is outside the viewport", () => {
+      render(canvas({ overlays: [OVERLAY_FAR], overlaySvgs, hoveredOverlayId: "snippet-far" }));
+      expect(screen.getByTestId("overlay-arrow-snippet-far")).toBeInTheDocument();
     });
   });
 
