@@ -217,6 +217,14 @@ export function PresentationCanvas({ svgContent, viewBox: vb, step, transition, 
     }
 
     const tc = transition ?? DEFAULT_TRANSITION;
+
+    // Instant transition: snap directly to target, no animation.
+    if (tc.easing === "instant") {
+      liveViewportRef.current = target;
+      setLiveViewport(target);
+      setLiveHiddenStyle(buildStaticHiddenStyle(toHidden));
+      return;
+    }
     const from = { ...liveViewportRef.current };
     const rotDelta = shortestRotDelta(from.rotation, target.rotation);
     const startTime = performance.now();

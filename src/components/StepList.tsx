@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { Step, TransitionConfig } from "../types/config";
 import { DEFAULT_TRANSITION } from "../types/config";
 
-const EASING_OPTIONS = ["linear", "ease-in", "ease-out", "ease-in-out"] as const;
+const EASING_OPTIONS = ["instant", "linear", "ease-in", "ease-out", "ease-in-out"] as const;
 
 export interface CopyAspectsOptions {
   viewport: boolean;
@@ -362,6 +362,7 @@ export function StepList({ steps, selectedIndex, transitions, defaultTransition,
             const tc: TransitionConfig = transitions?.[index] ?? defaultTransition ?? DEFAULT_TRANSITION;
             const update = (patch: Partial<TransitionConfig>) =>
               onTransitionChange?.(index, { ...tc, ...patch });
+            const isInstant = tc.easing === "instant";
 
             const transitionRow = (
               <li key={`tr-${index}`} className="transition-item">
@@ -372,6 +373,7 @@ export function StepList({ steps, selectedIndex, transitions, defaultTransition,
                     min={0}
                     max={60}
                     step={0.1}
+                    disabled={isInstant}
                     value={tc.duration_ms / 1000}
                     aria-label={`Transition duration between step ${index + 1} and ${index + 2} in seconds`}
                     onChange={(e) => {
@@ -390,27 +392,29 @@ export function StepList({ steps, selectedIndex, transitions, defaultTransition,
                     {EASING_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
                   </select>
                 </div>
-                <div className="transition-item-row transition-blend-row">
-                  <label>
-                    <input
-                      type="checkbox"
-                      checked={tc.blend ?? false}
-                      onChange={(e) => update({ blend: e.target.checked })}
-                      onClick={(e) => e.stopPropagation()}
-                    />
-                    blend
-                  </label>
-                  {tc.blend && (
-                    <select
-                      value={tc.blend_easing ?? "linear"}
-                      aria-label={`Blend easing between step ${index + 1} and ${index + 2}`}
-                      onChange={(e) => update({ blend_easing: e.target.value })}
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      {EASING_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
-                    </select>
-                  )}
-                </div>
+                {!isInstant && (
+                  <div className="transition-item-row transition-blend-row">
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={tc.blend ?? false}
+                        onChange={(e) => update({ blend: e.target.checked })}
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                      blend
+                    </label>
+                    {tc.blend && (
+                      <select
+                        value={tc.blend_easing ?? "linear"}
+                        aria-label={`Blend easing between step ${index + 1} and ${index + 2}`}
+                        onChange={(e) => update({ blend_easing: e.target.value })}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {EASING_OPTIONS.filter((o) => o !== "instant").map((o) => <option key={o} value={o}>{o}</option>)}
+                      </select>
+                    )}
+                  </div>
+                )}
               </li>
             );
 

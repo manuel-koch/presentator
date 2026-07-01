@@ -558,6 +558,11 @@ button:active {
   border-color: var(--blue);
 }
 
+.transition-item input[type="number"]:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
 .transition-item select {
   flex: 1;
   min-width: 0;

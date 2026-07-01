@@ -268,6 +268,6 @@ overlay's own rotation.
       are, e.g. that adjusting the step-viewport to an overlay requires that both are
       selected.
 
-- [ ] Introduce an instant step transition without smooth viewport adjustment and blending
+- [x] Introduce an instant step transition without smooth viewport adjustment and blending
       in/out SVG elements.
       Add a "instant" to the dropdown and disable the transition duration input field when "instant" is selected.
