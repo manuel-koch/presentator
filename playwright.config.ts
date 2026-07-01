@@ -4,9 +4,13 @@ export default defineConfig({
   testDir: "./e2e",
   fullyParallel: false,
   reporter: "list",
+  timeout: 15000,
+  globalTimeout: 60000,
   use: {
     baseURL: "http://localhost:1420",
     trace: "on-first-retry",
+    actionTimeout: 5000,
+    navigationTimeout: 10000,
   },
   projects: [
     {

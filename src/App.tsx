@@ -6,6 +6,7 @@ import { useSvgFile } from "./hooks/useSvgFile";
 import { useSidecarConfig } from "./hooks/useSidecarConfig";
 import { useFileWatcher } from "./hooks/useFileWatcher";
 import { useOverlaySvgs } from "./hooks/useOverlaySvgs";
+import { useStepThumbnails } from "./hooks/useStepThumbnails";
 import { sidecarPath } from "./utils/configSidecar";
 import { parseSvgViewBox, parseAspectRatio } from "./utils/svgViewBox";
 import { computeFitViewport } from "./utils/fitViewportToOverlay";
@@ -24,7 +25,7 @@ import { ReloadNotification } from "./components/ReloadNotification";
 import { AboutDialog } from "./components/AboutDialog";
 import { SettingsDialog } from "./components/SettingsDialog";
 import type { AppSettings } from "./components/SettingsDialog";
-import { PresentationCanvas, parseOverlayViewBox } from "./components/PresentationCanvas";
+import { PresentationCanvas, parseOverlayViewBox, extractSvgInner } from "./components/PresentationCanvas";
 import type { AppMode } from "./types/mode";
 import type { MarkdownOverlay, OverlayStyle, Step, TransitionConfig, Viewport } from "./types/config";
 import { DEFAULT_TRANSITION } from "./types/config";
@@ -75,6 +76,23 @@ function App() {
     [svgFile]
   );
   const { svgMap: overlaySvgs, pendingCount: overlaysPending } = useOverlaySvgs(config?.overlays);
+  const svgInner = useMemo(
+    () => (svgFile ? extractSvgInner(svgFile.content) : undefined),
+    [svgFile]
+  );
+  // Memoize so the fallback [] keeps the same reference while config is null,
+  // preventing a render loop in useStepThumbnails whose effect depends on steps.
+  const steps = useMemo(() => config?.steps ?? [], [config]);
+  const stepThumbnails = useStepThumbnails(
+    steps,
+    svgInner,
+    svgFile?.path,
+    viewBox ?? undefined,
+    config?.aspect_ratio ?? "16:9",
+    config?.background_color ?? "#ffffff",
+    config?.overlays,
+    overlaySvgs ?? undefined,
+  );
   const namedElements = useMemo(
     () => (svgFile ? extractNamedElements(svgFile.content, config?.exclude_id_pattern) : []),
     [svgFile, config?.exclude_id_pattern]
@@ -666,6 +684,8 @@ function App() {
                   onFitAllToView={() => canvasRef.current?.fitAllSteps(config.steps)}
                   onCopyAspects={handleCopyAspects}
                   onTransitionChange={handleTransitionChange}
+                  thumbnails={stepThumbnails}
+                  aspectRatio={config?.aspect_ratio ?? "16:9"}
                 />
                 <OverlayList
                   overlays={config.overlays ?? []}

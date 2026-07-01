@@ -181,26 +181,28 @@ Functionality should be like the step-viewport editing: moving, resizing, rotati
 
 #### Viewport alignment to overlay
 
-A "Viewport → Snippet" panel appears in the editing sidebar whenever overlays exist and a step
-is selected. It contains a 3×3 anchor picker (left/center/right × top/center/bottom), a
-padding slider (0–40% of viewport size), and a "Fit to snippet" button. Clicking the button
-computes and writes the active step's viewport (center, zoom, rotation) so the selected
-overlay is placed at the chosen anchor position within the viewport, rotated to match the
-overlay's own rotation.
+A "Viewport → Snippet" panel appears in the editing sidebar whenever overlays exist
+and a step is selected. It contains a 3×3 anchor picker (left/center/right ×
+top/center/bottom), a padding slider (0–40% of viewport size), and a "Fit to snippet"
+button. Clicking the button computes and writes the active step's viewport (center, zoom,
+rotation) so the selected overlay is placed at the chosen anchor position within the
+viewport, rotated to match the overlay's own rotation.
 
-- [x] "Fit to snippet" button is active only when an overlay is selected; disabled otherwise
+- [x] "Fit to snippet" button is active only when an overlay is selected;
+      disabled otherwise
 - [x] 3×3 anchor picker and padding slider control how the overlay is positioned within the
       fitted viewport
-- [x] Viewport rotation is set to match the overlay's rotation so the snippet appears axis-aligned
-- [x] Verify: apply "fit to snippet" on two steps referencing the same overlay with identical
-      anchor and padding settings; confirm the overlay appears at an identical screen
-      position in both steps with no visual jump during transition
+- [x] Viewport rotation is set to match the overlay's rotation so the snippet
+      appears axis-aligned
+- [x] Verify: apply "fit to snippet" on two steps referencing the same overlay
+      with identical anchor and padding settings; confirm the overlay appears at an
+      identical screen position in both steps with no visual jump during transition
 - [x] Show snap guide lines at overlay AABB edges (top, bottom, left, right) while the step
       viewport rectangle is being dragged or resized in `EditingCanvas`; snap the viewport
       rectangle to these guides when within a small pixel threshold;
       use AABB edges even for rotated overlays to keep snap logic simple
-- [x] Verify: drag a step viewport near an overlay edge; confirm it snaps and the guide line
-      is visible
+- [x] Verify: drag a step viewport near an overlay edge; confirm it snaps and the guide
+      line is visible
 
 ### Phase 10 — Per-step visibility toggle
 
@@ -262,11 +264,35 @@ overlay's own rotation.
       bigger than the other app-icons.
   - Likely need to revise `docs/app-icon.md` to create correct icon
 
+- [x] Show a rendered preview of each step inside its row in the step list (below the step
+      title). The thumbnail width matches the step-list width; height is derived from the
+      configured aspect ratio. The thumbnail reflects the step's viewport, hidden elements,
+      and overlay visibility — identical to how it would appear in presentation mode.
+
 - [ ] Need to refactor the left area with step-list, element-hidden-list, overlay-list,
       options to adjust step-viewport to overlay.
       The layout looks cluttered and it is not clear what the relations of those lists
       are, e.g. that adjusting the step-viewport to an overlay requires that both are
       selected.
+
+- [ ] Need to refactor snapping on guidelines when moving step-viewport.
+      Use "shift" key while dragging the viewport-rect to disable guideline-snapping, likewise adjust the rotation-snap behavior (Rotation snap currently uses
+      Shift-to-enable; change to always-on with Shift-to-disable to match.)
+      Only snap to eligible element (edges) in the edit-mode viewport ( see below ),
+      snapping to some distant / invisble edge of a markdown-overlay-rect doesn't make
+      sense.
+  - Canvas-window visibility: the overlay's AABB must intersect the scrolled/zoomed
+    editing canvas area to be considered for snapping.
+  - Step visibility: the overlay must not be in the active step's hidden_overlays list.
+  - Other step viewport rectangles, useful for aligning consecutive steps' viewports.
+  - Background SVG bounding box: snapping to the document edge or a large SVG element.
+- [ ] Add a snap-to-center option alongside snap-to-edge
+  - Viewport center → overlay center
+  - Viewport edge → overlay center line (horizontal or vertical axis through overlay)
+  - When multiple candidates are within threshold, snap to the nearest one; prefer
+    center snaps over edge snaps at equal distance.
+- [ ] Snap guide line length: guide line should only run from one snapping element
+      through to the other (like an "alignment rail")
 
 - [x] Introduce an instant step transition without smooth viewport adjustment and blending
       in/out SVG elements.

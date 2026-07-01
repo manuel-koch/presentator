@@ -26,6 +26,8 @@ interface Props {
   onHoverChange: (index: number | null) => void;
   onCopyAspects: (fromIndex: number, toIndices: number[], opts: CopyAspectsOptions) => void;
   onTransitionChange?: (gapIndex: number, tc: TransitionConfig) => void;
+  thumbnails?: Map<number, string>;
+  aspectRatio?: string;
 }
 
 function PlusIcon() {
@@ -92,7 +94,7 @@ function CopyHiddenIcon() {
   );
 }
 
-export function StepList({ steps, selectedIndex, transitions, defaultTransition, onSelect, onRename, onReorder, onAdd, onRemove, onDuplicate, onGoToViewport, onFitToViewport, onFitAllToView, onHoverChange, onCopyAspects, onTransitionChange }: Props) {
+export function StepList({ steps, selectedIndex, transitions, defaultTransition, onSelect, onRename, onReorder, onAdd, onRemove, onDuplicate, onGoToViewport, onFitToViewport, onFitAllToView, onHoverChange, onCopyAspects, onTransitionChange, thumbnails, aspectRatio }: Props) {
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editingName, setEditingName] = useState("");
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
@@ -290,70 +292,89 @@ export function StepList({ steps, selectedIndex, transitions, defaultTransition,
               onDoubleClick={(e) => startEditing(index, e)}
               onMouseDown={(e) => handleItemMouseDown(index, e)}
             >
-              <span className="step-item-drag-handle" aria-hidden>
-                <GripIcon />
-              </span>
-              {editingIndex === index ? (
-                <input
-                  autoFocus
-                  autoCorrect="off"
-                  autoCapitalize="off"
-                  spellCheck={false}
-                  value={editingName}
-                  onChange={(e) => setEditingName(e.target.value)}
-                  onBlur={commitEdit}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") { e.preventDefault(); commitEdit(); }
-                    else if (e.key === "Escape") cancelEdit();
-                  }}
-                  onClick={(e) => e.stopPropagation()}
-                  aria-label="Step name"
-                />
-              ) : (
-                <span className="step-item-name">{step.name}</span>
-              )}
-              <button
-                className="step-item-goto-btn"
-                aria-label={`Focus ${step.name} in viewport`}
-                title="Focus in viewport"
-                onClick={(e) => { e.stopPropagation(); onGoToViewport(index); }}
-              >
-                <FrameIcon />
-              </button>
-              <button
-                className="step-item-fit-btn"
-                aria-label={`Fit ${step.name} viewport to current view`}
-                title="Fit to current view"
-                onClick={(e) => { e.stopPropagation(); onFitToViewport(index); }}
-              >
-                <FitViewportIcon />
-              </button>
-              <button
-                className="step-item-duplicate-btn"
-                aria-label={`Duplicate ${step.name}`}
-                title="Duplicate step"
-                onClick={(e) => { e.stopPropagation(); onDuplicate(index); }}
-              >
-                <DuplicateIcon />
-              </button>
-              {steps.length > 1 && (
+              <div className="step-item-header">
+                <span className="step-item-drag-handle" aria-hidden>
+                  <GripIcon />
+                </span>
+                {editingIndex === index ? (
+                  <input
+                    autoFocus
+                    autoCorrect="off"
+                    autoCapitalize="off"
+                    spellCheck={false}
+                    value={editingName}
+                    onChange={(e) => setEditingName(e.target.value)}
+                    onBlur={commitEdit}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") { e.preventDefault(); commitEdit(); }
+                      else if (e.key === "Escape") cancelEdit();
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                    aria-label="Step name"
+                  />
+                ) : (
+                  <span className="step-item-name">{step.name}</span>
+                )}
                 <button
-                  className="step-item-clone-hidden-btn"
-                  aria-label={`Copy aspects of ${step.name} to other steps`}
-                  title="Copy step aspects to other steps"
-                  onClick={(e) => openClonePopup(index, e)}
+                  className="step-item-goto-btn"
+                  aria-label={`Focus ${step.name} in viewport`}
+                  title="Focus in viewport"
+                  onClick={(e) => { e.stopPropagation(); onGoToViewport(index); }}
                 >
-                  <CopyHiddenIcon />
+                  <FrameIcon />
                 </button>
+                <button
+                  className="step-item-fit-btn"
+                  aria-label={`Fit ${step.name} viewport to current view`}
+                  title="Fit to current view"
+                  onClick={(e) => { e.stopPropagation(); onFitToViewport(index); }}
+                >
+                  <FitViewportIcon />
+                </button>
+                <button
+                  className="step-item-duplicate-btn"
+                  aria-label={`Duplicate ${step.name}`}
+                  title="Duplicate step"
+                  onClick={(e) => { e.stopPropagation(); onDuplicate(index); }}
+                >
+                  <DuplicateIcon />
+                </button>
+                {steps.length > 1 && (
+                  <button
+                    className="step-item-clone-hidden-btn"
+                    aria-label={`Copy aspects of ${step.name} to other steps`}
+                    title="Copy step aspects to other steps"
+                    onClick={(e) => openClonePopup(index, e)}
+                  >
+                    <CopyHiddenIcon />
+                  </button>
+                )}
+                <button
+                  className="step-item-remove-btn"
+                  aria-label={`Remove ${step.name}`}
+                  title="Remove step"
+                  onClick={(e) => { e.stopPropagation(); onRemove(index); }}
+                >
+                  <TrashIcon />
+                </button>
+              </div>
+              {thumbnails && (
+                thumbnails.get(index)
+                  ? <img
+                      src={thumbnails.get(index)}
+                      className="step-thumbnail-img"
+                      alt=""
+                      aria-hidden
+                      draggable={false}
+                    />
+                  : <div
+                      className="step-thumbnail-placeholder"
+                      style={aspectRatio ? { aspectRatio: aspectRatio.replace(":", " / ") } : undefined}
+                      aria-hidden
+                    >
+                      <span className="step-thumbnail-hint">Rendering preview…</span>
+                    </div>
               )}
-              <button
-                className="step-item-remove-btn"
-                aria-label={`Remove ${step.name}`}
-                title="Remove step"
-                onClick={(e) => { e.stopPropagation(); onRemove(index); }}
-              >
-                <TrashIcon />
-              </button>
             </li>
           );
 

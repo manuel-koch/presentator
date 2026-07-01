@@ -35,8 +35,13 @@ Every code change must complete this cycle before the task is considered done:
 2. **Test** — type-check, unit tests, e2e tests; use `make test`; fix every failure before continuing
 3. **Mark done** — only after all checks are green
 
+**Cadence:** Run `npm test` (unit tests only, fast) after each wired-up feature unit,
+do not batch verification to the end of a session. A failing test caught in 3 seconds
+beats an OOM hunt in a later session. Run the full `make test` before marking done.
+
 **When delegating to a sub-agent:**
-After a sub-agent returns, explicitly verify its output against this cycle before accepting the result:
+After a sub-agent returns, explicitly verify its output against this cycle before
+accepting the result:
 
 * Did it add tests for every new pure function, utility, or data model it introduced?
 * Do all existing tests still pass (`make test`)?
@@ -44,6 +49,17 @@ After a sub-agent returns, explicitly verify its output against this cycle befor
 
 Sub-agents satisfy the checks they are given but are not aware of project-wide guidelines unless
 told. The delegating agent is responsible for the complete cycle, not just the build result.
+
+**Mock only what you must:**
+
+* Mock at the boundary of the unit under test — the external I/O it cannot perform
+  in a test environment (IPC commands, native dialogs, filesystem). Never mock the
+  unit itself.
+* Use per-command mock implementations, not blanket mock for an entire module.
+  A blanket mock silently returns wrong types to unrelated callers, masking real failures.
+* A test that passes with mocks but fails in production is worse than no test,
+  it creates false confidence. If a mock makes the test trivially pass for any
+  implementation, the test is not verifying anything.
 
 **When a test fails after a change:**
 

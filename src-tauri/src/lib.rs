@@ -1,5 +1,7 @@
 mod markdown;
 mod overlay_cache;
+mod svg_render;
+mod thumbnail_cache;
 
 use std::collections::HashMap;
 use std::sync::Mutex;
@@ -254,6 +256,69 @@ fn clear_overlay_svg_cache(app: AppHandle) -> usize {
 }
 
 #[tauri::command]
+fn render_svg_thumbnail(svg: String, width: u32, height: u32, base_dir: Option<String>) -> Option<String> {
+    svg_render::render_to_png_base64(&svg, width, height, base_dir.map(PathBuf::from))
+}
+
+#[tauri::command]
+fn js_log(level: String, msg: String) {
+    match level.as_str() {
+        "error" => log::error!("[js] {msg}"),
+        "warn"  => log::warn!("[js] {msg}"),
+        "info"  => log::info!("[js] {msg}"),
+        _       => log::debug!("[js] {msg}"),
+    }
+}
+
+#[tauri::command]
+fn get_step_thumbnail(name: String, key: String, app: AppHandle) -> Option<String> {
+    let cache_dir = app.path().app_cache_dir().ok()
+        .map(|d| thumbnail_cache::thumbnail_dir(&d))?;
+    let result = thumbnail_cache::get(&cache_dir, &key);
+    if result.is_some() {
+        log::debug!("step-thumbnail cache hit: {name}");
+    } else {
+        log::debug!("step-thumbnail cache miss: {name}");
+    }
+    result
+}
+
+#[tauri::command]
+fn cache_step_thumbnail(name: String, key: String, png_base64: String, app: AppHandle) -> Result<(), String> {
+    let cache_dir = app.path().app_cache_dir()
+        .map_err(|e| e.to_string())
+        .map(|d| thumbnail_cache::thumbnail_dir(&d))?;
+    let result = thumbnail_cache::put(&cache_dir, &key, &png_base64).map_err(|e| e.to_string());
+    match &result {
+        Ok(()) => log::debug!("step-thumbnail cached to disk: {name}"),
+        Err(e) => log::warn!("step-thumbnail cache write failed: {name}: {e}"),
+    }
+    result
+}
+
+#[tauri::command]
+fn get_step_thumbnail_cache_stats(app: AppHandle) -> thumbnail_cache::CacheStats {
+    let cache_dir = app.path().app_cache_dir().ok()
+        .map(|d| thumbnail_cache::thumbnail_dir(&d));
+    match cache_dir {
+        Some(dir) => thumbnail_cache::stats(&dir),
+        None => thumbnail_cache::CacheStats { entry_count: 0, total_bytes: 0 },
+    }
+}
+
+#[tauri::command]
+fn clear_step_thumbnail_cache(app: AppHandle) -> usize {
+    let Some(cache_dir) = app.path().app_cache_dir().ok()
+        .map(|d| thumbnail_cache::thumbnail_dir(&d))
+    else {
+        return 0;
+    };
+    let removed = thumbnail_cache::clear(&cache_dir);
+    log::info!("step-thumbnail cache cleared: {removed} file(s) removed");
+    removed
+}
+
+#[tauri::command]
 fn set_app_settings(settings: AppConfig, app: AppHandle, state: State<AppConfigState>) {
     {
         let mut cfg = state.lock().unwrap();
@@ -281,15 +346,21 @@ pub fn run() {
         .setup(|app| {
             use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
 
-            // Log overlay SVG cache stats.
+            // Log cache stats for both caches at startup.
             if let Ok(cache_root) = app.path().app_cache_dir() {
-                let dir = overlay_cache::overlay_svg_dir(&cache_root);
-                let s = overlay_cache::stats(&dir);
+                let ov = overlay_cache::stats(&overlay_cache::overlay_svg_dir(&cache_root));
                 log::info!(
                     "overlay-svg cache: {} entr{}, {} KB",
-                    s.entry_count,
-                    if s.entry_count == 1 { "y" } else { "ies" },
-                    s.total_bytes / 1024,
+                    ov.entry_count,
+                    if ov.entry_count == 1 { "y" } else { "ies" },
+                    ov.total_bytes / 1024,
+                );
+                let th = thumbnail_cache::stats(&thumbnail_cache::thumbnail_dir(&cache_root));
+                log::info!(
+                    "step-thumbnail cache: {} entr{}, {} KB",
+                    th.entry_count,
+                    if th.entry_count == 1 { "y" } else { "ies" },
+                    th.total_bytes / 1024,
                 );
             }
 
@@ -413,7 +484,13 @@ pub fn run() {
             list_fonts,
             render_markdown_to_svg,
             get_overlay_cache_stats,
-            clear_overlay_svg_cache
+            clear_overlay_svg_cache,
+            get_step_thumbnail,
+            cache_step_thumbnail,
+            get_step_thumbnail_cache_stats,
+            clear_step_thumbnail_cache,
+            render_svg_thumbnail,
+            js_log
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

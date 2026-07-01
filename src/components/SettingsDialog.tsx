@@ -20,7 +20,7 @@ interface Props {
   onSavePresentationConfig?: (config: PresentationConfig) => void;
 }
 
-type Tab = "presentation" | "playback" | "keybindings";
+type Tab = "presentation" | "playback" | "caches" | "keybindings";
 
 export function SettingsDialog({ settings, onSave, onCancel, filename, presentationConfig, onSavePresentationConfig }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>("presentation");
@@ -39,19 +39,23 @@ export function SettingsDialog({ settings, onSave, onCancel, filename, presentat
   const learnRef = useRef<string | null>(null);
   learnRef.current = learningAction;
 
-  const [cacheStats, setCacheStats] = useState<{ entry_count: number; total_bytes: number } | null>(null);
+  type CacheStats = { entry_count: number; total_bytes: number };
+  const [cacheStats, setCacheStats] = useState<CacheStats | null>(null);
+  const [thumbCacheStats, setThumbCacheStats] = useState<CacheStats | null>(null);
 
   useEffect(() => {
-    invoke<{ entry_count: number; total_bytes: number }>("get_overlay_cache_stats")
-      .then(setCacheStats)
-      .catch(() => {});
+    invoke<CacheStats>("get_overlay_cache_stats").then(setCacheStats).catch(() => {});
+    invoke<CacheStats>("get_step_thumbnail_cache_stats").then(setThumbCacheStats).catch(() => {});
   }, []);
 
   async function handleClearCache() {
     await invoke("clear_overlay_svg_cache").catch(() => {});
-    invoke<{ entry_count: number; total_bytes: number }>("get_overlay_cache_stats")
-      .then(setCacheStats)
-      .catch(() => {});
+    invoke<CacheStats>("get_overlay_cache_stats").then(setCacheStats).catch(() => {});
+  }
+
+  async function handleClearThumbCache() {
+    await invoke("clear_step_thumbnail_cache").catch(() => {});
+    invoke<CacheStats>("get_step_thumbnail_cache_stats").then(setThumbCacheStats).catch(() => {});
   }
 
   const [aspectRatio, setAspectRatio] = useState(presentationConfig?.aspect_ratio ?? "16:9");
@@ -146,6 +150,12 @@ export function SettingsDialog({ settings, onSave, onCancel, filename, presentat
             onClick={() => setActiveTab("playback")}
           >
             Playback
+          </button>
+          <button
+            className={`settings-tab-btn${activeTab === "caches" ? " settings-tab-btn--active" : ""}`}
+            onClick={() => setActiveTab("caches")}
+          >
+            Caches
           </button>
           <button
             className={`settings-tab-btn${activeTab === "keybindings" ? " settings-tab-btn--active" : ""}`}
@@ -254,6 +264,11 @@ export function SettingsDialog({ settings, onSave, onCancel, filename, presentat
                 />
                 <span className="settings-row-desc">Stroke width of drawn lines in presentation mode.</span>
               </label>
+            </div>
+          </div>
+
+          <div className={`settings-tab-panel${activeTab === "caches" ? "" : " settings-tab-panel--hidden"}`}>
+            <div className="settings-general">
               <div className="settings-row">
                 <span className="settings-row-title">Overlay render cache</span>
                 <button
@@ -267,6 +282,22 @@ export function SettingsDialog({ settings, onSave, onCancel, filename, presentat
                 <span className="settings-row-desc">
                   {cacheStats
                     ? `${cacheStats.entry_count} entr${cacheStats.entry_count === 1 ? "y" : "ies"} · ${formatBytes(cacheStats.total_bytes)}`
+                    : "Loading…"}
+                </span>
+              </div>
+              <div className="settings-row">
+                <span className="settings-row-title">Step preview cache</span>
+                <button
+                  className="settings-row-control settings-btn-clear-cache"
+                  onClick={handleClearThumbCache}
+                  disabled={thumbCacheStats?.entry_count === 0}
+                  aria-label="Clear step preview cache"
+                >
+                  Clear
+                </button>
+                <span className="settings-row-desc">
+                  {thumbCacheStats
+                    ? `${thumbCacheStats.entry_count} entr${thumbCacheStats.entry_count === 1 ? "y" : "ies"} · ${formatBytes(thumbCacheStats.total_bytes)}`
                     : "Loading…"}
                 </span>
               </div>

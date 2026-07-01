@@ -67,7 +67,7 @@ function shortestRotDelta(from: number, to: number): number {
   return delta > 180 ? delta - 360 : delta;
 }
 
-function buildStaticHiddenStyle(hidden: string[]): string {
+export function buildStaticHiddenStyle(hidden: string[]): string {
   if (hidden.length === 0) return "";
   return `<style>${hidden.map((id) => `#${CSS.escape(id)}{display:none}`).join("")}</style>`;
 }

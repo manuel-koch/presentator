@@ -21,6 +21,23 @@ const SAMPLE_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 100
   <rect id="bg" x="0" y="0" width="200" height="100" fill="navy" />
 </svg>`;
 
+// Minimal 1×1 PNG — realistic return value for render_svg_thumbnail.
+const THUMB_B64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVQI12NgAAIABQAABjE+ibYAAAAASUVORK5CYII=";
+
+/** Mock invoke with per-command responses so that broad mocks don't mask failures. */
+function mockInvokeForFileLoad(svgContent: string) {
+  vi.mocked(invoke).mockImplementation((cmd: string) => {
+    switch (cmd) {
+      case "read_text_file":        return Promise.resolve(svgContent);
+      case "render_svg_thumbnail":  return Promise.resolve(THUMB_B64);
+      case "get_step_thumbnail":    return Promise.resolve(null);
+      case "cache_step_thumbnail":  return Promise.resolve(null);
+      case "js_log":                return Promise.resolve(null);
+      default:                      return Promise.resolve(undefined);
+    }
+  });
+}
+
 type AnyHandler = (event: { payload: unknown }) => void;
 const capturedHandlers: Record<string, AnyHandler> = {};
 
@@ -53,7 +70,7 @@ describe("App", () => {
 
   it("renders the editing canvas after a file is picked", async () => {
     vi.mocked(open).mockResolvedValue("/path/to/slides.svg");
-    vi.mocked(invoke).mockResolvedValue(SAMPLE_SVG);
+    mockInvokeForFileLoad(SAMPLE_SVG);
 
     render(<App />);
     await userEvent.click(screen.getByRole("button", { name: "Open SVG file" }));
@@ -64,7 +81,7 @@ describe("App", () => {
 
   it("opens a file via the menu-open-svg event", async () => {
     vi.mocked(open).mockResolvedValue("/path/to/slides.svg");
-    vi.mocked(invoke).mockResolvedValue(SAMPLE_SVG);
+    mockInvokeForFileLoad(SAMPLE_SVG);
 
     render(<App />);
     fireEvent("menu-open-svg");
@@ -133,7 +150,7 @@ describe("App — mode switching via menu", () => {
 
   it("resets to editing and updates menu when a new file is opened", async () => {
     vi.mocked(open).mockResolvedValue("/slides.svg");
-    vi.mocked(invoke).mockResolvedValue(SAMPLE_SVG);
+    mockInvokeForFileLoad(SAMPLE_SVG);
 
     render(<App />);
     await userEvent.click(screen.getByRole("button", { name: "Open SVG file" }));
