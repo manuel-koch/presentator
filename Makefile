@@ -1,4 +1,13 @@
-.PHONY: run-dev install-deps show-outdated-deps upgrade-deps build-release bundle-macos bundle-macos-dmg generate-icons preview-icon check-versions set-version test
+ifeq ($(CARGO_TARGET_DIR),)
+export CARGO_TARGET_DIR := $(REPO_ROOT)/target
+endif
+
+.PHONY: install-deps show-outdated-deps upgrade-deps \
+	generate-icons preview-icon \
+	build-release run-dev \
+	bundle-macos bundle-macos-dmg \
+	check-versions set-version \
+	test test-coverage
 
 run-dev:
 	npm run tauri dev
@@ -31,12 +40,12 @@ bundle-macos:
 	$(if $(SIGNING_IDENTITY),APPLE_SIGNING_IDENTITY="$(SIGNING_IDENTITY)" )npm run tauri build -- --bundles app
 ifdef SIGNING_IDENTITY
 	@echo ""
-	@codesign -d --verbose=4 src-tauri/target/release/bundle/macos/Presentator.app 2>&1 \
+	@codesign -d --verbose=4 $(CARGO_TARGET_DIR)/release/bundle/macos/Presentator.app 2>&1 \
 		| grep -E "(Identifier|Authority|CDHash|SHA1 |SHA256)"
 endif
 
 bundle-macos-dmg: bundle-macos
-	@rm -f src-tauri/target/release/bundle/macos/Presentator.dmg
+	@rm -f $(CARGO_TARGET_DIR)/release/bundle/macos/Presentator.dmg
 	create-dmg \
 		--volname "Presentator" \
 		--volicon "src-tauri/icons/icon.icns" \
@@ -46,8 +55,8 @@ bundle-macos-dmg: bundle-macos
 		--icon "Presentator.app" 175 190 \
 		--hide-extension "Presentator.app" \
 		--app-drop-link 425 190 \
-		src-tauri/target/release/bundle/macos/Presentator.dmg \
-		src-tauri/target/release/bundle/macos/Presentator.app
+		$(CARGO_TARGET_DIR)/release/bundle/macos/Presentator.dmg \
+		$(CARGO_TARGET_DIR)/release/bundle/macos/Presentator.app
 
 set-version:
 	@test -n "$(VERSION)" || { echo "Usage: make set-version VERSION=x.y.z"; exit 1; }
@@ -89,3 +98,7 @@ test-coverage: check-versions
 		--show-missing-lines \
 		--fail-under-lines 80 \
 		--manifest-path src-tauri/Cargo.toml
+
+lint:
+	cargo check --manifest-path src-tauri/Cargo.toml
+	cargo clippy --manifest-path src-tauri/Cargo.toml
