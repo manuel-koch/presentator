@@ -99,6 +99,8 @@ mod tests {
     fn tmp_dir() -> PathBuf {
         let n = COUNTER.fetch_add(1, Ordering::SeqCst);
         let dir = std::env::temp_dir().join(format!("presentator_cache_test_{n}"));
+        // Remove stale state from a previous test run, then recreate.
+        let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         dir
     }
