@@ -47,9 +47,15 @@ A `Makefile` provides shortcuts for all common tasks:
 | `make install-deps` | Install Node and Cargo dependencies |
 | `make run-dev` | Start the app in development mode |
 | `make build-release` | Build a production `.app` bundle |
+| `make bundle-macos` | Build and (optionally) code-sign the macOS `.app`; pass `SIGNING_IDENTITY=<cert>` to sign |
+| `make bundle-macos-dmg` | Build the `.app` and wrap it in a distributable DMG via `create-dmg` |
+| `make set-version` | Set the app version everywhere (`package.json`, `tauri.conf.json`, `Cargo.toml`); pass `VERSION=x.y.z` |
 | `make test` | Run unit, component, and e2e tests |
+| `make test-coverage` | Run tests with line-coverage report |
 | `make show-outdated-deps` | List outdated npm and Cargo packages |
 | `make upgrade-deps` | Upgrade npm and Cargo packages in-place |
+| `make generate-icons` | Regenerate all icon assets from `src-tauri/icons/icon-source.svg` |
+| `make preview-icon` | Regenerate icons and preview the `.icns` via QuickLook |
 
 The sections below document the underlying commands for cases where more control is needed.
 
@@ -108,6 +114,7 @@ Uses [Playwright](https://playwright.dev) (Chromium) against the Vite dev server
 
 - [Features](docs/features.md)
 - [Architecture](docs/architecture.md)
+- [App icon design](docs/app-icon.md)
 - [Sidecar config schema](docs/sidecar-config-schema.json)
 - [Global config schema](docs/global-config-schema.json)
 - [Implementation tasks](docs/todo.md)

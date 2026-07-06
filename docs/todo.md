@@ -90,31 +90,10 @@ Render pipeline (all Rust, no browser engine):
   - should we exclude some feature in the first attempt and enhance exporting afterwards ?
   - what basic feature should we pick for the first working export results ?
 
-## Testing
-
-- [x] Show test coverage when running tests, to detect blind spots that are not tested enough
-
 ## UI
-
-- [x] Main menu option to quit app should be in the "Presentator" menu, not under "File" menu.
-
-- [x] The app icon is bigger in MacOS tab-switcher than any other app.
-      What could be the cause for it ?
-      E.g. while moving thru the apps with cmd-tab I can see a dark border around all
-      other app icons, but there is no such border around the presentator app-icon.
-      The same happens in the app-bar on lower screen edge, presentator app-icon looks
-      bigger than the other app-icons.
-  - Cause: a decorative purple border ring was full-bleed (touched every canvas
-      edge), overwriting the system squircle border that gives other icons their
-      visible dark ring. Fixed by removing the border ring and using a full-bleed
-      opaque dark gradient background; content now stays within the Apple safe zone.
-      See `docs/app-icon.md`.
 
 - [ ] Need to refactor the left area with step-list, element-hidden-list, overlay-list,
       options to adjust step-viewport to overlay.
       The layout looks cluttered and it is not clear what the relations of those lists
       are, e.g. that adjusting the step-viewport to an overlay requires that both are
       selected.
-
-- [x] The "Fit all visible" functionality to fit step-viewport to all visible overlay-rects
-      is not very usable. We should drop that feature.

@@ -30,10 +30,19 @@
   * `make install-deps` — install Node and Cargo dependencies (`npm install`)
   * `make build-release` — compile and bundle a production `.app` (`npm run tauri build`)
   * `make test` — run the full test suite (unit, component, and e2e tests combined)
+  * `make test-coverage` — run the test suite with line-coverage reporting (Vitest + cargo llvm-cov), failing below 80% Rust coverage
   * `make bundle-macos` — build the macOS `.app` bundle; pass `SIGNING_IDENTITY=<keychain-cert-name>` to code-sign with any Keychain certificate and print the SHA256 fingerprint
   * `make bundle-macos-dmg` — run `bundle-macos` then wrap the `.app` in a distributable DMG via `create-dmg` (custom volume icon, Finder window with drag-to-Applications shortcut)
   * `make show-outdated-deps` — list outdated packages from npm and Cargo
   * `make upgrade-deps` — upgrade npm and Cargo packages in-place
+
+## Main Menu
+
+* The menu bar is organised into four top-level menus: **Presentator**, **File**, **Edit**, **View**
+* The **Presentator** menu (the app-named menu, leftmost) contains: About Presentator…, Settings… (Cmd-,), and Quit — standard macOS convention placing Quit under the app menu, not under File
+* The **File** menu contains: Open SVG… (Cmd-O), Reload SVG && Config (Cmd-R)
+* The **Edit** menu contains standard undo/redo/cut/copy/paste/select-all items
+* The **View** menu contains the Editing Mode / Presentation Mode checkbox toggles (mirrors the Mode Switching feature)
 
 ## Mode Switching
 
@@ -227,7 +236,7 @@ Global presentation-mode behavior settings:
 * Official Apple notarization (which silences Gatekeeper warnings for all users) requires a paid Apple Developer ID ($99/year) — deliberately not adopted
   * Users bypass Gatekeeper via right-click → Open, or `xattr -rd com.apple.quarantine /path/to/Presentator.app`
 * The DMG uses `create-dmg` in preference to Tauri's built-in DMG bundler for a polished Finder window layout
-* The app icon is a custom SVG design (`src-tauri/icons/icon-source.svg`); all raster sizes and platform formats are generated from it via `make generate-icons`
+* The app icon is a custom SVG design (`src-tauri/icons/icon-source.svg`); all raster sizes and platform formats are generated from it via `make generate-icons`; the source follows macOS system-icon sizing conventions (~42 px transparent padding, ~428×428 opaque region on a 512×512 canvas, no full-bleed decorative border) so it renders at the same visual size as other app icons in the Dock and cmd-tab switcher — see [app-icon.md](app-icon.md) for design details
 * Bundle metadata: category `Productivity`, short description set in `tauri.conf.json`
 
 ## Future features (not yet decided, for future releases)
