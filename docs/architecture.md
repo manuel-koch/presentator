@@ -21,3 +21,6 @@
 * **Vitest** — unit and component tests
 * **React Testing Library** — component interaction tests (SVG DOM)
 * **Playwright** — end-to-end tests running against the Vite dev server (Chromium); Tauri IPC is mocked via a fixture so tests run on all platforms without a built app binary
+* **Markdown overlay rendering** — `pulldown-cmark` (Markdown → Typst source) → `typst-as-lib` (Typst → SVG); no browser engine involved, keeps rendering deterministic and off the main thread (`tokio::task::spawn_blocking`)
+* **resvg** (`svg_render.rs`) — rasterizes SVG to PNG for step-list thumbnail previews
+* **Disk caching** — both overlay SVG renders and step thumbnail PNGs are cached under `app.path().app_cache_dir()` (evictable OS-managed storage); overlay renders are keyed by a SHA-256 hash of content/style/width plus the app version (so a version bump invalidates stale entries), thumbnails are keyed by a hash of viewport/hidden/overlay-content state computed client-side; cache stats and clearing are exposed via Tauri commands surfaced in the Settings → Caches tab

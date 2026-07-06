@@ -76,7 +76,7 @@ make build-release
 # or: npm run tauri build
 ```
 
-Compiles the React frontend and the Rust backend, then bundles both into a self-contained macOS `.app` in `src-tauri/target/release/bundle/macos/`.
+Compiles the React frontend and the Rust backend, then bundles both into a self-contained macOS `.app` under `$CARGO_TARGET_DIR/release/bundle/macos/`. The Makefile can use envvar `CARGO_TARGET_DIR` to share one Cargo build cache across multiple checkouts.
 
 ## Testing
 

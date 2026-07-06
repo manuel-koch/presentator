@@ -213,6 +213,20 @@
           "description": "Font family name passed to the Typst renderer. Must be available in the system font path.",
           "default": "Helvetica Neue",
           "examples": ["Helvetica Neue", "Georgia", "Monaco", "SF Pro"]
+        },
+        "text_align": {
+          "type": "string",
+          "description": "Text alignment applied to the rendered markdown content.",
+          "enum": ["left", "center", "right"],
+          "default": "left"
+        },
+        "render_width_pct": {
+          "type": "number",
+          "description": "Percentage of a fixed 2000pt internal canvas used as the Typst page width for text wrapping (e.g. 20 → 400pt). This is independent of the overlay's on-canvas display width.",
+          "default": 20,
+          "exclusiveMinimum": 0,
+          "maximum": 100,
+          "examples": [10, 20, 40]
         }
       }
     }
