@@ -657,22 +657,6 @@ describe("App — overlay management", () => {
     // (selectedOverlayId is null until an overlay is selected)
   });
 
-  it("Fit all visible button executes without crashing when overlays have rendered SVGs", async () => {
-    await loadFile(SVG_WITH_VIEWBOX, CONFIG_WITH_OVERLAYS);
-    await userEvent.click(screen.getByText("Step 1"));
-    await waitFor(() => expect(screen.getByText("Viewport → Snippet")).toBeInTheDocument());
-    // Wait for render_markdown_to_svg to populate overlaySvgs
-    await waitFor(() =>
-      expect(invoke).toHaveBeenCalledWith("render_markdown_to_svg", expect.anything())
-    );
-    const fitAllBtn = screen.getByRole("button", { name: /Fit all visible/i });
-    await userEvent.click(fitAllBtn);
-    // Config should be updated (updateConfig called)
-    await waitFor(() =>
-      expect(invoke).toHaveBeenCalledWith("write_text_file", expect.anything())
-    );
-  });
-
   it("selects an overlay when its row is clicked", async () => {
     await loadFile(SVG_WITH_VIEWBOX, CONFIG_WITH_OVERLAYS);
     await userEvent.click(screen.getByText("snippet-1"));
@@ -689,5 +673,175 @@ describe("App — overlay management", () => {
     await waitFor(() =>
       expect(invoke).toHaveBeenCalledWith("write_text_file", expect.anything())
     );
+  });
+});
+
+describe("App — settings save", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    setupListenMock();
+  });
+
+  it("saves settings via the Settings dialog Save button", async () => {
+    vi.mocked(invoke).mockImplementation((cmd: string) => {
+      if (cmd === "get_app_settings") {
+        return Promise.resolve({
+          fullscreen_on_presentation: false,
+          pointer_linger_ms: 2000,
+          pointer_stroke_width: 5,
+          key_bindings: {},
+        });
+      }
+      return Promise.resolve(undefined);
+    });
+    render(<App />);
+    fireEvent("menu-settings");
+    await waitFor(() => expect(screen.getByRole("dialog", { name: "Settings" })).toBeInTheDocument());
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("set_app_settings", expect.anything())
+    );
+    expect(screen.queryByRole("dialog", { name: "Settings" })).toBeNull();
+  });
+});
+
+const CONFIG_TWO_STEPS_HIDDEN_OVERLAY = `aspect_ratio: "16:9"
+background_color: "#000000"
+steps:
+  - name: "Step 1"
+    viewport:
+      center: [0.5, 0.5]
+      zoom: 1.0
+      rotation: 0
+    hidden: []
+    hidden_overlays: ["snippet-1"]
+  - name: "Step 2"
+    viewport:
+      center: [0.5, 0.5]
+      zoom: 1.5
+      rotation: 0
+    hidden: []
+overlays:
+  - id: snippet-1
+    content: "**Hello**"
+    x: 100
+    y: 100
+    width: 200
+  - id: snippet-2
+    content: "World"
+    x: 200
+    y: 200
+    width: 150
+`;
+
+describe("App — step handler coverage", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    setupListenMock();
+  });
+
+  it("duplicates a step when the Duplicate button is clicked", async () => {
+    await loadFile(SVG_WITH_VIEWBOX, CONFIG_TWO_STEPS_HIDDEN_OVERLAY);
+    const dupBtns = screen.getAllByRole("button", { name: /Duplicate step/i });
+    await userEvent.click(dupBtns[0]);
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("write_text_file", expect.anything())
+    );
+    // A duplicated step adds a "Step 1 (Clone)" entry.
+    await waitFor(() => expect(screen.getByText("Step 1 (Clone)")).toBeInTheDocument());
+  });
+
+  it("renames a step via double-click and Enter", async () => {
+    await loadFile(SVG_WITH_VIEWBOX, CONFIG_TWO_STEPS_HIDDEN_OVERLAY);
+    await userEvent.dblClick(screen.getByText("Step 1"));
+    const input = await screen.findByRole("textbox", { name: "Step name" });
+    await userEvent.clear(input);
+    await userEvent.type(input, "Renamed{Enter}");
+    await waitFor(() => expect(screen.getByText("Renamed")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("write_text_file", expect.anything())
+    );
+  });
+
+  it("changes transition easing via the dropdown between steps", async () => {
+    await loadFile(SVG_WITH_VIEWBOX, CONFIG_TWO_STEPS_HIDDEN_OVERLAY);
+    const easingSelect = screen.getByRole("combobox", {
+      name: "Transition easing between step 1 and 2",
+    });
+    await userEvent.selectOptions(easingSelect, "ease-in");
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("write_text_file", expect.anything())
+    );
+  });
+
+  it("changes transition duration via the number input", async () => {
+    await loadFile(SVG_WITH_VIEWBOX, CONFIG_TWO_STEPS_HIDDEN_OVERLAY);
+    const durationInput = screen.getByRole("spinbutton", {
+      name: "Transition duration between step 1 and 2 in seconds",
+    });
+    await userEvent.clear(durationInput);
+    await userEvent.type(durationInput, "2");
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("write_text_file", expect.anything())
+    );
+  });
+
+  it("removes the selected step and adjusts selection to the last step", async () => {
+    await loadFile(SVG_WITH_VIEWBOX, CONFIG_TWO_STEPS_HIDDEN_OVERLAY);
+    // Select step 2 (the last one)
+    await userEvent.click(screen.getByText("Step 2"));
+    const deleteButtons = screen.getAllByRole("button", { name: /Remove step/i });
+    await userEvent.click(deleteButtons[1]);
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("write_text_file", expect.anything())
+    );
+    // Step 2 should be gone; Step 1 remains.
+    await waitFor(() => expect(screen.getByText("Step 1")).toBeInTheDocument());
+    expect(screen.queryByText("Step 2")).toBeNull();
+  });
+
+  it("copies step aspects to another step via the clone popup", async () => {
+    await loadFile(SVG_WITH_VIEWBOX, CONFIG_TWO_STEPS_HIDDEN_OVERLAY);
+    const cloneBtns = screen.getAllByRole("button", { name: /Copy aspects of Step 1 to other steps/i });
+    await userEvent.click(cloneBtns[0]);
+    // Toggle target Step 2 on and apply.
+    const targetBtn = screen.getByRole("button", { name: "Step 2" });
+    await userEvent.click(targetBtn);
+    const applyBtn = screen.getByRole("button", { name: "Apply" });
+    await userEvent.click(applyBtn);
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("write_text_file", expect.anything())
+    );
+  });
+});
+
+describe("App — overlay handler coverage", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    setupListenMock();
+  });
+
+  it("renames a snippet via double-click and Enter", async () => {
+    await loadFile(SVG_WITH_VIEWBOX, CONFIG_TWO_STEPS_HIDDEN_OVERLAY);
+    await userEvent.dblClick(screen.getByText("snippet-1"));
+    const input = await screen.findByRole("textbox", { name: "Snippet id" });
+    await userEvent.clear(input);
+    await userEvent.type(input, "renamed-snippet{Enter}");
+    await waitFor(() => expect(screen.getByText("renamed-snippet")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("write_text_file", expect.anything())
+    );
+  });
+
+  it("focuses a snippet in the viewport when the Focus button is clicked", async () => {
+    await loadFile(SVG_WITH_VIEWBOX, CONFIG_TWO_STEPS_HIDDEN_OVERLAY);
+    // Wait for overlay SVG render so handleGoToOverlay has data.
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("render_markdown_to_svg", expect.anything())
+    );
+    const focusBtn = screen.getByRole("button", { name: "Focus snippet-1 in viewport" });
+    await userEvent.click(focusBtn);
+    // No crash expected; goToRect is a no-op in jsdom (canvasRef.current null).
+    expect(focusBtn).toBeInTheDocument();
   });
 });

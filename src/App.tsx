@@ -529,61 +529,6 @@ function App() {
     updateConfig({ ...config, steps });
   }
 
-  function handleFitAllOverlaysToViewport() {
-    if (!config || selectedStepIndex === null || !viewBox) return;
-    const activeStep = config.steps[selectedStepIndex];
-    if (!activeStep) return;
-    const hiddenSet = new Set(activeStep.hidden_overlays ?? []);
-    const visibleOverlays = (config.overlays ?? []).filter((o) => !hiddenSet.has(o.id));
-    if (!visibleOverlays.length) return;
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    for (const overlay of visibleOverlays) {
-      const svg = overlaySvgs.get(overlay.id);
-      if (!svg) continue;
-      const m = svg.match(/viewBox="([^"]+)"/);
-      if (!m) continue;
-      const parts = m[1].trim().split(/[\s,]+/).map(Number);
-      if (parts.length < 4 || parts[2] === 0) continue;
-      const hPerW = parts[3] / parts[2];
-      const w = overlay.width;
-      const h = w * hPerW;
-      const cx = overlay.x + w / 2;
-      const cy = overlay.y + h / 2;
-      const r = (overlay.rotation ?? 0) * Math.PI / 180;
-      const cosR = Math.abs(Math.cos(r));
-      const sinR = Math.abs(Math.sin(r));
-      const aabbHW = w / 2 * cosR + h / 2 * sinR;
-      const aabbHH = w / 2 * sinR + h / 2 * cosR;
-      minX = Math.min(minX, cx - aabbHW); maxX = Math.max(maxX, cx + aabbHW);
-      minY = Math.min(minY, cy - aabbHH); maxY = Math.max(maxY, cy + aabbHH);
-    }
-    if (!isFinite(minX)) return;
-    const vb = viewBox;
-    const pAR = parseAspectRatio(config.aspect_ratio);
-    const svgAR = vb.width / vb.height;
-    let baseW: number, baseH: number;
-    if (svgAR >= pAR) { baseW = vb.width; baseH = vb.width / pAR; }
-    else { baseH = vb.height; baseW = vb.height * pAR; }
-    const pad = 0.05;
-    const totalW = maxX - minX;
-    const totalH = maxY - minY;
-    const newZoom = Math.max(0.01, Math.min(baseW / (totalW / (1 - 2 * pad)), baseH / (totalH / (1 - 2 * pad))));
-    const centerCx = (minX + maxX) / 2;
-    const centerCy = (minY + maxY) / 2;
-    const newViewport = {
-      center: [
-        Math.max(0, Math.min(1, (centerCx - vb.x) / vb.width)),
-        Math.max(0, Math.min(1, (centerCy - vb.y) / vb.height)),
-      ] as [number, number],
-      zoom: newZoom,
-      rotation: activeStep.viewport.rotation,
-    };
-    const steps = config.steps.map((s, i) =>
-      i === selectedStepIndex ? { ...s, viewport: newViewport } : s
-    );
-    updateConfig({ ...config, steps });
-  }
-
   function handleTransitionChange(gapIndex: number, tc: TransitionConfig) {
     if (!config) return;
     const transitions = getTransitions(config);
@@ -735,11 +680,6 @@ function App() {
                         onClick={handleFitViewportToOverlay}
                         title="Fit viewport to selected snippet"
                       >Fit to snippet</button>
-                      <button
-                        className="overlay-align-btn"
-                        onClick={handleFitAllOverlaysToViewport}
-                        title="Fit viewport to all visible snippets"
-                      >Fit all visible</button>
                     </div>
                   </div>
                 )}

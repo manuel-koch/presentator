@@ -164,7 +164,6 @@ Snippets (markdown overlays) can be authored, positioned, and styled directly in
 * A "Viewport → Snippet" panel appears in the editing sidebar whenever snippets exist and a step is selected:
   * a 3×3 anchor picker (left/center/right × top/center/bottom) and a padding slider (0–40% of viewport size) control how "Fit to snippet" positions the snippet within the viewport
   * "Fit to snippet" (enabled only when a snippet is selected) computes and writes the active step's viewport (center, zoom, rotation) so the selected snippet is placed at the chosen anchor, with viewport rotation matching the snippet's own rotation
-  * "Fit all visible" computes the bounding-box union of all snippets not hidden on the active step and fits the viewport to that union with a small fixed padding, without changing rotation
 
 * SVG and config files are watched for external changes (e.g. hand-editing YAML, re-exporting SVG from a tool)
   * changes are reloaded automatically in editing mode

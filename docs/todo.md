@@ -112,5 +112,5 @@ Render pipeline (all Rust, no browser engine):
       are, e.g. that adjusting the step-viewport to an overlay requires that both are
       selected.
 
-- [ ] The "Fit all visible" functionality to fit step-viewport to all visible overlay-rects
+- [x] The "Fit all visible" functionality to fit step-viewport to all visible overlay-rects
       is not very usable. We should drop that feature.
