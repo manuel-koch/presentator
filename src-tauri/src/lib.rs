@@ -370,7 +370,14 @@ pub fn run() {
 
             let about = MenuItem::with_id(app, "about", "About Presentator…", true, None::<&str>)?;
             let settings = MenuItem::with_id(app, "settings", "Settings…", true, Some("CmdOrCtrl+,"))?;
-            let app_menu = Submenu::with_items(app, "Presentator", true, &[&about, &settings])?;
+            let app_separator = PredefinedMenuItem::separator(app)?;
+            let quit = PredefinedMenuItem::quit(app, None)?;
+            let app_menu = Submenu::with_items(
+                app,
+                "Presentator",
+                true,
+                &[&about, &settings, &app_separator, &quit],
+            )?;
 
             let open_svg = MenuItem::with_id(
                 app,
@@ -386,9 +393,7 @@ pub fn run() {
                 false,
                 Some("CmdOrCtrl+R"),
             )?;
-            let separator = PredefinedMenuItem::separator(app)?;
-            let quit = PredefinedMenuItem::quit(app, None)?;
-            let file_menu = Submenu::with_items(app, "File", true, &[&open_svg, &reload, &separator, &quit])?;
+            let file_menu = Submenu::with_items(app, "File", true, &[&open_svg, &reload])?;
             *app.state::<ReloadMenuState>().lock().unwrap() = Some(reload);
 
             let edit_menu = Submenu::with_items(

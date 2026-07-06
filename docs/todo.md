@@ -92,11 +92,11 @@ Render pipeline (all Rust, no browser engine):
 
 ## Testing
 
-- [ ] Show test coverage when running tests, to detect blind spots that are not tested enough
+- [x] Show test coverage when running tests, to detect blind spots that are not tested enough
 
 ## UI
 
-- [ ] Main menu option to quit app should be in the "Presentator" menu, not under "File" menu.
+- [x] Main menu option to quit app should be in the "Presentator" menu, not under "File" menu.
 
 - [ ] The app icon is bigger in MacOS tab-switcher than any other app.
       What could be the cause for it ?
