@@ -57,9 +57,10 @@ Render pipeline (all Rust, no browser engine):
 
 ### Phase 11 — Cache cleanup
 
-- [ ] Maintain a max total size of cached markdown-to-svg files, remove oldest files until
-      the limit is not exhausted
-- [ ] At configurable size limit to settings dialog
+- [ ] Maintain a max accumulated size of cached artifacts ( markdown-to-svg files, step-preview images )
+  - [ ] remove oldest files until the limit of the cached artifacts of given kind is not exhausted
+  - [ ] At configurable size limit to settings-dialog, one limit for each kind of cached artifacts
+    - [ ] Include the limit (number, in megabytes) in the same row as the clear-button
 
 ## Presentation Mode (basic)
 
@@ -92,8 +93,71 @@ Render pipeline (all Rust, no browser engine):
 
 ## UI
 
-- [ ] Need to refactor the left area with step-list, element-hidden-list, overlay-list,
-      options to adjust step-viewport to overlay.
-      The layout looks cluttered and it is not clear what the relations of those lists
-      are, e.g. that adjusting the step-viewport to an overlay requires that both are
-      selected.
+Refactor the left sidebar to reduce clutter and make the relations between step-list,
+overlay-list, and element-list clear. Approach: replace the "Fit to snippet" button +
+"Viewport → Snippet" panel framing with direct-manipulation context menus on the canvas,
+and keep a single shared "Fit alignment" defaults panel.
+
+### Fit-step-viewport via context menu
+
+- [ ] Generalize `computeFitViewport` (src/utils/fitViewportToOverlay.ts) to operate on an
+      abstract target rectangle instead of an overlay:
+      - rename `overlay` param to `targetRect: { x, y, width, rotation? }`
+      - keep `overlayHPerW` (rename to `targetHPerW`)
+      - add an optional `targetRotation` argument used as the viewport rotation for the
+        result; for snippets this defaults to the snippet's own rotation (current
+        behaviour); for SVG elements it lets the step viewport be rotated to a chosen
+        angle even though the element bbox is axis-aligned
+- [ ] Add a single `onContextMenu` handler on the editing canvas (not on individual DOM
+      nodes or overlay groups) that, on right-click, resolves ALL applicable targets at
+      the hit point in one shot and flashes them. No mousemove tracking — evaluation
+      happens only at the `contextmenu` event:
+      - point-in-rotated-rect test against each step viewport rect → maybe a step
+      - same against each overlay rect → maybe a snippet
+      - `document.elementFromPoint` (or SVG `getIntersectionList`) for the leaf DOM node,
+        then walk ancestors to the nearest element whose `id` is in the named-elements
+        set (same set the ElementPicker uses) → maybe a named SVG element
+        - edge case: hit leaf is itself named (no named ancestor above it) — target is
+          the leaf itself
+        - if no named ancestor is found (whitespace / unnamed content), no element target
+      - flash all resolved targets' highlights simultaneously (step rect stroke, overlay
+        rect stroke, element bbox outline) as a transient local state for ~400ms or until
+        the menu closes, so the user sees what was picked
+        - note: there is no canvas-side hover state to rely on — hover only fires from
+          the sidebar lists and goes to `null` when the mouse enters the canvas; the
+          flash is a one-shot reveal of the hit-test result, not a live hover
+        - the element flash draws only the bbox outline; do NOT apply the sidebar-list
+          dim-everything-else behavior (the `opacity:0.15` rule at
+          EditingCanvas.tsx:1584 is a sidebar affordance, not suitable for free mouse
+          interaction)
+- [ ] Implement a shared context-menu component built from the resolved targets at the
+      hit point. Menu items per target type:
+      - overlay target:
+        - "Fit step viewport to this snippet"  (disabled when no step selected or no
+          rendered overlay SVG available; show reason in disabled state)
+        - "Focus in viewport"
+        - "Edit snippet…"
+        - "Duplicate"
+        - "Delete"
+      - element target:
+        - "Fit step viewport to this element"  (disabled when no step selected; uses the
+          element bbox as the target rect, hPerW = bboxH/bboxW, targetRotation = step's
+          current viewport rotation by default so the step keeps its rotation, unless the
+          menu offers a rotation override)
+        - "Focus in viewport"
+      - if multiple targets resolved, group items by target type with separators
+      - if no target resolved (whitespace), show no menu (or a minimal canvas-level menu)
+- [ ] Wire the context-menu "Fit…" action to a single handler in App.tsx that builds the
+      `targetRect` from either the overlay or the element bbox and calls the generalized
+      `computeFitViewport` with the current anchor + padding defaults
+- [ ] Slim the existing `overlay-align-panel` in the sidebar:
+        - drop the "Fit to snippet" button
+        - drop the "Viewport → Snippet" header framing
+        - relabel to "Fit alignment"
+        - keep the 3×3 anchor grid + padding slider as shared defaults for any fit target
+
+### Sidebar layout (deferred until context-menu fit is in place)
+
+- [ ] Re-evaluate sidebar clutter after the context-menu change lands; remaining work
+      likely: reduce step-row inline action buttons, separate per-step config from asset
+      libraries. Track as a follow-up todo with concrete proposal then.
