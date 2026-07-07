@@ -50,6 +50,7 @@ A `Makefile` provides shortcuts for all common tasks:
 | `make bundle-macos` | Build and (optionally) code-sign the macOS `.app`; pass `SIGNING_IDENTITY=<cert>` to sign |
 | `make bundle-macos-dmg` | Build the `.app` and wrap it in a distributable DMG via `create-dmg` |
 | `make set-version` | Set the app version everywhere (`package.json`, `tauri.conf.json`, `Cargo.toml`); pass `VERSION=x.y.z` |
+| `make lint` | Run linter and type-checks |
 | `make test` | Run unit, component, and e2e tests |
 | `make test-coverage` | Run tests with line-coverage report |
 | `make show-outdated-deps` | List outdated npm and Cargo packages |
@@ -63,14 +64,12 @@ The sections below document the underlying commands for cases where more control
 
 ```sh
 make install-deps
-# or: npm install
 ```
 
 ### Run the app (development)
 
 ```sh
 make run-dev
-# or: npm run tauri dev
 ```
 
 Starts the Vite dev server and launches the Tauri desktop window. The UI hot-reloads on every file save; Rust changes trigger a Tauri rebuild automatically.
@@ -79,10 +78,12 @@ Starts the Vite dev server and launches the Tauri desktop window. The UI hot-rel
 
 ```sh
 make build-release
-# or: npm run tauri build
 ```
 
-Compiles the React frontend and the Rust backend, then bundles both into a self-contained macOS `.app` under `$CARGO_TARGET_DIR/release/bundle/macos/`. The Makefile can use envvar `CARGO_TARGET_DIR` to share one Cargo build cache across multiple checkouts.
+Compiles the React frontend and the Rust backend, then bundles both into
+a self-contained macOS `.app` under `$CARGO_TARGET_DIR/release/bundle/macos/`.
+The Makefile can use envvar `CARGO_TARGET_DIR` to share one Cargo build
+cache across multiple checkouts.
 
 ## Testing
 
@@ -92,23 +93,9 @@ Run the full test suite (unit + component + e2e) with:
 make test
 ```
 
-### Unit and component tests
-
-```sh
-npm test                # run all tests once
-npm run test:watch      # re-run on file changes
-npm run test:coverage   # run with coverage report
-```
-
 Uses [Vitest](https://vitest.dev) and [React Testing Library](https://testing-library.com/react). Test files live next to the source they test (`*.test.tsx` / `*.test.ts`).
 
-### End-to-end tests
-
-```sh
-npm run test:e2e
-```
-
-Uses [Playwright](https://playwright.dev) (Chromium) against the Vite dev server. The server starts automatically before the tests and stops afterwards. Tauri IPC calls are intercepted by a fixture in [e2e/fixtures.ts](e2e/fixtures.ts) so no built app binary is needed. E2e specs live in [e2e/](e2e/).
+Uses [Playwright](https://playwright.dev) (Chromium)  for end-to-end tests against the Vite dev server. The server starts automatically before the tests and stops afterwards. Tauri IPC calls are intercepted by a fixture in [e2e/fixtures.ts](e2e/fixtures.ts) so no built app binary is needed. E2e specs live in [e2e/](e2e/).
 
 ## Documentation
 

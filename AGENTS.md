@@ -27,30 +27,35 @@ Interactive / dynamic presentation app built from SVG input files, running on ma
   * Check off completed tasks immediately when done.
   * Merge done tasks to [docs/features.md](docs/features.md) on explicit user demand, follow the rules at [docs/todo.md](docs/todo.md#cleanup-todo-on-demand).
 
-### Implement → Test → Fix Cycle
+### Implement → Lint → Test → Fix Cycle
 
 Every code change must complete this cycle before the task is considered done:
 
-1. **Implement** — make the change; touch only what the task requires (YAGNI, KISS)
-2. **Test** — type-check, unit tests, e2e tests; use `make test`; fix every failure before continuing
-3. **Mark done** — only after all checks are green
+1. **Implement**: make the change; touch only what the task requires (YAGNI, KISS)
+2. **Lint**: type-check, lint; use `make lint`; fix every failure/warning before continuing
+3. **Test**: unit tests, e2e tests; use `make test`; fix every failure before continuing
+4. **Mark done**: only after all checks are green
 
 **Cadence:** Run `npm test` (unit tests only, fast) after each wired-up feature unit,
 do not batch verification to the end of a session. A failing test caught in 3 seconds
 beats an OOM hunt in a later session. Run the full `make test` before marking done.
 
-**When delegating to a sub-agent:**
-After a sub-agent returns, explicitly verify its output against this cycle before
-accepting the result:
+### Delegating to Sub-Agents
 
-* Did it add tests for every new pure function, utility, or data model it introduced?
-* Do all existing tests still pass (`make test`)?
-* Are there TypeScript or Rust compile errors?
+Delegate sub-tasks to sub-agents to keep the main context lean. Good candidates:
 
-Sub-agents satisfy the checks they are given but are not aware of project-wide
-guidelines unless
-told. The delegating agent is responsible for the complete cycle, not just
-the build result.
+* **Self-contained** — implement function X, write tests for module Y, refactor file Z
+* **Many-file exploration** — tracing a bug across 10 files would flood context
+* **Parallel work** — investigate approach A and B simultaneously
+* **Mechanical** — renaming a symbol across 20 files, adding a pattern to many fixtures
+
+**Do NOT delegate** when the sub-task needs clarifying questions, relies on
+conversation history you can't summarise, or is so tightly coupled that
+integration cost outweighs context saved. When in doubt, keep it in the main agent.
+
+**Always verify after delegation:** sub-agent summaries are self-reports, not
+verified facts. Read back file contents, confirm tests pass, check for compile
+errors. The delegating agent owns the full implement→test→fix cycle.
 
 **Mock only what you must:**
 
@@ -65,6 +70,10 @@ the build result.
 
 **When a test fails after a change:** Check whether the failure is in the *code*
 or the *test*. Both are bugs.
+
+**Test stderr discipline:** After any change, compare stderr output before and after.
+Zero new warnings or error messages allowed. Existing stderr noise is a known debt
+that sould be addressed immediately.
 
 **Test Coverage:** Aim to achieve **>80% line coverage** on testable files,
 run `make test-coverage`.
