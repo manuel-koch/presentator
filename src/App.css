@@ -1610,13 +1610,20 @@ button:active {
     opacity: 1;
 }
 
-/* Viewport → Overlay alignment panel */
+/* Fit alignment panel — shared structure */
 .overlay-align-panel {
-    padding: 0.5rem 0.75rem 0.6rem;
-    border-top: 1px solid var(--border);
     display: flex;
     flex-direction: column;
     gap: 0.45rem;
+}
+
+.overlay-align-panel.floating {
+    padding: 0.5rem 0.75rem 0.6rem;
+    background: rgba(38, 38, 38, 0.97);
+    border: 1px solid rgba(160, 160, 160, 0.55);
+    border-radius: 6px;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.55);
+    user-select: none;
 }
 
 .overlay-align-header {
@@ -1704,8 +1711,7 @@ button:active {
 }
 
 .overlay-align-range {
-    flex: 1;
-    min-width: 0;
+    width: 60px;
     accent-color: #f59e0b;
 }
 

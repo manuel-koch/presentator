@@ -452,7 +452,7 @@ describe("App — editor layout paths", () => {
     await waitFor(() => expect(screen.getByTestId("svg-viewport")).toBeInTheDocument());
   });
 
-  it("shows the overlay align panel when overlays exist and a step is selected", async () => {
+  it("does not show the fit alignment widget in the sidebar when overlays exist and a step is selected", async () => {
     vi.mocked(open).mockResolvedValue("/path/to/slides.svg");
     mockInvokeWithConfig(SVG_WITH_VIEWBOX, CONFIG_WITH_OVERLAYS);
     render(<App />);
@@ -461,8 +461,9 @@ describe("App — editor layout paths", () => {
     await waitFor(() => expect(screen.getByText("Step 1")).toBeInTheDocument());
     // Click step 1 to select it
     await userEvent.click(screen.getByText("Step 1"));
+    // The floating widget is only shown on right-click context menu, not in the sidebar
     await waitFor(() =>
-      expect(screen.getByText("Fit alignment")).toBeInTheDocument()
+      expect(screen.queryByText("Fit alignment")).not.toBeInTheDocument()
     );
   });
 
@@ -630,27 +631,32 @@ describe("App — overlay management", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
-  it("shows the overlay align panel after selecting a step when overlays exist", async () => {
+  it("does not show the fit alignment widget in the sidebar after selecting a step", async () => {
     await loadFile(SVG_WITH_VIEWBOX, CONFIG_WITH_OVERLAYS);
     await userEvent.click(screen.getByText("Step 1"));
+    // The floating widget is only shown on right-click context menu
     await waitFor(() =>
-      expect(screen.getByText("Fit alignment")).toBeInTheDocument()
+      expect(screen.queryByText("Fit alignment")).not.toBeInTheDocument()
     );
   });
 
-  it("updates anchor alignment when an anchor grid button is clicked", async () => {
+  it("no longer shows anchor grid buttons directly in the sidebar", async () => {
     await loadFile(SVG_WITH_VIEWBOX, CONFIG_WITH_OVERLAYS);
     await userEvent.click(screen.getByText("Step 1"));
-    await waitFor(() => expect(screen.getByText("Fit alignment")).toBeInTheDocument());
-    const topRightBtn = screen.getByTitle("Anchor: right / top");
-    await userEvent.click(topRightBtn);
-    expect(topRightBtn).toHaveClass("active");
+    // Anchor buttons only appear in the floating widget (right-click), not in the sidebar
+    await waitFor(() =>
+      expect(screen.queryByText("Fit alignment")).not.toBeInTheDocument()
+    );
+    expect(screen.queryByTitle("Anchor: right / top")).toBeNull();
   });
 
   it("Fit alignment panel no longer renders a Fit to snippet button", async () => {
     await loadFile(SVG_WITH_VIEWBOX, CONFIG_WITH_OVERLAYS);
     await userEvent.click(screen.getByText("Step 1"));
-    await waitFor(() => expect(screen.getByText("Fit alignment")).toBeInTheDocument());
+    // The panel is entirely removed from the sidebar (only shows on right-click)
+    await waitFor(() =>
+      expect(screen.queryByText("Fit alignment")).not.toBeInTheDocument()
+    );
     // The standalone "Fit to snippet" button was replaced by the context menu.
     expect(screen.queryByRole("button", { name: /Fit to snippet/i })).toBeNull();
   });
@@ -658,9 +664,11 @@ describe("App — overlay management", () => {
   it("selects an overlay when its row is clicked", async () => {
     await loadFile(SVG_WITH_VIEWBOX, CONFIG_WITH_OVERLAYS);
     await userEvent.click(screen.getByText("snippet-1"));
-    // After selecting, the overlay align panel should still render (step auto-selects to 0).
+    // Clicking step 1 — widget only appears on right-click, not in sidebar
     await userEvent.click(screen.getByText("Step 1"));
-    await waitFor(() => expect(screen.getByText("Fit alignment")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.queryByText("Fit alignment")).not.toBeInTheDocument()
+    );
     // Wait for overlaySvgs to load
     await waitFor(() =>
       expect(invoke).toHaveBeenCalledWith("render_markdown_to_svg", expect.anything())
@@ -838,39 +846,48 @@ describe("App — overlay handler coverage", () => {
   });
 });
 
-describe("App — overlay-align panel interactions", () => {
+describe("App — overlay-align widget (floating)", () => {
   beforeEach(() => {
     vi.resetAllMocks();
     setupListenMock();
   });
 
-  it("changes the active anchor when an anchor cell is clicked", async () => {
+  it("does not show the floating widget without a right-click on the canvas", async () => {
     vi.mocked(open).mockResolvedValue("/path/to/slides.svg");
     mockInvokeWithConfig(SVG_WITH_VIEWBOX, CONFIG_WITH_OVERLAYS);
     render(<App />);
     await userEvent.click(screen.getByRole("button", { name: "Open SVG file" }));
-    await waitFor(() => expect(screen.getByText("Step 1")).toBeInTheDocument());
-    await userEvent.click(screen.getByText("Step 1"));
-    await waitFor(() => expect(screen.getByText("Fit alignment")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByTestId("editing-canvas")).toBeInTheDocument());
+    // Widget only shows when context-menu is open
+    expect(screen.queryByTestId("overlay-align-widget")).not.toBeInTheDocument();
+  });
+
+  it("shows the widget after right-clicking the canvas and allows anchor/padding interaction", async () => {
+    vi.mocked(open).mockResolvedValue("/path/to/slides.svg");
+    mockInvokeWithConfig(SVG_WITH_VIEWBOX, CONFIG_WITH_OVERLAYS);
+    render(<App />);
+    await userEvent.click(screen.getByRole("button", { name: "Open SVG file" }));
+    await waitFor(() => expect(screen.getByTestId("editing-canvas")).toBeInTheDocument());
+
+    // Right-click on the editing canvas to open context menu (which shows the widget)
+    const canvas = screen.getByTestId("editing-canvas");
+    await act(async () => {
+      canvas.dispatchEvent(new MouseEvent("contextmenu", {
+        bubbles: true, cancelable: true, clientX: 400, clientY: 200,
+      }));
+    });
+
+    // Widget should now be visible
+    await waitFor(() => expect(screen.getByTestId("overlay-align-widget")).toBeInTheDocument());
 
     // Default anchor is center/center; click "Anchor: left / top"
     const topLeft = screen.getByRole("button", { name: "Anchor: left / top" });
     await userEvent.click(topLeft);
     expect(topLeft.className).toContain("active");
-  });
 
-  it("renders the padding slider with the default 5% value", async () => {
-    vi.mocked(open).mockResolvedValue("/path/to/slides.svg");
-    mockInvokeWithConfig(SVG_WITH_VIEWBOX, CONFIG_WITH_OVERLAYS);
-    render(<App />);
-    await userEvent.click(screen.getByRole("button", { name: "Open SVG file" }));
-    await waitFor(() => expect(screen.getByText("Step 1")).toBeInTheDocument());
-    await userEvent.click(screen.getByText("Step 1"));
-    await waitFor(() => expect(screen.getByText("Fit alignment")).toBeInTheDocument());
-
+    // Padding slider exists with default 5%
     const slider = screen.getByRole("slider");
     expect(slider).toBeInTheDocument();
-    // Default padding is 5% (0.05)
     expect(screen.getByText("5%")).toBeInTheDocument();
   });
 });

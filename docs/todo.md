@@ -154,7 +154,8 @@ and keep a single shared "Fit alignment" defaults panel.
         - drop the "Fit to snippet" button
         - drop the "Viewport → Snippet" header framing
         - relabel to "Fit alignment"
-        - keep the 3×3 anchor grid + padding slider as shared defaults for any fit target
+        - keep the 3×3 anchor grid + padding slider as shared defaults
+          for any fit target
 
 - [x] The right-click context menu on canvas can be unusable
       when the click happens near the edge of the canvas, hence
@@ -172,12 +173,25 @@ and keep a single shared "Fit alignment" defaults panel.
       Reading the tasks above I would expect that the rects
       should stay highlighted until the context-menu is dismissed.
 
-- [ ] The 3x3 alignment matrix and the padding-slider formerly
-      used to control how fit-step-viewport functionality behaves are gone.
+- [x] Move the 3x3 anchor grid + padding slider out of the sidebar into a floating
+      widget at the upper-left edge of the editing canvas, visible only while the
+      context menu is open (piggyback on the `contextMenu !== null` state).
+      - [x] Drops the sidebar visibility condition (`overlays > 0 && step selected`),
+        aligning with the "shared defaults for any fit target" intent.
+      - [x] Widget: `position: absolute; left: 8px; top: 8px;` inside .editor-main,
+        clamped to parent bounds.
+      - [x] Uses forwardRef so App.tsx keeps a ref; passes keepOpenRef to
+        CanvasContextMenu so clicking the widget doesn't close the context menu.
+      - [x] Keeps `overlayAlignH/V` and `overlayPadding` state in App.tsx —
+        both widget and fit handlers read the same source; state persists across
+        right-click invocations.
+      - [x] Remove dead CSS (`.overlay-align-*` classes) or refactor them as a
+        `.floating` modifier on the existing panel styles.
 
 - [ ] The right-click context menu has unexpected entries.
       E.g. when I right-click on a overlay-rect within a
-      step-viewport-rect without a step selected then the following entries are shown:
+      step-viewport-rect without a step selected then the following
+      entries are shown:
   - "Fit step viewport to this snippet": this is grayed out, why ?
     Is this a tooltip for the following rows ? Or because there is no
     current step selected ?

@@ -121,4 +121,27 @@ describe("CanvasContextMenu", () => {
     );
     expect(screen.getByText("Fit step viewport to this element")).toBeDisabled();
   });
+
+  it("does not close when clicking inside the keepOpenRef element", () => {
+    const onClose = vi.fn();
+    const keepOpen = document.createElement("div");
+    keepOpen.setAttribute("data-testid", "keep-open-el");
+    document.body.appendChild(keepOpen);
+    const keepOpenRef = { current: keepOpen };
+
+    render(
+      <CanvasContextMenu
+        {...baseProps}
+        onClose={onClose}
+        keepOpenRef={keepOpenRef}
+        target={{ overlayId: "snippet-1", overlaySvgReady: true, elementId: null }}
+      />
+    );
+
+    // Click outside the menu but inside the keepOpen element
+    fireEvent.mouseDown(keepOpen);
+    expect(onClose).not.toHaveBeenCalled();
+
+    document.body.removeChild(keepOpen);
+  });
 });

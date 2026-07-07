@@ -17,6 +17,7 @@ import { EditingCanvas } from "./components/EditingCanvas";
 import type { EditingCanvasHandle, CanvasContextMenuInfo } from "./components/EditingCanvas";
 import { CanvasContextMenu } from "./components/CanvasContextMenu";
 import type { ContextMenuAction } from "./components/CanvasContextMenu";
+import { OverlayAlignWidget } from "./components/OverlayAlignWidget";
 import { StepList } from "./components/StepList";
 import type { CopyAspectsOptions } from "./components/StepList";
 import { OverlayList } from "./components/OverlayList";
@@ -71,6 +72,7 @@ function App() {
   const [hoveredElementId, setHoveredElementId] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<CanvasContextMenuInfo | null>(null);
   const canvasRef = useRef<EditingCanvasHandle>(null);
+  const overlayAlignRef = useRef<HTMLDivElement>(null);
   // Tracks the previous presentation step index so we can look up the applicable TransitionConfig.
   const prevPresentationStepIndexRef = useRef<number | null>(null);
 
@@ -684,6 +686,7 @@ function App() {
           hasSelectedStep={selectedStepIndex !== null}
           onAction={handleContextMenuAction}
           onClose={() => { setContextMenu(null); canvasRef.current?.clearFlash(); }}
+          keepOpenRef={overlayAlignRef}
         />
       )}
       {!svgFile ? (
@@ -739,36 +742,6 @@ function App() {
                   onRename={handleRenameOverlay}
                   onEdit={setEditingOverlayId}
                 />
-                {(config.overlays ?? []).length > 0 && selectedStepIndex !== null && (
-                  <div className="overlay-align-panel">
-                    <div className="overlay-align-header">Fit alignment</div>
-                    <div className="overlay-align-grid-row">
-                      <span className="overlay-align-label">Anchor</span>
-                      <div className="overlay-align-grid">
-                        {(["top", "center", "bottom"] as const).flatMap((v) =>
-                          (["left", "center", "right"] as const).map((h) => (
-                            <button
-                              key={`${v}-${h}`}
-                              title={`Anchor: ${h} / ${v}`}
-                              className={`overlay-align-cell${overlayAlignH === h && overlayAlignV === v ? " active" : ""}`}
-                              onClick={() => { setOverlayAlignH(h); setOverlayAlignV(v); }}
-                            />
-                          ))
-                        )}
-                      </div>
-                    </div>
-                    <div className="overlay-align-padding-row">
-                      <label className="overlay-align-label">Padding</label>
-                      <input
-                        type="range" min={0} max={0.4} step={0.01}
-                        value={overlayPadding}
-                        onChange={(e) => setOverlayPadding(parseFloat(e.target.value))}
-                        className="overlay-align-range"
-                      />
-                      <span className="overlay-align-pad-val">{Math.round(overlayPadding * 100)}%</span>
-                    </div>
-                  </div>
-                )}
                 {selectedStep && (
                   <ElementPicker
                     elements={namedElements}
@@ -812,6 +785,16 @@ function App() {
               <div className="svg-viewport" data-testid="svg-viewport">
                 <div dangerouslySetInnerHTML={{ __html: svgFile.content }} />
               </div>
+            )}
+            {contextMenu && (
+              <OverlayAlignWidget
+                ref={overlayAlignRef}
+                alignH={overlayAlignH}
+                alignV={overlayAlignV}
+                padding={overlayPadding}
+                onAlignChange={(h, v) => { setOverlayAlignH(h); setOverlayAlignV(v); }}
+                onPaddingChange={setOverlayPadding}
+              />
             )}
           </div>
         </div>

@@ -29,6 +29,8 @@ interface Props {
   hasSelectedStep: boolean;
   onAction: (action: ContextMenuAction) => void;
   onClose: () => void;
+  /** Optional ref to an element that should NOT trigger onClose on mousedown. */
+  keepOpenRef?: React.RefObject<HTMLElement | null>;
 }
 
 interface MenuItem {
@@ -39,7 +41,7 @@ interface MenuItem {
   disabledReason?: string;
 }
 
-export function CanvasContextMenu({ x, y, target, hasSelectedStep, onAction, onClose }: Props) {
+export function CanvasContextMenu({ x, y, target, hasSelectedStep, onAction, onClose, keepOpenRef }: Props) {
   const menuRef = useRef<HTMLDivElement>(null);
   const [clampedPos, setClampedPos] = useState<{ left: number; top: number } | null>(null);
   const GUTTER = 8; // px gap from window edge
@@ -66,6 +68,8 @@ export function CanvasContextMenu({ x, y, target, hasSelectedStep, onAction, onC
   useEffect(() => {
     function onDown(e: MouseEvent) {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        // Don't close if the click is inside the keepOpen element (e.g. the widget).
+        if (keepOpenRef?.current?.contains(e.target as Node)) return;
         onClose();
       }
     }
@@ -87,7 +91,7 @@ export function CanvasContextMenu({ x, y, target, hasSelectedStep, onAction, onC
       window.removeEventListener("scroll", onScroll, true);
       window.removeEventListener("resize", onClose);
     };
-  }, [onClose]);
+  }, [onClose, keepOpenRef]);
 
   const items: MenuItem[] = [];
 
