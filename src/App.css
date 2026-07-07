@@ -1745,6 +1745,46 @@ button:active {
     cursor: default;
 }
 
+/* Canvas context menu */
+.canvas-context-menu {
+    min-width: 180px;
+    background: rgba(38, 38, 38, 0.97);
+    border: 1px solid rgba(160, 160, 160, 0.55);
+    border-radius: 6px;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.55);
+    padding: 4px 0;
+    user-select: none;
+}
+
+.canvas-context-menu-item {
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: 5px 14px;
+    font-size: 0.82rem;
+    color: #e0e0e0;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.canvas-context-menu-item:hover:not(:disabled) {
+    background: rgba(59, 130, 246, 0.32);
+    color: #ffffff;
+}
+
+.canvas-context-menu-item:disabled {
+    color: rgba(200, 200, 200, 0.35);
+    cursor: default;
+}
+
+.canvas-context-menu-sep {
+    height: 1px;
+    margin: 4px 8px;
+    background: rgba(160, 160, 160, 0.3);
+}
+
 /* Markdown editor dialog */
 .markdown-editor-overlay {
     position: fixed;

@@ -462,7 +462,7 @@ describe("App — editor layout paths", () => {
     // Click step 1 to select it
     await userEvent.click(screen.getByText("Step 1"));
     await waitFor(() =>
-      expect(screen.getByText("Viewport → Snippet")).toBeInTheDocument()
+      expect(screen.getByText("Fit alignment")).toBeInTheDocument()
     );
   });
 
@@ -634,44 +634,36 @@ describe("App — overlay management", () => {
     await loadFile(SVG_WITH_VIEWBOX, CONFIG_WITH_OVERLAYS);
     await userEvent.click(screen.getByText("Step 1"));
     await waitFor(() =>
-      expect(screen.getByText("Viewport → Snippet")).toBeInTheDocument()
+      expect(screen.getByText("Fit alignment")).toBeInTheDocument()
     );
   });
 
   it("updates anchor alignment when an anchor grid button is clicked", async () => {
     await loadFile(SVG_WITH_VIEWBOX, CONFIG_WITH_OVERLAYS);
     await userEvent.click(screen.getByText("Step 1"));
-    await waitFor(() => expect(screen.getByText("Viewport → Snippet")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Fit alignment")).toBeInTheDocument());
     const topRightBtn = screen.getByTitle("Anchor: right / top");
     await userEvent.click(topRightBtn);
     expect(topRightBtn).toHaveClass("active");
   });
 
-  it("Fit to snippet button executes without crashing (hits early return without svg)", async () => {
+  it("Fit alignment panel no longer renders a Fit to snippet button", async () => {
     await loadFile(SVG_WITH_VIEWBOX, CONFIG_WITH_OVERLAYS);
     await userEvent.click(screen.getByText("Step 1"));
-    await waitFor(() => expect(screen.getByText("Viewport → Snippet")).toBeInTheDocument());
-    const fitBtn = screen.getByRole("button", { name: /Fit to snippet/i });
-    await userEvent.click(fitBtn);
-    // No crash expected — button is disabled when no overlay is selected
-    // (selectedOverlayId is null until an overlay is selected)
+    await waitFor(() => expect(screen.getByText("Fit alignment")).toBeInTheDocument());
+    // The standalone "Fit to snippet" button was replaced by the context menu.
+    expect(screen.queryByRole("button", { name: /Fit to snippet/i })).toBeNull();
   });
 
   it("selects an overlay when its row is clicked", async () => {
     await loadFile(SVG_WITH_VIEWBOX, CONFIG_WITH_OVERLAYS);
     await userEvent.click(screen.getByText("snippet-1"));
-    // After selecting, Fit to snippet button should become enabled
+    // After selecting, the overlay align panel should still render (step auto-selects to 0).
     await userEvent.click(screen.getByText("Step 1"));
-    await waitFor(() => expect(screen.getByText("Viewport → Snippet")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Fit alignment")).toBeInTheDocument());
     // Wait for overlaySvgs to load
     await waitFor(() =>
       expect(invoke).toHaveBeenCalledWith("render_markdown_to_svg", expect.anything())
-    );
-    const fitBtn = screen.getByRole("button", { name: /Fit to snippet/i });
-    expect(fitBtn).not.toBeDisabled();
-    await userEvent.click(fitBtn);
-    await waitFor(() =>
-      expect(invoke).toHaveBeenCalledWith("write_text_file", expect.anything())
     );
   });
 });
@@ -843,5 +835,103 @@ describe("App — overlay handler coverage", () => {
     await userEvent.click(focusBtn);
     // No crash expected; goToRect is a no-op in jsdom (canvasRef.current null).
     expect(focusBtn).toBeInTheDocument();
+  });
+});
+
+describe("App — overlay-align panel interactions", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    setupListenMock();
+  });
+
+  it("changes the active anchor when an anchor cell is clicked", async () => {
+    vi.mocked(open).mockResolvedValue("/path/to/slides.svg");
+    mockInvokeWithConfig(SVG_WITH_VIEWBOX, CONFIG_WITH_OVERLAYS);
+    render(<App />);
+    await userEvent.click(screen.getByRole("button", { name: "Open SVG file" }));
+    await waitFor(() => expect(screen.getByText("Step 1")).toBeInTheDocument());
+    await userEvent.click(screen.getByText("Step 1"));
+    await waitFor(() => expect(screen.getByText("Fit alignment")).toBeInTheDocument());
+
+    // Default anchor is center/center; click "Anchor: left / top"
+    const topLeft = screen.getByRole("button", { name: "Anchor: left / top" });
+    await userEvent.click(topLeft);
+    expect(topLeft.className).toContain("active");
+  });
+
+  it("renders the padding slider with the default 5% value", async () => {
+    vi.mocked(open).mockResolvedValue("/path/to/slides.svg");
+    mockInvokeWithConfig(SVG_WITH_VIEWBOX, CONFIG_WITH_OVERLAYS);
+    render(<App />);
+    await userEvent.click(screen.getByRole("button", { name: "Open SVG file" }));
+    await waitFor(() => expect(screen.getByText("Step 1")).toBeInTheDocument());
+    await userEvent.click(screen.getByText("Step 1"));
+    await waitFor(() => expect(screen.getByText("Fit alignment")).toBeInTheDocument());
+
+    const slider = screen.getByRole("slider");
+    expect(slider).toBeInTheDocument();
+    // Default padding is 5% (0.05)
+    expect(screen.getByText("5%")).toBeInTheDocument();
+  });
+});
+
+describe("App — presentation mode with steps", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    setupListenMock();
+  });
+
+  it("renders PresentationCanvas when entering presentation mode with steps", async () => {
+    vi.mocked(open).mockResolvedValue("/path/to/slides.svg");
+    mockInvokeWithConfig(SVG_WITH_VIEWBOX, SAMPLE_CONFIG_YAML);
+    render(<App />);
+    await userEvent.click(screen.getByRole("button", { name: "Open SVG file" }));
+    await waitFor(() => expect(screen.getByTestId("editing-canvas")).toBeInTheDocument());
+
+    fireEvent("menu-set-mode", "presentation");
+    await waitFor(() =>
+      expect(screen.getByTestId("presentation-container")).toBeInTheDocument()
+    );
+  });
+
+  it("renders the fallback presentation-container when SVG has no viewBox in presentation mode", async () => {
+    vi.mocked(open).mockResolvedValue("/path/to/slides.svg");
+    mockInvokeWithConfig(SVG_NO_VIEWBOX, SAMPLE_CONFIG_YAML);
+    render(<App />);
+    await userEvent.click(screen.getByRole("button", { name: "Open SVG file" }));
+    await waitFor(() => expect(screen.getByTestId("svg-viewport")).toBeInTheDocument());
+
+    fireEvent("menu-set-mode", "presentation");
+    await waitFor(() =>
+      expect(document.querySelector(".presentation-container")).toBeInTheDocument()
+    );
+  });
+
+  it("shows the snippet rendering spinner while overlays are pending", async () => {
+    vi.mocked(open).mockResolvedValue("/path/to/slides.svg");
+    // Hold the render_markdown_to_svg promise pending so pendingCount stays > 0.
+    const deferred: { resolve?: (v: string) => void } = {};
+    vi.mocked(invoke).mockImplementation((cmd: string, args?: unknown) => {
+      const a = args as { path?: string } | undefined;
+      switch (cmd) {
+        case "read_text_file":
+          if (a?.path?.endsWith(".presentator.yaml")) return Promise.resolve(CONFIG_WITH_OVERLAYS);
+          return Promise.resolve(SVG_WITH_VIEWBOX);
+        case "render_markdown_to_svg":
+          return new Promise<string>((resolve) => { deferred.resolve = resolve; });
+        case "render_svg_thumbnail":  return Promise.resolve(THUMB_B64);
+        case "get_step_thumbnail":    return Promise.resolve(null);
+        case "cache_step_thumbnail":  return Promise.resolve(null);
+        case "js_log":                return Promise.resolve(null);
+        default:                      return Promise.resolve(undefined);
+      }
+    });
+    render(<App />);
+    await userEvent.click(screen.getByRole("button", { name: "Open SVG file" }));
+    await waitFor(() =>
+      expect(screen.getByText("Rendering snippet…")).toBeInTheDocument()
+    );
+    // Resolve to clean up
+    await act(async () => { deferred.resolve?.(OVERLAY_SVG); });
   });
 });

@@ -3,6 +3,16 @@ import type { MarkdownOverlay, Step, Viewport } from "../types/config";
 import type { ViewBox } from "../utils/svgViewBox";
 import { buildOverlayEmbeds, parseOverlayViewBox } from "./PresentationCanvas";
 import { parseAspectRatio } from "../utils/svgViewBox";
+import { resolveContextMenuTargets } from "../utils/canvasHitTest";
+
+/** Info passed to the parent when the user right-clicks the canvas. */
+export interface CanvasContextMenuInfo {
+  clientX: number;
+  clientY: number;
+  overlayId: string | null;
+  overlaySvgReady: boolean;
+  elementId: string | null;
+}
 
 interface Props {
   svgContent: string;
@@ -22,6 +32,10 @@ interface Props {
   selectedOverlayId?: string | null;
   onOverlaySelect?: (id: string | null) => void;
   hoveredOverlayId?: string | null;
+  /** Named-element ID set (same the ElementPicker uses), for context-menu hit-testing. */
+  namedElementIds?: Set<string>;
+  /** Fired when the user right-clicks the canvas; parent renders the context menu. */
+  onContextMenu?: (info: CanvasContextMenuInfo) => void;
 }
 
 export interface EditingCanvasHandle {
@@ -30,6 +44,10 @@ export interface EditingCanvasHandle {
   goToRect: (cx: number, cy: number, w: number, h: number) => void;
   getCanvasViewport: () => { left: number; top: number; width: number; height: number } | null;
   fitAllSteps: (steps: Step[]) => void;
+  /** Returns an element's SVG-space bounding box, or null if not found / zero-sized. */
+  getElementSvgBBox: (id: string) => { x: number; y: number; w: number; h: number } | null;
+  /** Clear the transient flash highlights shown after a right-click resolves targets. */
+  clearFlash: () => void;
 }
 
 const ZOOM_FACTOR = 1.04;
@@ -274,7 +292,7 @@ interface OverlayDragState {
 interface SnapLine { x1: number; y1: number; x2: number; y2: number; }
 
 export const EditingCanvas = forwardRef<EditingCanvasHandle, Props>(function EditingCanvas(
-  { svgContent, viewBox: vb, steps, selectedStepIndex, hoveredStepIndex = null, aspectRatio, backgroundColor, onViewportChange, onSelectStep, hidden, hoveredElementId = null, overlays, overlaySvgs, onOverlayChange, selectedOverlayId = null, onOverlaySelect, hoveredOverlayId = null },
+  { svgContent, viewBox: vb, steps, selectedStepIndex, hoveredStepIndex = null, aspectRatio, backgroundColor, onViewportChange, onSelectStep, hidden, hoveredElementId = null, overlays, overlaySvgs, onOverlayChange, selectedOverlayId = null, onOverlaySelect, hoveredOverlayId = null, namedElementIds, onContextMenu },
   ref
 ) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -317,6 +335,75 @@ export const EditingCanvas = forwardRef<EditingCanvasHandle, Props>(function Edi
   const [elementSvgBbox, setElementSvgBbox] = useState<{
     x: number; y: number; w: number; h: number; cx: number; cy: number;
   } | null>(null);
+
+  // Transient highlight shown after a right-click resolves targets.
+  // Stays visible until the context menu is dismissed.
+  const [flashTargets, setFlashTargets] = useState<{
+    stepRect: { cx: number; cy: number; w: number; h: number; rotation: number } | null;
+    overlayRect: { cx: number; cy: number; w: number; h: number; rotation: number } | null;
+    elementBbox: { x: number; y: number; w: number; h: number } | null;
+  }>({ stepRect: null, overlayRect: null, elementBbox: null });
+
+  function clearFlash() {
+    setFlashTargets({ stepRect: null, overlayRect: null, elementBbox: null });
+  }
+  // Clear flash when the component unmounts.
+  useEffect(() => () => clearFlash(), []);
+
+  function handleContextMenu(e: React.MouseEvent) {
+    if (!onContextMenu) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const el = containerRef.current;
+    if (!el) return;
+    const [svgX, svgY] = screenToSvg(e.clientX, e.clientY);
+    const resolved = resolveContextMenuTargets({
+      px: svgX,
+      py: svgY,
+      steps,
+      overlays,
+      overlaySvgs,
+      vb,
+      aspectRatio,
+      container: el,
+      clientX: e.clientX,
+      clientY: e.clientY,
+      namedElementIds: namedElementIds ?? new Set(),
+    });
+
+    // Build the flash highlight for all resolved targets.
+    const stepRect = resolved.step
+      ? { cx: resolved.step.cx, cy: resolved.step.cy, w: resolved.step.w, h: resolved.step.h, rotation: resolved.step.rotation }
+      : null;
+    const overlayRect = resolved.overlay
+      ? { cx: resolved.overlay.cx, cy: resolved.overlay.cy, w: resolved.overlay.w, h: resolved.overlay.h, rotation: resolved.overlay.rotation }
+      : null;
+    let elementBbox: { x: number; y: number; w: number; h: number } | null = null;
+    if (resolved.elementId) {
+      const domEl = el.querySelector<Element>(`#${CSS.escape(resolved.elementId)}`);
+      if (domEl) {
+        const er = domEl.getBoundingClientRect();
+        const cr = el.getBoundingClientRect();
+        const { zoom: z, panX: px, panY: py } = transformRef.current;
+        const x1 = (er.left - cr.left - px) / z + vb.x;
+        const y1 = (er.top - cr.top - py) / z + vb.y;
+        const x2 = (er.right - cr.left - px) / z + vb.x;
+        const y2 = (er.bottom - cr.top - py) / z + vb.y;
+        elementBbox = { x: Math.min(x1, x2), y: Math.min(y1, y2), w: Math.abs(x2 - x1), h: Math.abs(y2 - y1) };
+      }
+    }
+    clearFlash();
+    setFlashTargets({ stepRect, overlayRect, elementBbox });
+
+    onContextMenu({
+      clientX: e.clientX,
+      clientY: e.clientY,
+      overlayId: resolved.overlay?.overlayId ?? null,
+      overlaySvgReady: resolved.overlay !== null,
+      elementId: resolved.elementId,
+    });
+  }
+
 
   function cancelAnimation() {
     if (animationIdRef.current !== null) {
@@ -583,6 +670,25 @@ export const EditingCanvas = forwardRef<EditingCanvasHandle, Props>(function Edi
         panY: ch / 2 - (centerY - vbRef.current.y) * newZoom,
       });
     },
+    getElementSvgBBox(id: string) {
+      const el = containerRef.current;
+      if (!el) return null;
+      const domEl = el.querySelector<Element>(`#${CSS.escape(id)}`);
+      if (!domEl) return null;
+      const er = domEl.getBoundingClientRect();
+      if (er.width === 0 && er.height === 0) return null;
+      const cr = el.getBoundingClientRect();
+      const { zoom: z, panX: px, panY: py } = transformRef.current;
+      const x1 = (er.left - cr.left - px) / z + vbRef.current.x;
+      const y1 = (er.top - cr.top - py) / z + vbRef.current.y;
+      const x2 = (er.right - cr.left - px) / z + vbRef.current.x;
+      const y2 = (er.bottom - cr.top - py) / z + vbRef.current.y;
+      const w = Math.abs(x2 - x1);
+      const h = Math.abs(y2 - y1);
+      if (w === 0 && h === 0) return null;
+      return { x: Math.min(x1, x2), y: Math.min(y1, y2), w, h };
+    },
+    clearFlash,
   }));
 
   const zoomAt = useCallback((cx: number, cy: number, factor: number) => {
@@ -1558,6 +1664,7 @@ export const EditingCanvas = forwardRef<EditingCanvasHandle, Props>(function Edi
       onWheel={handleWheel}
       onKeyDown={handleKeyDown}
       onMouseDown={handleCanvasMouseDown}
+      onContextMenu={handleContextMenu}
       data-testid="editing-canvas"
     >
       {cw > 0 && (
@@ -1621,6 +1728,50 @@ export const EditingCanvas = forwardRef<EditingCanvasHandle, Props>(function Edi
               {hoverArrowEl}
               {elementHighlightEl}
               {elementHoverArrowEl}
+              {/* Transient flash highlights shown after a right-click resolves targets. */}
+              {flashTargets.stepRect && (
+                <g transform={`translate(${flashTargets.stepRect.cx},${flashTargets.stepRect.cy}) rotate(${flashTargets.stepRect.rotation})`}>
+                  <rect
+                    x={-flashTargets.stepRect.w / 2}
+                    y={-flashTargets.stepRect.h / 2}
+                    width={flashTargets.stepRect.w}
+                    height={flashTargets.stepRect.h}
+                    fill="rgba(96, 165, 250, 0.12)"
+                    stroke="#60a5fa"
+                    strokeWidth={2.5 / zoom}
+                    style={{ pointerEvents: "none" } as React.CSSProperties}
+                    data-testid="flash-step-rect"
+                  />
+                </g>
+              )}
+              {flashTargets.overlayRect && (
+                <g transform={`translate(${flashTargets.overlayRect.cx},${flashTargets.overlayRect.cy}) rotate(${flashTargets.overlayRect.rotation})`}>
+                  <rect
+                    x={-flashTargets.overlayRect.w / 2}
+                    y={-flashTargets.overlayRect.h / 2}
+                    width={flashTargets.overlayRect.w}
+                    height={flashTargets.overlayRect.h}
+                    fill="rgba(251, 191, 36, 0.12)"
+                    stroke="#fbbf24"
+                    strokeWidth={2.5 / zoom}
+                    style={{ pointerEvents: "none" } as React.CSSProperties}
+                    data-testid="flash-overlay-rect"
+                  />
+                </g>
+              )}
+              {flashTargets.elementBbox && (
+                <rect
+                  x={flashTargets.elementBbox.x}
+                  y={flashTargets.elementBbox.y}
+                  width={flashTargets.elementBbox.w}
+                  height={flashTargets.elementBbox.h}
+                  fill="rgba(74, 222, 128, 0.12)"
+                  stroke="#4ade80"
+                  strokeWidth={2.5 / zoom}
+                  style={{ pointerEvents: "none" } as React.CSSProperties}
+                  data-testid="flash-element-rect"
+                />
+              )}
             </g>
           </svg>
           {/* Mini-map: rendered after overlay SVG so it sits on top in stacking order. */}

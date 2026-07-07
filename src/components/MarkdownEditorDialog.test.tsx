@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { vi, describe, it, expect, beforeEach } from "vitest";
 
@@ -37,7 +37,8 @@ const BASE_OVERLAY: MarkdownOverlay = {
   width: 100,
 };
 
-function renderDialog(overrides: Partial<Parameters<typeof MarkdownEditorDialog>[0]> = {}) {
+/** Render + flush mount effects so state updates from async useEffect are wrapped in act(). */
+async function renderDialog(overrides: Partial<Parameters<typeof MarkdownEditorDialog>[0]> = {}) {
   const props = {
     overlay: BASE_OVERLAY,
     onSave: vi.fn(),
@@ -46,6 +47,8 @@ function renderDialog(overrides: Partial<Parameters<typeof MarkdownEditorDialog>
     ...overrides,
   };
   render(<MarkdownEditorDialog {...props} />);
+  // Flush microtasks queued by useEffect async invoke calls (list_fonts, render_markdown_to_svg).
+  await act(async () => {});
   return props;
 }
 
@@ -58,20 +61,20 @@ beforeEach(() => {
 });
 
 describe("MarkdownEditorDialog — rendering", () => {
-  it("renders the dialog with the overlay id", () => {
-    renderDialog();
+  it("renders the dialog with the overlay id", async () => {
+    await renderDialog();
     expect(screen.getByRole("dialog")).toBeInTheDocument();
     expect(screen.getByText("snippet-1")).toBeInTheDocument();
   });
 
-  it("shows Save and Cancel buttons", () => {
-    renderDialog();
+  it("shows Save and Cancel buttons", async () => {
+    await renderDialog();
     expect(screen.getByRole("button", { name: "Save" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
   });
 
-  it("shows style controls: width, size, font, color, and alignment", () => {
-    renderDialog();
+  it("shows style controls: width, size, font, color, and alignment", async () => {
+    await renderDialog();
     expect(screen.getByLabelText("Render width as percent of canvas")).toBeInTheDocument();
     expect(screen.getByLabelText("Font size in pt")).toBeInTheDocument();
     expect(screen.getByLabelText("Font family")).toBeInTheDocument();
@@ -79,15 +82,15 @@ describe("MarkdownEditorDialog — rendering", () => {
     expect(screen.getByRole("group", { name: "Text alignment" })).toBeInTheDocument();
   });
 
-  it("shows the preview placeholder while waiting for first render", () => {
+  it("shows the preview placeholder while waiting for first render", async () => {
     vi.mocked(invoke).mockReturnValue(new Promise(() => {})); // never resolves
-    renderDialog();
+    await renderDialog();
     expect(screen.getByLabelText("Preview")).toBeInTheDocument();
     expect(screen.getByText("Rendering…")).toBeInTheDocument();
   });
 
   it("initiates a render_markdown_to_svg call on mount", async () => {
-    renderDialog();
+    await renderDialog();
     await waitFor(() =>
       expect(invoke).toHaveBeenCalledWith("render_markdown_to_svg", expect.objectContaining({ id: "snippet-1" }))
     );
@@ -99,14 +102,14 @@ describe("MarkdownEditorDialog — rendering", () => {
       if (cmd === "render_markdown_to_svg") return Promise.reject("Render failed");
       return Promise.resolve(undefined);
     });
-    renderDialog();
+    await renderDialog();
     await screen.findByText("Render failed");
   });
 });
 
 describe("MarkdownEditorDialog — save and cancel", () => {
   it("calls onSave when Save button is clicked", async () => {
-    const { onSave } = renderDialog();
+    const { onSave } = await renderDialog();
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
     expect(onSave).toHaveBeenCalledOnce();
     expect(onSave).toHaveBeenCalledWith(
@@ -116,13 +119,13 @@ describe("MarkdownEditorDialog — save and cancel", () => {
   });
 
   it("calls onCancel when Cancel button is clicked", async () => {
-    const { onCancel } = renderDialog();
+    const { onCancel } = await renderDialog();
     await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(onCancel).toHaveBeenCalledOnce();
   });
 
   it("calls onCancel when the overlay backdrop is clicked", async () => {
-    const { onCancel } = renderDialog();
+    const { onCancel } = await renderDialog();
     // Click directly on the outermost overlay div (the backdrop)
     const backdrop = document.querySelector(".markdown-editor-overlay")!;
     fireEvent.click(backdrop, { target: backdrop });
@@ -130,7 +133,7 @@ describe("MarkdownEditorDialog — save and cancel", () => {
   });
 
   it("does not call onCancel when clicking inside the dialog", async () => {
-    const { onCancel } = renderDialog();
+    const { onCancel } = await renderDialog();
     await userEvent.click(screen.getByRole("dialog"));
     expect(onCancel).not.toHaveBeenCalled();
   });
@@ -138,7 +141,7 @@ describe("MarkdownEditorDialog — save and cancel", () => {
 
 describe("MarkdownEditorDialog — style controls", () => {
   it("updates font size when a valid value is blurred", async () => {
-    const { onSave } = renderDialog();
+    const { onSave } = await renderDialog();
     const sizeInput = screen.getByLabelText("Font size in pt");
     fireEvent.change(sizeInput, { target: { value: "18" } });
     fireEvent.blur(sizeInput);
@@ -150,7 +153,7 @@ describe("MarkdownEditorDialog — style controls", () => {
   });
 
   it("reverts font size to previous value when an invalid string is blurred", async () => {
-    renderDialog();
+    await renderDialog();
     const sizeInput = screen.getByLabelText("Font size in pt");
     fireEvent.change(sizeInput, { target: { value: "abc" } });
     fireEvent.blur(sizeInput);
@@ -158,7 +161,7 @@ describe("MarkdownEditorDialog — style controls", () => {
   });
 
   it("reverts font size when value is outside allowed range", async () => {
-    renderDialog();
+    await renderDialog();
     const sizeInput = screen.getByLabelText("Font size in pt");
     fireEvent.change(sizeInput, { target: { value: "200" } });
     fireEvent.blur(sizeInput);
@@ -166,7 +169,7 @@ describe("MarkdownEditorDialog — style controls", () => {
   });
 
   it("updates render width when a valid value is blurred", async () => {
-    const { onSave } = renderDialog();
+    const { onSave } = await renderDialog();
     const widthInput = screen.getByLabelText("Render width as percent of canvas");
     fireEvent.change(widthInput, { target: { value: "40" } });
     fireEvent.blur(widthInput);
@@ -178,7 +181,7 @@ describe("MarkdownEditorDialog — style controls", () => {
   });
 
   it("reverts render width when an invalid value is blurred", async () => {
-    renderDialog();
+    await renderDialog();
     const widthInput = screen.getByLabelText("Render width as percent of canvas");
     fireEvent.change(widthInput, { target: { value: "999" } });
     fireEvent.blur(widthInput);
@@ -186,7 +189,7 @@ describe("MarkdownEditorDialog — style controls", () => {
   });
 
   it("updates text color via color picker", async () => {
-    const { onSave } = renderDialog();
+    const { onSave } = await renderDialog();
     fireEvent.change(screen.getByLabelText("Text color"), { target: { value: "#ff0000" } });
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
     expect(onSave).toHaveBeenCalledWith(
@@ -196,7 +199,7 @@ describe("MarkdownEditorDialog — style controls", () => {
   });
 
   it("updates text alignment when an alignment button is clicked", async () => {
-    const { onSave } = renderDialog();
+    const { onSave } = await renderDialog();
     // Buttons use emoji as text content; title is the fallback for tooltips, not accessible name
     await userEvent.click(screen.getByTitle("Align right"));
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
@@ -207,7 +210,7 @@ describe("MarkdownEditorDialog — style controls", () => {
   });
 
   it("alignment button shows active state for the current selection", async () => {
-    renderDialog();
+    await renderDialog();
     await userEvent.click(screen.getByTitle("Align center"));
     expect(screen.getByTitle("Align center")).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByTitle("Align left")).toHaveAttribute("aria-pressed", "false");
@@ -216,14 +219,14 @@ describe("MarkdownEditorDialog — style controls", () => {
 
 describe("MarkdownEditorDialog — font picker", () => {
   it("opens the font dropdown when the font input is focused", async () => {
-    renderDialog();
+    await renderDialog();
     const fontInput = screen.getByLabelText("Font family");
     await userEvent.click(fontInput);
     expect(screen.getByRole("listbox", { name: "Font families" })).toBeInTheDocument();
   });
 
   it("closes the font picker when clicking outside", async () => {
-    renderDialog();
+    await renderDialog();
     await userEvent.click(screen.getByLabelText("Font family"));
     expect(screen.getByRole("listbox")).toBeInTheDocument();
 
@@ -238,7 +241,7 @@ describe("MarkdownEditorDialog — font picker", () => {
       if (cmd === "render_markdown_to_svg") return Promise.resolve("<svg></svg>");
       return Promise.resolve(undefined);
     });
-    const { onSave } = renderDialog();
+    const { onSave } = await renderDialog();
 
     await userEvent.click(screen.getByLabelText("Font family"));
     const listItems = await screen.findAllByRole("option");
@@ -257,7 +260,7 @@ describe("MarkdownEditorDialog — font picker", () => {
       if (cmd === "render_markdown_to_svg") return Promise.resolve("<svg></svg>");
       return Promise.resolve(undefined);
     });
-    renderDialog();
+    await renderDialog();
 
     await userEvent.click(screen.getByLabelText("Font family"));
     await userEvent.type(screen.getByLabelText("Font family"), "geo");
@@ -272,7 +275,7 @@ describe("MarkdownEditorDialog — font picker", () => {
       if (cmd === "render_markdown_to_svg") return Promise.resolve("<svg></svg>");
       return Promise.resolve(undefined);
     });
-    renderDialog();
+    await renderDialog();
 
     await userEvent.click(screen.getByLabelText("Font family"));
     await userEvent.type(screen.getByLabelText("Font family"), "zzz");
@@ -285,7 +288,7 @@ describe("MarkdownEditorDialog — font picker", () => {
       if (cmd === "render_markdown_to_svg") return Promise.resolve("<svg></svg>");
       return Promise.resolve(undefined);
     });
-    const { onSave } = renderDialog({
+    const { onSave } = await renderDialog({
       overlay: { ...BASE_OVERLAY, style: { font_family: "Arial" } },
     });
     const fontInput = screen.getByLabelText("Font family");
@@ -312,7 +315,7 @@ describe("MarkdownEditorDialog — font picker", () => {
       return Promise.resolve(undefined);
     });
     // Start with style.font_family = "Georgia" so it IS in the system font list (not prepended)
-    const { onSave } = renderDialog({
+    const { onSave } = await renderDialog({
       overlay: { ...BASE_OVERLAY, style: { font_family: "Georgia" } },
     });
     const fontInput = screen.getByLabelText("Font family");
@@ -332,7 +335,7 @@ describe("MarkdownEditorDialog — font picker", () => {
   });
 
   it("closes the font picker with Escape key", async () => {
-    renderDialog();
+    await renderDialog();
     await userEvent.click(screen.getByLabelText("Font family"));
     expect(screen.getByRole("listbox")).toBeInTheDocument();
     await userEvent.keyboard("{Escape}");
@@ -340,7 +343,7 @@ describe("MarkdownEditorDialog — font picker", () => {
   });
 
   it("opens picker with ArrowDown even when closed", async () => {
-    renderDialog();
+    await renderDialog();
     const fontInput = screen.getByLabelText("Font family");
     // Dismiss picker first
     await userEvent.click(fontInput);
@@ -356,7 +359,7 @@ describe("MarkdownEditorDialog — font picker", () => {
       if (cmd === "render_markdown_to_svg") return Promise.resolve("<svg></svg>");
       return Promise.resolve(undefined);
     });
-    renderDialog();
+    await renderDialog();
     await userEvent.click(screen.getByLabelText("Font family"));
     const options = await screen.findAllByRole("option");
     // FONT_FALLBACK has 8 entries
@@ -369,7 +372,7 @@ describe("MarkdownEditorDialog — font picker", () => {
       if (cmd === "render_markdown_to_svg") return Promise.resolve("<svg></svg>");
       return Promise.resolve(undefined);
     });
-    renderDialog();
+    await renderDialog();
     await userEvent.click(screen.getByLabelText("Font family"));
     const options = await screen.findAllByRole("option");
     expect(options.length).toBeGreaterThanOrEqual(8);
@@ -378,7 +381,7 @@ describe("MarkdownEditorDialog — font picker", () => {
 
 describe("MarkdownEditorDialog — overlay with existing style", () => {
   it("pre-fills style fields from overlay.style", async () => {
-    renderDialog({
+    await renderDialog({
       overlay: {
         ...BASE_OVERLAY,
         style: { font_size_pt: 24, text_color: "#336699", font_family: "Georgia", text_align: "right", render_width_pct: 50 },

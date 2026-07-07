@@ -14,7 +14,9 @@ import { extractNamedElements } from "./utils/svgElements";
 import type { SVGElementNode } from "./utils/svgElements";
 import { matchesBinding, DEFAULT_KEY_BINDINGS } from "./utils/keyBinding";
 import { EditingCanvas } from "./components/EditingCanvas";
-import type { EditingCanvasHandle } from "./components/EditingCanvas";
+import type { EditingCanvasHandle, CanvasContextMenuInfo } from "./components/EditingCanvas";
+import { CanvasContextMenu } from "./components/CanvasContextMenu";
+import type { ContextMenuAction } from "./components/CanvasContextMenu";
 import { StepList } from "./components/StepList";
 import type { CopyAspectsOptions } from "./components/StepList";
 import { OverlayList } from "./components/OverlayList";
@@ -67,6 +69,7 @@ function App() {
   const [selectedStepIndex, setSelectedStepIndex] = useState<number | null>(null);
   const [hoveredStepIndex, setHoveredStepIndex] = useState<number | null>(null);
   const [hoveredElementId, setHoveredElementId] = useState<string | null>(null);
+  const [contextMenu, setContextMenu] = useState<CanvasContextMenuInfo | null>(null);
   const canvasRef = useRef<EditingCanvasHandle>(null);
   // Tracks the previous presentation step index so we can look up the applicable TransitionConfig.
   const prevPresentationStepIndexRef = useRef<number | null>(null);
@@ -96,6 +99,11 @@ function App() {
   const namedElements = useMemo(
     () => (svgFile ? extractNamedElements(svgFile.content, config?.exclude_id_pattern) : []),
     [svgFile, config?.exclude_id_pattern]
+  );
+  // Set form of named-element IDs for O(1) context-menu hit-testing.
+  const namedElementIdSet = useMemo(
+    () => new Set(collectSvgIds(namedElements)),
+    [namedElements]
   );
   const occupiedOverlayIds = useMemo(
     () => new Set([...collectSvgIds(namedElements), ...(config?.overlays ?? []).map((o) => o.id)]),
@@ -506,17 +514,17 @@ function App() {
     canvasRef.current?.goToRect(cx, cy, w * cosR + h * sinR, w * sinR + h * cosR);
   }
 
-  function handleFitViewportToOverlay() {
-    if (!config || selectedStepIndex === null || !selectedOverlayId || !viewBox) return;
-    const overlay = config.overlays?.find((o) => o.id === selectedOverlayId);
+  function handleFitViewportToOverlay(overlayId: string) {
+    if (!config || selectedStepIndex === null || !viewBox) return;
+    const overlay = config.overlays?.find((o) => o.id === overlayId);
     if (!overlay) return;
     const svg = overlaySvgs.get(overlay.id);
     if (!svg) return;
     const ovb = parseOverlayViewBox(svg);
     if (!ovb || ovb.w === 0) return;
     const newViewport = computeFitViewport({
-      overlay,
-      overlayHPerW: ovb.h / ovb.w,
+      targetRect: overlay,
+      targetHPerW: ovb.h / ovb.w,
       svgViewBox: viewBox,
       presentationAR: parseAspectRatio(config.aspect_ratio),
       alignH: overlayAlignH,
@@ -527,6 +535,78 @@ function App() {
       i === selectedStepIndex ? { ...s, viewport: newViewport } : s
     );
     updateConfig({ ...config, steps });
+  }
+
+  function handleFitViewportToElement(elementId: string) {
+    if (!config || selectedStepIndex === null || !viewBox) return;
+    const bbox = canvasRef.current?.getElementSvgBBox(elementId);
+    if (!bbox || bbox.w === 0 || bbox.h === 0) return;
+    const currentStep = config.steps[selectedStepIndex];
+    if (!currentStep) return;
+    const newViewport = computeFitViewport({
+      targetRect: { x: bbox.x, y: bbox.y, width: bbox.w, rotation: 0 },
+      targetHPerW: bbox.h / bbox.w,
+      // Keep the step's current viewport rotation instead of snapping to 0.
+      targetRotation: currentStep.viewport.rotation,
+      svgViewBox: viewBox,
+      presentationAR: parseAspectRatio(config.aspect_ratio),
+      alignH: overlayAlignH,
+      alignV: overlayAlignV,
+      padding: overlayPadding,
+    });
+    const steps = config.steps.map((s, i) =>
+      i === selectedStepIndex ? { ...s, viewport: newViewport } : s
+    );
+    updateConfig({ ...config, steps });
+  }
+
+  function handleDuplicateOverlay(id: string) {
+    if (!config) return;
+    const overlays = config.overlays ?? [];
+    const src = overlays.find((o) => o.id === id);
+    if (!src) return;
+    const usedIds = new Set([
+      ...collectSvgIds(namedElements),
+      ...overlays.map((o) => o.id),
+    ]);
+    let n = 1;
+    const base = src.id.replace(/-\d+$/, "");
+    while (usedIds.has(`${base}-${n}`)) n++;
+    const newOverlay: MarkdownOverlay = {
+      ...src,
+      id: `${base}-${n}`,
+      x: src.x + 20,
+      y: src.y + 20,
+      style: { ...src.style },
+    };
+    updateConfig({ ...config, overlays: [...overlays, newOverlay] });
+    setEditingOverlayId(newOverlay.id);
+  }
+
+  function handleContextMenuAction(action: ContextMenuAction) {
+    switch (action.type) {
+      case "fit-overlay":
+        if (action.overlayId) handleFitViewportToOverlay(action.overlayId);
+        break;
+      case "focus-overlay":
+        if (action.overlayId) handleGoToOverlay(action.overlayId);
+        break;
+      case "edit-overlay":
+        if (action.overlayId) setEditingOverlayId(action.overlayId);
+        break;
+      case "duplicate-overlay":
+        if (action.overlayId) handleDuplicateOverlay(action.overlayId);
+        break;
+      case "delete-overlay":
+        if (action.overlayId) handleDeleteOverlay(action.overlayId);
+        break;
+      case "fit-element":
+        if (action.elementId) handleFitViewportToElement(action.elementId);
+        break;
+      case "focus-element":
+        if (action.elementId) canvasRef.current?.goToElement(action.elementId);
+        break;
+    }
   }
 
   function handleTransitionChange(gapIndex: number, tc: TransitionConfig) {
@@ -592,6 +672,20 @@ function App() {
           onDismiss={() => setPendingReload(false)}
         />
       )}
+      {contextMenu && (
+        <CanvasContextMenu
+          x={contextMenu.clientX}
+          y={contextMenu.clientY}
+          target={{
+            overlayId: contextMenu.overlayId,
+            overlaySvgReady: contextMenu.overlaySvgReady,
+            elementId: contextMenu.elementId,
+          }}
+          hasSelectedStep={selectedStepIndex !== null}
+          onAction={handleContextMenuAction}
+          onClose={() => { setContextMenu(null); canvasRef.current?.clearFlash(); }}
+        />
+      )}
       {!svgFile ? (
         <div className="empty-state">
           <img src="/app-icon.svg" alt="Presentator" className="empty-state-icon" />
@@ -647,7 +741,7 @@ function App() {
                 />
                 {(config.overlays ?? []).length > 0 && selectedStepIndex !== null && (
                   <div className="overlay-align-panel">
-                    <div className="overlay-align-header">Viewport → Snippet</div>
+                    <div className="overlay-align-header">Fit alignment</div>
                     <div className="overlay-align-grid-row">
                       <span className="overlay-align-label">Anchor</span>
                       <div className="overlay-align-grid">
@@ -672,14 +766,6 @@ function App() {
                         className="overlay-align-range"
                       />
                       <span className="overlay-align-pad-val">{Math.round(overlayPadding * 100)}%</span>
-                    </div>
-                    <div className="overlay-align-actions">
-                      <button
-                        className="overlay-align-btn"
-                        disabled={!selectedOverlayId}
-                        onClick={handleFitViewportToOverlay}
-                        title="Fit viewport to selected snippet"
-                      >Fit to snippet</button>
                     </div>
                   </div>
                 )}
@@ -719,6 +805,8 @@ function App() {
                 selectedOverlayId={selectedOverlayId}
                 onOverlaySelect={setSelectedOverlayId}
                 hoveredOverlayId={hoveredOverlayId}
+                namedElementIds={namedElementIdSet}
+                onContextMenu={(info) => setContextMenu(info)}
               />
             ) : (
               <div className="svg-viewport" data-testid="svg-viewport">

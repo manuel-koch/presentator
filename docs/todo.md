@@ -100,7 +100,7 @@ and keep a single shared "Fit alignment" defaults panel.
 
 ### Fit-step-viewport via context menu
 
-- [ ] Generalize `computeFitViewport` (src/utils/fitViewportToOverlay.ts) to operate on an
+- [x] Generalize `computeFitViewport` (src/utils/fitViewportToOverlay.ts) to operate on an
       abstract target rectangle instead of an overlay:
       - rename `overlay` param to `targetRect: { x, y, width, rotation? }`
       - keep `overlayHPerW` (rename to `targetHPerW`)
@@ -108,7 +108,7 @@ and keep a single shared "Fit alignment" defaults panel.
         result; for snippets this defaults to the snippet's own rotation (current
         behaviour); for SVG elements it lets the step viewport be rotated to a chosen
         angle even though the element bbox is axis-aligned
-- [ ] Add a single `onContextMenu` handler on the editing canvas (not on individual DOM
+- [x] Add a single `onContextMenu` handler on the editing canvas (not on individual DOM
       nodes or overlay groups) that, on right-click, resolves ALL applicable targets at
       the hit point in one shot and flashes them. No mousemove tracking — evaluation
       happens only at the `contextmenu` event:
@@ -130,7 +130,7 @@ and keep a single shared "Fit alignment" defaults panel.
           dim-everything-else behavior (the `opacity:0.15` rule at
           EditingCanvas.tsx:1584 is a sidebar affordance, not suitable for free mouse
           interaction)
-- [ ] Implement a shared context-menu component built from the resolved targets at the
+- [x] Implement a shared context-menu component built from the resolved targets at the
       hit point. Menu items per target type:
       - overlay target:
         - "Fit step viewport to this snippet"  (disabled when no step selected or no
@@ -147,17 +147,60 @@ and keep a single shared "Fit alignment" defaults panel.
         - "Focus in viewport"
       - if multiple targets resolved, group items by target type with separators
       - if no target resolved (whitespace), show no menu (or a minimal canvas-level menu)
-- [ ] Wire the context-menu "Fit…" action to a single handler in App.tsx that builds the
+- [x] Wire the context-menu "Fit…" action to a single handler in App.tsx that builds the
       `targetRect` from either the overlay or the element bbox and calls the generalized
       `computeFitViewport` with the current anchor + padding defaults
-- [ ] Slim the existing `overlay-align-panel` in the sidebar:
+- [x] Slim the existing `overlay-align-panel` in the sidebar:
         - drop the "Fit to snippet" button
         - drop the "Viewport → Snippet" header framing
         - relabel to "Fit alignment"
         - keep the 3×3 anchor grid + padding slider as shared defaults for any fit target
 
+- [x] The right-click context menu on canvas can be unusable
+      when the click happens near the edge of the canvas, hence
+      the context-menu will largely by outside the visible canvas.
+      Context-menu position should be clamped at current canvas bounds
+      so that it stays completely visible, regardless of where the user
+      right-clicked.
+
+- [x] When step-viewport and overlay-rect are rotated, then a flash of
+      the rect(s) on right-click are not properly aligned.
+      They flash unrotated!
+
+- [x] The flash on right-click is just a flash, after short delay
+      the hightlight of the rect(s) is removed again.
+      Reading the tasks above I would expect that the rects
+      should stay highlighted until the context-menu is dismissed.
+
+- [ ] The 3x3 alignment matrix and the padding-slider formerly
+      used to control how fit-step-viewport functionality behaves are gone.
+
+- [ ] The right-click context menu has unexpected entries.
+      E.g. when I right-click on a overlay-rect within a
+      step-viewport-rect without a step selected then the following entries are shown:
+  - "Fit step viewport to this snippet": this is grayed out, why ?
+    Is this a tooltip for the following rows ? Or because there is no
+    current step selected ?
+  - "Focus in viewport": focus what? Why not "Focus snippet <id> in viewport"
+  - "Edit snippet <id>..."
+  - "Duplicate": duplicate what ? Why not "Clone snippet <id>" ?
+  - "Delete": delete what ? Why not "Delete snippet <id>" ?
+
+- [ ] The right-click context menu has unexpected entries.
+      E.g. when I right-click on a svg-element-rect without a step
+      selected then the following entries are shown:
+  - "Fit step viewport to this element": this is grayed out, why ?
+    Is this a tooltip for the following rows ? Or because there is no
+    current step selected ?
+  - "Focus in viewport": focus what? Why not "Focus element <id> in viewport"
+  - "Edit snippet <id>..."
+  - "Duplicate": duplicate what ? Why not "Clone snippet <id>" ?
+  - "Delete": delete what ? Why not "Delete snippet <id>" ?
+
 ### Sidebar layout (deferred until context-menu fit is in place)
 
-- [ ] Re-evaluate sidebar clutter after the context-menu change lands; remaining work
-      likely: reduce step-row inline action buttons, separate per-step config from asset
-      libraries. Track as a follow-up todo with concrete proposal then.
+- [ ] Re-evaluate sidebar clutter after the context-menu change
+      lands; remaining work likely:
+  - reduce step-row inline action buttons
+  - separate per-step config from asset libraries
+  - Track as a follow-up todo with concrete proposal then

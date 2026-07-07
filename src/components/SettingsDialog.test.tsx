@@ -32,7 +32,8 @@ const BASE_CONFIG: PresentationConfig = {
   steps: [],
 };
 
-function renderDialog(overrides: Partial<Parameters<typeof SettingsDialog>[0]> = {}) {
+/** Render + flush mount effects so state updates from async useEffect are wrapped in act(). */
+async function renderDialog(overrides: Partial<Parameters<typeof SettingsDialog>[0]> = {}) {
   const props = {
     settings: BASE_SETTINGS,
     onSave: vi.fn(),
@@ -40,40 +41,42 @@ function renderDialog(overrides: Partial<Parameters<typeof SettingsDialog>[0]> =
     ...overrides,
   };
   render(<SettingsDialog {...props} />);
+  // Flush microtasks queued by useEffect async invoke calls (cache stats).
+  await act(async () => {});
   return props;
 }
 
 // --- Presentation tab (default) ---
 
 describe("SettingsDialog — Presentation tab", () => {
-  it("shows 'no file' message when no presentation is loaded", () => {
-    renderDialog();
+  it("shows 'no file' message when no presentation is loaded", async () => {
+    await renderDialog();
     expect(screen.getByText("No presentation file loaded.")).toBeInTheDocument();
   });
 
-  it("shows the filename when a file is loaded", () => {
-    renderDialog({ filename: "slides.svg", presentationConfig: BASE_CONFIG });
+  it("shows the filename when a file is loaded", async () => {
+    await renderDialog({ filename: "slides.svg", presentationConfig: BASE_CONFIG });
     expect(screen.getByText("slides.svg")).toBeInTheDocument();
   });
 
-  it("shows the current aspect_ratio value", () => {
-    renderDialog({ filename: "slides.svg", presentationConfig: BASE_CONFIG });
+  it("shows the current aspect_ratio value", async () => {
+    await renderDialog({ filename: "slides.svg", presentationConfig: BASE_CONFIG });
     expect(screen.getByLabelText("Aspect ratio")).toHaveValue("16:9");
   });
 
-  it("shows the current background_color value", () => {
-    renderDialog({ filename: "slides.svg", presentationConfig: BASE_CONFIG });
+  it("shows the current background_color value", async () => {
+    await renderDialog({ filename: "slides.svg", presentationConfig: BASE_CONFIG });
     expect(screen.getByLabelText("Background color")).toHaveValue("#000000");
   });
 
-  it("shows the current pointer_color (defaults to #ff2828 when unset)", () => {
-    renderDialog({ filename: "slides.svg", presentationConfig: BASE_CONFIG });
+  it("shows the current pointer_color (defaults to #ff2828 when unset)", async () => {
+    await renderDialog({ filename: "slides.svg", presentationConfig: BASE_CONFIG });
     expect(screen.getByLabelText("Pointer indicator color")).toHaveValue("#ff2828");
   });
 
   it("saves updated aspect_ratio via onSavePresentationConfig", async () => {
     const onSavePresentationConfig = vi.fn();
-    renderDialog({
+    await renderDialog({
       filename: "slides.svg",
       presentationConfig: BASE_CONFIG,
       onSavePresentationConfig,
@@ -87,7 +90,7 @@ describe("SettingsDialog — Presentation tab", () => {
 
   it("saves updated background_color via onSavePresentationConfig", async () => {
     const onSavePresentationConfig = vi.fn();
-    renderDialog({
+    await renderDialog({
       filename: "slides.svg",
       presentationConfig: BASE_CONFIG,
       onSavePresentationConfig,
@@ -101,7 +104,7 @@ describe("SettingsDialog — Presentation tab", () => {
 
   it("does not call onSavePresentationConfig when no config is provided", async () => {
     const onSavePresentationConfig = vi.fn();
-    renderDialog({ onSavePresentationConfig });
+    await renderDialog({ onSavePresentationConfig });
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
     expect(onSavePresentationConfig).not.toHaveBeenCalled();
   });
@@ -111,7 +114,7 @@ describe("SettingsDialog — Presentation tab", () => {
 
 describe("SettingsDialog — Playback tab", () => {
   async function openPlayback() {
-    const props = renderDialog();
+    const props = await renderDialog();
     await userEvent.click(screen.getByRole("button", { name: "Playback" }));
     return props;
   }
@@ -156,25 +159,25 @@ describe("SettingsDialog — Playback tab", () => {
 
 describe("SettingsDialog — Save and Cancel", () => {
   it("calls onSave when Save is clicked", async () => {
-    const { onSave } = renderDialog();
+    const { onSave } = await renderDialog();
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
     expect(onSave).toHaveBeenCalledOnce();
   });
 
   it("calls onCancel when Cancel is clicked", async () => {
-    const { onCancel } = renderDialog();
+    const { onCancel } = await renderDialog();
     await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(onCancel).toHaveBeenCalledOnce();
   });
 
   it("calls onCancel when the overlay is clicked", async () => {
-    const { onCancel } = renderDialog();
+    const { onCancel } = await renderDialog();
     await userEvent.click(screen.getByRole("dialog"));
     expect(onCancel).toHaveBeenCalledOnce();
   });
 
   it("closes dialog with Escape key when not in learn mode", async () => {
-    const { onCancel } = renderDialog();
+    const { onCancel } = await renderDialog();
     act(() => {
       window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
     });
@@ -186,7 +189,7 @@ describe("SettingsDialog — Save and Cancel", () => {
 
 describe("SettingsDialog — Caches tab", () => {
   async function openCaches() {
-    const props = renderDialog();
+    const props = await renderDialog();
     await userEvent.click(screen.getByRole("button", { name: "Caches" }));
     return props;
   }
@@ -235,7 +238,7 @@ describe("SettingsDialog — Caches tab", () => {
 
 describe("SettingsDialog — Key Bindings tab", () => {
   async function openKeybindings(overrides: Partial<Parameters<typeof renderDialog>[0]> = {}) {
-    const props = renderDialog(overrides);
+    const props = await renderDialog(overrides);
     await userEvent.click(screen.getByRole("button", { name: "Key Bindings" }));
     return props;
   }

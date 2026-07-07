@@ -174,7 +174,7 @@ async fn list_fonts() -> Result<Vec<String>, String> {
                     .collect::<Vec<_>>()
             })
             .map_err(|e| e.to_string())?;
-        families.sort_unstable_by(|a, b| a.to_lowercase().cmp(&b.to_lowercase()));
+        families.sort_unstable_by_key(|a| a.to_lowercase());
         Ok(families)
     })
     .await

@@ -80,10 +80,10 @@ pub fn clear(cache_dir: &Path) -> usize {
     let mut removed = 0usize;
     for entry in entries.flatten() {
         let path = entry.path();
-        if path.extension().and_then(|e| e.to_str()) == Some("svg") {
-            if std::fs::remove_file(&path).is_ok() {
-                removed += 1;
-            }
+        if path.extension().and_then(|e| e.to_str()) == Some("svg")
+            && std::fs::remove_file(&path).is_ok()
+        {
+            removed += 1;
         }
     }
     removed
