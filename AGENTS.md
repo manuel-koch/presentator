@@ -11,17 +11,21 @@ Interactive / dynamic presentation app built from SVG input files, running on ma
 
 ## General guideline
 
-* Be concise
-* Prefer bullets over prose
-* Give concrete answers first
+* Be concise and direct
+* Communicate concrete/clear
+* Admit uncertainty when appropriate
+* Be targeted and efficient in your exploration and investigations
 * No preamble
 * No motivational filler
 * No repetition
+* Prefer bullets over prose
 * Keep explanations to the minimum needed
+* Execute actions via your tools
 
-**No file edits without explicit user consent:**
-"Propose", "analyze", "discuss", "explore", "re-think" → chat only.
-Only implement after user says "implement it" or equivalent.
+**No file edits without explicit user consent:** Phrases like "propose",
+"suggest", "evaluate", "review", "analyze", "discuss", "explore", "re-think"
+are just chat triggers.
+Only edit/implement after user says "do it", "implement it" or equivalent.
 
 ## Development Guideline
 
