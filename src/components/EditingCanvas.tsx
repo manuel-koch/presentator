@@ -12,6 +12,10 @@ export interface CanvasContextMenuInfo {
   overlayId: string | null;
   overlaySvgReady: boolean;
   elementId: string | null;
+  /** The resolved step index (null if no step viewport rect at hit point). */
+  stepIndex: number | null;
+  /** The resolved step name (null if no step viewport rect at hit point). */
+  stepName: string | null;
 }
 
 interface Props {
@@ -395,10 +399,10 @@ export const EditingCanvas = forwardRef<EditingCanvasHandle, Props>(function Edi
     clearFlash();
     setFlashTargets({ stepRect, overlayRect, elementBbox });
 
-    // Only fire onContextMenu when at least one actionable target (overlay or element)
-    // is resolved. A step-only hit (whitespace inside the viewport rect but not on
-    // an overlay or named element) should not open a context menu nor show the widget.
-    if (!resolved.overlay && !resolved.elementId) return;
+    // Fire onContextMenu when any target (step, overlay, or element) is resolved.
+    // A step-only hit (inside the viewport rect but not on an overlay or named
+    // element) opens a menu with "Focus step" and similar actions.
+    if (!resolved.step && !resolved.overlay && !resolved.elementId) return;
 
     onContextMenu({
       clientX: e.clientX,
@@ -406,6 +410,8 @@ export const EditingCanvas = forwardRef<EditingCanvasHandle, Props>(function Edi
       overlayId: resolved.overlay?.overlayId ?? null,
       overlaySvgReady: resolved.overlay !== null,
       elementId: resolved.elementId,
+      stepIndex: resolved.step?.stepIndex ?? null,
+      stepName: resolved.step ? steps[resolved.step.stepIndex]?.name ?? null : null,
     });
   }
 

@@ -7,6 +7,10 @@ export interface ContextMenuTarget {
   overlaySvgReady: boolean;
   /** Resolved named-element target (null if no named element at the hit point). */
   elementId: string | null;
+  /** Resolved step index (null if no step viewport rect at the hit point). */
+  stepIndex: number | null;
+  /** Resolved step name (null if no step viewport rect at the hit point). */
+  stepName: string | null;
 }
 
 export interface ContextMenuAction {
@@ -17,9 +21,11 @@ export interface ContextMenuAction {
     | "duplicate-overlay"
     | "delete-overlay"
     | "fit-element"
-    | "focus-element";
+    | "focus-element"
+    | "focus-step";
   overlayId?: string;
   elementId?: string;
+  stepIndex?: number;
 }
 
 interface Props {
@@ -27,6 +33,8 @@ interface Props {
   y: number;
   target: ContextMenuTarget;
   hasSelectedStep: boolean;
+  /** The name of the currently selected step (null if no step selected). */
+  selectedStepName: string | null;
   onAction: (action: ContextMenuAction) => void;
   onClose: () => void;
   /** Optional ref to an element that should NOT trigger onClose on mousedown. */
@@ -44,7 +52,7 @@ type FlatNode =
   | { type: "separator"; key: string }
   | { type: "header"; key: string; title: string };
 
-export function CanvasContextMenu({ x, y, target, hasSelectedStep, onAction, onClose, keepOpenRef }: Props) {
+export function CanvasContextMenu({ x, y, target, hasSelectedStep, selectedStepName, onAction, onClose, keepOpenRef }: Props) {
   const menuRef = useRef<HTMLDivElement>(null);
   const [clampedPos, setClampedPos] = useState<{ left: number; top: number } | null>(null);
   const GUTTER = 8; // px gap from window edge
@@ -103,34 +111,45 @@ export function CanvasContextMenu({ x, y, target, hasSelectedStep, onAction, onC
   }
   const sections: Section[] = [];
 
+  if (target.stepIndex != null) {
+    const stepTitle = target.stepName ?? `Step ${target.stepIndex + 1}`;
+    const items: MenuItem[] = [
+      {
+        key: "focus-step",
+        label: "Focus in viewport",
+        action: { type: "focus-step", stepIndex: target.stepIndex },
+      },
+    ];
+    sections.push({ title: stepTitle, items });
+  }
+
   if (target.overlayId) {
     const items: MenuItem[] = [];
-    // Only add Fit if it would be enabled
     if (hasSelectedStep && target.overlaySvgReady) {
       items.push({
         key: "fit-overlay",
-        label: "Fit step viewport to this snippet",
+        label: `Fit ${selectedStepName ?? "step"} viewport`,
         action: { type: "fit-overlay", overlayId: target.overlayId },
       });
     }
     items.push({
       key: "focus-overlay",
-      label: `Focus snippet ${target.overlayId} in viewport`,
+      label: "Focus in viewport",
       action: { type: "focus-overlay", overlayId: target.overlayId },
     });
     items.push({
       key: "edit-overlay",
-      label: `Edit snippet ${target.overlayId}…`,
+      label: "Edit…",
       action: { type: "edit-overlay", overlayId: target.overlayId },
     });
     items.push({
       key: "duplicate-overlay",
-      label: `Duplicate snippet ${target.overlayId}`,
+      label: "Duplicate",
       action: { type: "duplicate-overlay", overlayId: target.overlayId },
     });
     items.push({
       key: "delete-overlay",
-      label: `Delete snippet ${target.overlayId}`,
+      label: "Delete",
       action: { type: "delete-overlay", overlayId: target.overlayId },
     });
     sections.push({ title: `Snippet: ${target.overlayId}`, items });
@@ -141,13 +160,13 @@ export function CanvasContextMenu({ x, y, target, hasSelectedStep, onAction, onC
     if (hasSelectedStep) {
       items.push({
         key: "fit-element",
-        label: "Fit step viewport to this element",
+        label: `Fit ${selectedStepName ?? "step"} viewport`,
         action: { type: "fit-element", elementId: target.elementId },
       });
     }
     items.push({
       key: "focus-element",
-      label: `Focus element ${target.elementId} in viewport`,
+      label: "Focus in viewport",
       action: { type: "focus-element", elementId: target.elementId },
     });
     sections.push({ title: `Element: ${target.elementId}`, items });
@@ -161,9 +180,7 @@ export function CanvasContextMenu({ x, y, target, hasSelectedStep, onAction, onC
     if (idx > 0) {
       flat.push({ type: "separator", key: `sep-${idx}` });
     }
-    if (sections.length > 1) {
-      flat.push({ type: "header", key: `hdr-${idx}`, title: section.title });
-    }
+    flat.push({ type: "header", key: `hdr-${idx}`, title: section.title });
     for (const item of section.items) {
       flat.push({ type: "item", item });
     }

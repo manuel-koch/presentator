@@ -217,13 +217,46 @@ and keep a single shared "Fit alignment" defaults panel.
   "Duplicate snippet <id>"). Show section headers ("Snippet: <id>" /
   "Element: <id>") when both overlay and element are resolved.
 
-- [ ] Right-click on canvas where hit-point is in step-viewport-rect
+- [x] Right-click on canvas where hit-point is in step-viewport-rect
       doesn't show context-menu, but the step-viewport-rect is highlighted.
       I would expect a context-menu to fit canvas to step-viewport like
       fit-to-element-rect or fit-to-overlay-rect.
 
-- [ ] Right-click context-menu on canvas has no action item to align
+- [x] Right-click context-menu on canvas has no action item to align
       step-viewport to element/overlay.
+
+- [x] Right-click with hit point on step-viewport-rect is inconsistent:
+  - Has no title row, just action "Focus <step-name> in viewport"
+
+- [x] Right-click with hit point on element-rect is inconsistent:
+  - Has no title row, just action "Focus <element-id> in viewport"
+
+- [x] Now that we have a title-row for the types of things we are processing
+      ( step, element, overlay ) the repetition of "snippet", "step" in the and the name/id of the thing in action title is redundant and can be removed.
+
+- [x] When a step is selected and context-menu on canvas is shown,
+      the action-menu description to align step-viewport to current
+      element/snippet is kind of misleading:
+  - "Fit step viewport to this snippet": Which step will be updated? The menu
+    may show a title-row with "<step-name>" when current right-click hit-point
+    is on another step-viewport-rect.
+    Include the step-name in the action-menu to note the target of the action.
+  - "Fit step viewport to this element": Which step will be updated? The menu
+    may show a title-row with "<step-name>" when current right-click hit-point
+    is on another step-viewport-rect.
+    Include the step-name in the action-menu to note the target of the action.
+
+- [ ] The 3x3-fit-alignment widget is shown although no corresponding
+      fit-to-snippet or fit-to-element action-menu is included in the
+      current opened context-menu.
+      E.g. this happens when right-click hit point is within a step-viewport-rect
+      and not in any other element-rect or snippet-rect.
+
+- [x] The step context-menu uses "Step: N" as header despite the step having
+      a name. Changed to use the step's `name` field (with `"Step N"` fallback).
+      The "Focus" label no longer repeats the target type: "Focus <id> in viewport"
+      instead of "Focus snippet <id> in viewport". Step section title is the step
+      name (or "Step N" fallback), not an extra "Step: N" header.
 
 ### Sidebar layout (deferred until context-menu fit is in place)
 

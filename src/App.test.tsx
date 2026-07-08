@@ -927,13 +927,14 @@ describe("App — context menu integration", () => {
     rightClickOnCanvas(200, 120);
 
     await waitFor(() => {
-      expect(screen.getByText("Focus snippet snippet-1 in viewport")).toBeInTheDocument();
-      expect(screen.getByText("Edit snippet snippet-1…")).toBeInTheDocument();
-      expect(screen.getByText("Duplicate snippet snippet-1")).toBeInTheDocument();
-      expect(screen.getByText("Delete snippet snippet-1")).toBeInTheDocument();
+      // Both step ("Step 1") and overlay sections have a "Focus in viewport" button
+      expect(screen.getAllByText("Focus in viewport")).toHaveLength(2);
+      expect(screen.getByText("Edit…")).toBeInTheDocument();
+      expect(screen.getByText("Duplicate")).toBeInTheDocument();
+      expect(screen.getByText("Delete")).toBeInTheDocument();
     });
     // "Fit" should NOT appear because no step is selected yet
-    expect(screen.queryByText("Fit step viewport to this snippet")).not.toBeInTheDocument();
+    expect(screen.queryByText("Fit step viewport")).not.toBeInTheDocument();
   });
 
   it("includes Fit item when a step is selected", async () => {
@@ -942,25 +943,36 @@ describe("App — context menu integration", () => {
     rightClickOnCanvas(200, 120);
 
     await waitFor(() => {
-      expect(screen.getByText("Fit step viewport to this snippet")).toBeInTheDocument();
+      expect(screen.getByText("Fit Step 1 viewport")).toBeInTheDocument();
     });
-    expect(screen.getByText("Focus snippet snippet-1 in viewport")).toBeInTheDocument();
+    // Both step ("Step 1") and overlay sections have a "Focus in viewport" button
+    expect(screen.getAllByText("Focus in viewport")).toHaveLength(2);
   });
 
-  it("drops the context menu entirely when right-clicking outside any target", async () => {
+  it("drops the context menu when right-clicking outside any target", async () => {
     await loadWithOverlays();
-    // Click far outside the overlay and viewport area
-    rightClickOnCanvas(0, 0);
+    // Click at a coordinate that maps to SVG coords outside all viewport rects
+    rightClickOnCanvas(-100, -100);
 
     await waitFor(() => {
       expect(screen.queryByTestId("canvas-context-menu")).not.toBeInTheDocument();
     });
   });
 
+  it("shows step context menu when right-clicking inside the step viewport rect", async () => {
+    await loadWithOverlays();
+    // Click at (0, 0) — inside the Step 1 viewport rect (fills the viewBox at zoom=1)
+    rightClickOnCanvas(0, 0);
+
+    await waitFor(() => {
+      expect(screen.getByText("Focus in viewport")).toBeInTheDocument();
+    });
+  });
+
   it("hides the alignment widget when right-clicking whitespace with no targets", async () => {
     await loadWithOverlays();
     // Whitespace right-click should NOT show the widget
-    rightClickOnCanvas(0, 0);
+    rightClickOnCanvas(-100, -100);
 
     await waitFor(() => {
       expect(screen.queryByTestId("overlay-align-widget")).not.toBeInTheDocument();
@@ -971,9 +983,9 @@ describe("App — context menu integration", () => {
     await loadWithOverlays();
     rightClickOnCanvas(200, 120);
     await waitFor(() => {
-      expect(screen.getByText("Edit snippet snippet-1…")).toBeInTheDocument();
+      expect(screen.getByText("Edit…")).toBeInTheDocument();
     });
-    await userEvent.click(screen.getByText("Edit snippet snippet-1…"));
+    await userEvent.click(screen.getByText("Edit…"));
     await waitFor(() => {
       expect(screen.getByRole("dialog")).toBeInTheDocument();
     });
@@ -983,7 +995,7 @@ describe("App — context menu integration", () => {
     await loadWithOverlays();
     rightClickOnCanvas(200, 120);
     await waitFor(() => {
-      expect(screen.getByText("Edit snippet snippet-1…")).toBeInTheDocument();
+      expect(screen.getByText("Edit…")).toBeInTheDocument();
     });
     act(() => {
       window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));

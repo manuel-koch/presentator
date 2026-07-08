@@ -7,6 +7,7 @@ const baseProps = {
   x: 100,
   y: 100,
   hasSelectedStep: true,
+  selectedStepName: "Step 1",
   onClose: vi.fn(),
   onAction: vi.fn(),
 };
@@ -16,24 +17,48 @@ describe("CanvasContextMenu", () => {
     const { container } = render(
       <CanvasContextMenu
         {...baseProps}
-        target={{ overlayId: null, overlaySvgReady: false, elementId: null }}
+        target={{ overlayId: null, overlaySvgReady: false, elementId: null, stepIndex: null, stepName: null }}
       />
     );
     expect(container.firstChild).toBeNull();
+  });
+
+  it("renders step actions when a step index is resolved without a name", () => {
+    render(
+      <CanvasContextMenu
+        {...baseProps}
+        target={{ overlayId: null, overlaySvgReady: false, elementId: null, stepIndex: 1, stepName: null }}
+      />
+    );
+    // Header is always shown: "Step 2" (1-indexed fallback)
+    expect(screen.getByText("Step 2")).toBeInTheDocument();
+    expect(screen.getByText("Focus in viewport")).toBeInTheDocument();
+  });
+
+  it("renders step actions with the step name when available", () => {
+    render(
+      <CanvasContextMenu
+        {...baseProps}
+        target={{ overlayId: null, overlaySvgReady: false, elementId: null, stepIndex: 0, stepName: "Slide 1" }}
+      />
+    );
+    expect(screen.getByText("Slide 1")).toBeInTheDocument();
+    expect(screen.getByText("Focus in viewport")).toBeInTheDocument();
   });
 
   it("renders overlay actions when an overlay target is resolved", () => {
     render(
       <CanvasContextMenu
         {...baseProps}
-        target={{ overlayId: "snippet-1", overlaySvgReady: true, elementId: null }}
+        target={{ overlayId: "snippet-1", overlaySvgReady: true, elementId: null, stepIndex: null, stepName: null }}
       />
     );
-    expect(screen.getByText("Fit step viewport to this snippet")).toBeInTheDocument();
-    expect(screen.getByText("Focus snippet snippet-1 in viewport")).toBeInTheDocument();
-    expect(screen.getByText("Edit snippet snippet-1…")).toBeInTheDocument();
-    expect(screen.getByText("Duplicate snippet snippet-1")).toBeInTheDocument();
-    expect(screen.getByText("Delete snippet snippet-1")).toBeInTheDocument();
+    expect(screen.getByText("Snippet: snippet-1")).toBeInTheDocument();
+    expect(screen.getByText("Fit Step 1 viewport")).toBeInTheDocument();
+    expect(screen.getByText("Focus in viewport")).toBeInTheDocument();
+    expect(screen.getByText("Edit…")).toBeInTheDocument();
+    expect(screen.getByText("Duplicate")).toBeInTheDocument();
+    expect(screen.getByText("Delete")).toBeInTheDocument();
   });
 
   it("drops Fit overlay when no step is selected", () => {
@@ -41,24 +66,25 @@ describe("CanvasContextMenu", () => {
       <CanvasContextMenu
         {...baseProps}
         hasSelectedStep={false}
-        target={{ overlayId: "snippet-1", overlaySvgReady: true, elementId: null }}
+        target={{ overlayId: "snippet-1", overlaySvgReady: true, elementId: null, stepIndex: null, stepName: null }}
       />
     );
-    expect(screen.queryByText("Fit step viewport to this snippet")).not.toBeInTheDocument();
-    // Other items still render
-    expect(screen.getByText("Focus snippet snippet-1 in viewport")).toBeInTheDocument();
-    expect(screen.getByText("Edit snippet snippet-1…")).toBeInTheDocument();
+    expect(screen.queryByText("Fit step viewport")).not.toBeInTheDocument();
+    // Header and other items still render
+    expect(screen.getByText("Snippet: snippet-1")).toBeInTheDocument();
+    expect(screen.getByText("Focus in viewport")).toBeInTheDocument();
+    expect(screen.getByText("Edit…")).toBeInTheDocument();
   });
 
   it("drops Fit overlay when overlay SVG is not ready", () => {
     render(
       <CanvasContextMenu
         {...baseProps}
-        target={{ overlayId: "snippet-1", overlaySvgReady: false, elementId: null }}
+        target={{ overlayId: "snippet-1", overlaySvgReady: false, elementId: null, stepIndex: null, stepName: null }}
       />
     );
-    expect(screen.queryByText("Fit step viewport to this snippet")).not.toBeInTheDocument();
-    expect(screen.getByText("Focus snippet snippet-1 in viewport")).toBeInTheDocument();
+    expect(screen.queryByText("Fit step viewport")).not.toBeInTheDocument();
+    expect(screen.getByText("Focus in viewport")).toBeInTheDocument();
   });
 
   it("fires fit-overlay action and closes when Fit is clicked", () => {
@@ -69,10 +95,10 @@ describe("CanvasContextMenu", () => {
         {...baseProps}
         onAction={onAction}
         onClose={onClose}
-        target={{ overlayId: "snippet-1", overlaySvgReady: true, elementId: null }}
+        target={{ overlayId: "snippet-1", overlaySvgReady: true, elementId: null, stepIndex: null, stepName: null }}
       />
     );
-    fireEvent.click(screen.getByText("Fit step viewport to this snippet"));
+    fireEvent.click(screen.getByText("Fit Step 1 viewport"));
     expect(onAction).toHaveBeenCalledWith({ type: "fit-overlay", overlayId: "snippet-1" } as ContextMenuAction);
     expect(onClose).toHaveBeenCalled();
   });
@@ -81,27 +107,26 @@ describe("CanvasContextMenu", () => {
     render(
       <CanvasContextMenu
         {...baseProps}
-        target={{ overlayId: null, overlaySvgReady: false, elementId: "box-1" }}
+        target={{ overlayId: null, overlaySvgReady: false, elementId: "box-1", stepIndex: null, stepName: null }}
       />
     );
-    expect(screen.getByText("Fit step viewport to this element")).toBeInTheDocument();
-    expect(screen.getByText("Focus element box-1 in viewport")).toBeInTheDocument();
+    expect(screen.getByText("Element: box-1")).toBeInTheDocument();
+    expect(screen.getByText("Fit Step 1 viewport")).toBeInTheDocument();
+    expect(screen.getByText("Focus in viewport")).toBeInTheDocument();
   });
 
   it("groups overlay and element actions with a separator and headers when both resolve", () => {
     render(
       <CanvasContextMenu
         {...baseProps}
-        target={{ overlayId: "snippet-1", overlaySvgReady: true, elementId: "box-1" }}
+        target={{ overlayId: "snippet-1", overlaySvgReady: true, elementId: "box-1", stepIndex: null, stepName: null }}
       />
     );
-    expect(screen.getByText("Fit step viewport to this snippet")).toBeInTheDocument();
-    expect(screen.getByText("Fit step viewport to this element")).toBeInTheDocument();
-    expect(screen.getByText("Focus snippet snippet-1 in viewport")).toBeInTheDocument();
-    expect(screen.getByText("Focus element box-1 in viewport")).toBeInTheDocument();
-    // Section headers
     expect(screen.getByText("Snippet: snippet-1")).toBeInTheDocument();
     expect(screen.getByText("Element: box-1")).toBeInTheDocument();
+    // Both sections have "Fit Step 1 viewport" and "Focus in viewport"
+    expect(screen.getAllByText("Fit Step 1 viewport")).toHaveLength(2);
+    expect(screen.getAllByText("Focus in viewport")).toHaveLength(2);
   });
 
   it("closes on Escape", () => {
@@ -110,7 +135,7 @@ describe("CanvasContextMenu", () => {
       <CanvasContextMenu
         {...baseProps}
         onClose={onClose}
-        target={{ overlayId: "snippet-1", overlaySvgReady: true, elementId: null }}
+        target={{ overlayId: "snippet-1", overlaySvgReady: true, elementId: null, stepIndex: null, stepName: null }}
       />
     );
     act(() => {
@@ -124,11 +149,12 @@ describe("CanvasContextMenu", () => {
       <CanvasContextMenu
         {...baseProps}
         hasSelectedStep={false}
-        target={{ overlayId: null, overlaySvgReady: false, elementId: "box-1" }}
+        target={{ overlayId: null, overlaySvgReady: false, elementId: "box-1", stepIndex: null, stepName: null }}
       />
     );
-    expect(screen.queryByText("Fit step viewport to this element")).not.toBeInTheDocument();
-    expect(screen.getByText("Focus element box-1 in viewport")).toBeInTheDocument();
+    expect(screen.queryByText("Fit step viewport")).not.toBeInTheDocument();
+    expect(screen.getByText("Element: box-1")).toBeInTheDocument();
+    expect(screen.getByText("Focus in viewport")).toBeInTheDocument();
   });
 
   it("does not close when clicking inside the keepOpenRef element", () => {
@@ -143,7 +169,7 @@ describe("CanvasContextMenu", () => {
         {...baseProps}
         onClose={onClose}
         keepOpenRef={keepOpenRef}
-        target={{ overlayId: "snippet-1", overlaySvgReady: true, elementId: null }}
+        target={{ overlayId: "snippet-1", overlaySvgReady: true, elementId: null, stepIndex: null, stepName: null }}
       />
     );
 

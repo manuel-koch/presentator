@@ -608,6 +608,9 @@ function App() {
       case "focus-element":
         if (action.elementId) canvasRef.current?.goToElement(action.elementId);
         break;
+      case "focus-step":
+        if (config && action.stepIndex !== undefined) canvasRef.current?.goToStep(config.steps[action.stepIndex]);
+        break;
     }
   }
 
@@ -682,8 +685,15 @@ function App() {
             overlayId: contextMenu.overlayId,
             overlaySvgReady: contextMenu.overlaySvgReady,
             elementId: contextMenu.elementId,
+            stepIndex: contextMenu.stepIndex,
+            stepName: contextMenu.stepName,
           }}
           hasSelectedStep={selectedStepIndex !== null}
+          selectedStepName={
+            selectedStepIndex !== null && config?.steps[selectedStepIndex]
+              ? config.steps[selectedStepIndex].name
+              : null
+          }
           onAction={handleContextMenuAction}
           onClose={() => { setContextMenu(null); canvasRef.current?.clearFlash(); }}
           keepOpenRef={overlayAlignRef}
