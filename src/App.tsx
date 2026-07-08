@@ -796,7 +796,11 @@ function App() {
                 <div dangerouslySetInnerHTML={{ __html: svgFile.content }} />
               </div>
             )}
-            {contextMenu && (
+            {contextMenu && selectedStepIndex !== null && (
+              /* Only show the fit alignment widget when a fit action would be in the context menu */
+              (contextMenu.overlayId !== null && contextMenu.overlaySvgReady) ||
+              contextMenu.elementId !== null
+            ) && (
               <OverlayAlignWidget
                 ref={overlayAlignRef}
                 alignH={overlayAlignH}

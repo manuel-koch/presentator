@@ -48,19 +48,27 @@ with the background content. Visibility is controlled per step.
 Render pipeline (all Rust, no browser engine):
 `markdown` → `pulldown-cmark` → Typst source → `typst-as-lib` → SVG string → frontend embed
 
-### Phase 10 — Per-step visibility toggle
+### Per-step snippet visibility toggle
 
 - [ ] In the step list, add a toggle (eye icon) per overlay row to hide/show the overlay
       for that step (updates `hidden_overlays` on the step)
 - [ ] Verify: toggle an overlay off for one step; confirm it is absent in that step and
       present in adjacent steps during presentation
 
-### Phase 11 — Cache cleanup
+### Cache cleanup
 
 - [ ] Maintain a max accumulated size of cached artifacts ( markdown-to-svg files, step-preview images )
   - [ ] remove oldest files until the limit of the cached artifacts of given kind is not exhausted
   - [ ] At configurable size limit to settings-dialog, one limit for each kind of cached artifacts
     - [ ] Include the limit (number, in megabytes) in the same row as the clear-button
+
+### Snippet Styling
+
+- [ ] Allow configuring background color for a markdown snippet
+      when it gets rendered to SVG.
+
+- [ ] Allow configuring border width/style/color for a markdown snippet when
+      it gets rendered to SVG.
 
 ## Presentation Mode (basic)
 
@@ -246,7 +254,7 @@ and keep a single shared "Fit alignment" defaults panel.
     is on another step-viewport-rect.
     Include the step-name in the action-menu to note the target of the action.
 
-- [ ] The 3x3-fit-alignment widget is shown although no corresponding
+- [x] The 3x3-fit-alignment widget is shown although no corresponding
       fit-to-snippet or fit-to-element action-menu is included in the
       current opened context-menu.
       E.g. this happens when right-click hit point is within a step-viewport-rect

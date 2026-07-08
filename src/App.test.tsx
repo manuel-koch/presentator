@@ -862,12 +862,15 @@ describe("App — overlay-align widget (floating)", () => {
     expect(screen.queryByTestId("overlay-align-widget")).not.toBeInTheDocument();
   });
 
-  it("shows the widget after right-clicking the canvas and allows anchor/padding interaction", async () => {
+  it("shows the widget after selecting a step and right-clicking on an overlay", async () => {
     vi.mocked(open).mockResolvedValue("/path/to/slides.svg");
     mockInvokeWithConfig(SVG_WITH_VIEWBOX, CONFIG_WITH_OVERLAYS);
     render(<App />);
     await userEvent.click(screen.getByRole("button", { name: "Open SVG file" }));
     await waitFor(() => expect(screen.getByTestId("editing-canvas")).toBeInTheDocument());
+
+    // Select a step first, otherwise the widget has no fit action to pair with
+    await userEvent.click(screen.getByText("Step 1"));
 
     // Right-click inside the overlay rect to open context menu (which shows the widget)
     const canvas = screen.getByTestId("editing-canvas");
@@ -971,12 +974,29 @@ describe("App — context menu integration", () => {
 
   it("hides the alignment widget when right-clicking whitespace with no targets", async () => {
     await loadWithOverlays();
+    // Select a step to ensure the widget condition tests target presence, not selectedStepIndex
+    await userEvent.click(screen.getByText("Step 1"));
     // Whitespace right-click should NOT show the widget
     rightClickOnCanvas(-100, -100);
 
     await waitFor(() => {
       expect(screen.queryByTestId("overlay-align-widget")).not.toBeInTheDocument();
     });
+  });
+
+  it("hides the alignment widget when right-clicking on a step-only target (no overlay or element)", async () => {
+    await loadWithOverlays();
+    await userEvent.click(screen.getByText("Step 1"));
+    // Click inside the step viewport rect but outside the overlay rect
+    // (step viewport fills the viewBox, overlay is at x=100,y=100,w=200)
+    rightClickOnCanvas(0, 0);
+
+    await waitFor(() => {
+      // The step context menu should show
+      expect(screen.getByText("Focus in viewport")).toBeInTheDocument();
+    });
+    // But the fit alignment widget should NOT show — no overlay/element for a fit action
+    expect(screen.queryByTestId("overlay-align-widget")).not.toBeInTheDocument();
   });
 
   it("opens the markdown editor when clicking Edit snippet", async () => {
