@@ -43,6 +43,9 @@ export default defineConfig(async () => ({
     globals: true,
     environment: "jsdom",
     setupFiles: ["src/test-setup.ts"],
+    env: {
+      NODE_ENV: "test",
+    },
     exclude: ["**/node_modules/**", "**/e2e/**"],
     testTimeout: 5000,
     hookTimeout: 5000,

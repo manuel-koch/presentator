@@ -73,6 +73,12 @@ export function useOverlaySvgs(
         text_color: overlay.style?.text_color ?? "#000000",
         font_family: overlay.style?.font_family ?? "Helvetica Neue",
         text_align: overlay.style?.text_align ?? "left",
+        background_color: overlay.style?.background_color ?? null,
+        border_width: overlay.style?.border_width ?? 0,
+        border_style: overlay.style?.border_style ?? "solid",
+        border_color: overlay.style?.border_color ?? "#000000",
+        border_radius: overlay.style?.border_radius ?? 0,
+        padding: overlay.style?.padding ?? 0,
       };
       invoke<string>("render_markdown_to_svg", {
         id: overlay.id,

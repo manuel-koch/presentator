@@ -44,7 +44,7 @@ describe("useOverlaySvgs", () => {
     expect(invoke).toHaveBeenCalledWith("render_markdown_to_svg", {
       id: "o1",
       content: "# Hello",
-      options: { font_size_pt: 14.0, text_color: "#000000", font_family: "Helvetica Neue", text_align: "left" },
+      options: { font_size_pt: 14.0, text_color: "#000000", font_family: "Helvetica Neue", text_align: "left", background_color: null, border_width: 0, border_style: "solid", border_color: "#000000", border_radius: 0, padding: 0 },
       width: 400, // default render_width_pct=20 → 20*20=400pt
     });
   });
@@ -56,7 +56,7 @@ describe("useOverlaySvgs", () => {
     expect(invoke).toHaveBeenCalledWith("render_markdown_to_svg", {
       id: "o2",
       content: "## Styled",
-      options: { font_size_pt: 18, text_color: "#ff0000", font_family: "Monaco", text_align: "left" },
+      options: { font_size_pt: 18, text_color: "#ff0000", font_family: "Monaco", text_align: "left", background_color: null, border_width: 0, border_style: "solid", border_color: "#000000", border_radius: 0, padding: 0 },
       width: 400, // no render_width_pct in style → default 20 → 400pt
     });
   });

@@ -3,7 +3,10 @@ import { invoke } from "@tauri-apps/api/core";
 import type { MarkdownOverlay, Step } from "../types/config";
 import type { ViewBox } from "../utils/svgViewBox";
 import { parseAspectRatio } from "../utils/svgViewBox";
-import { buildStaticHiddenStyle, buildOverlayEmbeds } from "../components/PresentationCanvas";
+import {
+  buildStaticHiddenStyle,
+  buildOverlayEmbeds,
+} from "../components/PresentationCanvas";
 import { rustLog } from "../utils/rustLog";
 
 const THUMB_W = 400;
@@ -55,17 +58,32 @@ function buildThumbnailSvg(
     `<g transform="rotate(${-rotation},${W / 2},${H / 2})">` +
     `<svg x="${svgLeft}" y="${svgTop}" width="${svgPixelW}" height="${svgPixelH}"` +
     ` viewBox="${vb.x} ${vb.y} ${vb.width} ${vb.height}" overflow="visible">` +
-    hiddenStyle + svgInner + overlayHtml +
+    hiddenStyle +
+    svgInner +
+    overlayHtml +
     `</svg></g></svg>`
   );
 }
 
-async function renderThumbnail(svgStr: string, width: number, height: number, baseDir: string | undefined): Promise<string> {
+async function renderThumbnail(
+  svgStr: string,
+  width: number,
+  height: number,
+  baseDir: string | undefined,
+): Promise<string> {
   try {
-    const b64 = await invoke<string | null>("render_svg_thumbnail", { svg: svgStr, width, height, baseDir: baseDir ?? null });
+    const b64 = await invoke<string | null>("render_svg_thumbnail", {
+      svg: svgStr,
+      width,
+      height,
+      baseDir: baseDir ?? null,
+    });
     return b64 ? `data:image/png;base64,${b64}` : "";
   } catch (e) {
-    rustLog("warn", `step-thumbnail: render_svg_thumbnail invoke error: ${e instanceof Error ? e.message : String(e)}`);
+    rustLog(
+      "warn",
+      `step-thumbnail: render_svg_thumbnail invoke error: ${e instanceof Error ? e.message : String(e)}`,
+    );
     return "";
   }
 }
@@ -101,9 +119,15 @@ function stepKey(
   });
 }
 
-async function resolveFromDisk(name: string, key: string): Promise<string | null> {
+async function resolveFromDisk(
+  name: string,
+  key: string,
+): Promise<string | null> {
   try {
-    const base64 = await invoke<string | null>("get_step_thumbnail", { name, key });
+    const base64 = await invoke<string | null>("get_step_thumbnail", {
+      name,
+      key,
+    });
     if (base64) return `data:image/png;base64,${base64}`;
   } catch {
     // disk cache unavailable
@@ -111,7 +135,11 @@ async function resolveFromDisk(name: string, key: string): Promise<string | null
   return null;
 }
 
-async function saveToDisk(name: string, key: string, dataUri: string): Promise<void> {
+async function saveToDisk(
+  name: string,
+  key: string,
+  dataUri: string,
+): Promise<void> {
   const base64 = dataUri.replace(/^data:image\/png;base64,/, "");
   try {
     await invoke("cache_step_thumbnail", { name, key, pngBase64: base64 });
@@ -169,7 +197,15 @@ export function useStepThumbnails(
     // Show already-known thumbnails instantly.
     const initial = new Map<number, string>();
     for (let i = 0; i < debouncedSteps.length; i++) {
-      const hit = memCache.get(stepKey(debouncedSteps[i], svgVersion, overlaySvgs, aspectRatio, backgroundColor));
+      const hit = memCache.get(
+        stepKey(
+          debouncedSteps[i],
+          svgVersion,
+          overlaySvgs,
+          aspectRatio,
+          backgroundColor,
+        ),
+      );
       if (hit) initial.set(i, hit);
     }
     setThumbnails(initial);
@@ -178,22 +214,49 @@ export function useStepThumbnails(
     // Sequential processing avoids simultaneous canvas operations that can block
     // the main thread for complex SVGs, and keeps state updates predictable.
     (async () => {
-      rustLog("debug", `step-thumbnail: effect started for ${debouncedSteps.length} step(s)`);
+      rustLog(
+        "debug",
+        `step-thumbnail: started for ${debouncedSteps.length} step(s)`,
+      );
       for (let i = 0; i < debouncedSteps.length; i++) {
         if (cancelled) break;
         const step = debouncedSteps[i];
-        const k = stepKey(step, svgVersion, overlaySvgs, aspectRatio, backgroundColor);
+        const k = stepKey(
+          step,
+          svgVersion,
+          overlaySvgs,
+          aspectRatio,
+          backgroundColor,
+        );
         if (memCache.has(k)) continue;
 
         let png = await resolveFromDisk(step.name, k);
-        if (cancelled) { rustLog("debug", `step-thumbnail: cancelled after disk lookup for "${step.name}"`); break; }
+        if (cancelled) {
+          rustLog(
+            "debug",
+            `step-thumbnail: cancelled after disk lookup for "${step.name}"`,
+          );
+          break;
+        }
 
         if (!png) {
           const svgStr = buildThumbnailSvg(
-            svgInner, svgViewBox, step, aspectRatio, backgroundColor, overlays, overlaySvgs,
+            svgInner,
+            svgViewBox,
+            step,
+            aspectRatio,
+            backgroundColor,
+            overlays,
+            overlaySvgs,
           );
           png = await renderThumbnail(svgStr, THUMB_W, H, baseDir);
-          if (cancelled) { rustLog("debug", `step-thumbnail: cancelled after render for "${step.name}"`); break; }
+          if (cancelled) {
+            rustLog(
+              "debug",
+              `step-thumbnail: cancelled after render for "${step.name}"`,
+            );
+            break;
+          }
           if (png) {
             rustLog("debug", `step-thumbnail rendered: ${step.name}`);
             saveToDisk(step.name, k, png);
@@ -215,8 +278,19 @@ export function useStepThumbnails(
       }
     })();
 
-    return () => { cancelled = true; };
-  }, [debouncedSteps, svgInner, svgFilePath, svgViewBox, aspectRatio, backgroundColor, overlays, overlaySvgs]);
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    debouncedSteps,
+    svgInner,
+    svgFilePath,
+    svgViewBox,
+    aspectRatio,
+    backgroundColor,
+    overlays,
+    overlaySvgs,
+  ]);
 
   return thumbnails;
 }

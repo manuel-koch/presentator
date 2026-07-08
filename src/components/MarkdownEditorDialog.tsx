@@ -19,7 +19,7 @@ const FONT_FALLBACK = [
   "Courier New",
 ];
 
-type StyleState = Required<Pick<OverlayStyle, "font_size_pt" | "text_color" | "font_family" | "text_align" | "render_width_pct">>;
+type StyleState = Required<Pick<OverlayStyle, "font_size_pt" | "text_color" | "font_family" | "text_align" | "render_width_pct" | "background_color" | "border_width" | "border_style" | "border_color" | "border_radius" | "padding">>;
 
 function defaultStyle(overlay: MarkdownOverlay): StyleState {
   return {
@@ -28,6 +28,12 @@ function defaultStyle(overlay: MarkdownOverlay): StyleState {
     font_family: overlay.style?.font_family ?? "Helvetica Neue",
     text_align: overlay.style?.text_align ?? "left",
     render_width_pct: overlay.style?.render_width_pct ?? 20,
+    background_color: overlay.style?.background_color ?? "",
+    border_width: overlay.style?.border_width ?? 0,
+    border_style: overlay.style?.border_style ?? "solid",
+    border_color: overlay.style?.border_color ?? "#000000",
+    border_radius: overlay.style?.border_radius ?? 0,
+    padding: overlay.style?.padding ?? 0,
   };
 }
 
@@ -45,6 +51,9 @@ export function MarkdownEditorDialog({ overlay, onSave, onQuickSave, onCancel }:
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [fontSizeStr, setFontSizeStr] = useState(() => String(overlay.style?.font_size_pt ?? 14.0));
   const [renderWidthStr, setRenderWidthStr] = useState(() => String(overlay.style?.render_width_pct ?? 20));
+  const [borderWidthStr, setBorderWidthStr] = useState(() => String(overlay.style?.border_width ?? 0));
+  const [borderRadiusStr, setBorderRadiusStr] = useState(() => String(overlay.style?.border_radius ?? 0));
+  const [paddingStr, setPaddingStr] = useState(() => String(overlay.style?.padding ?? 0));
 
   const [systemFonts, setSystemFonts] = useState<string[]>([]);
   const [fontSearch, setFontSearch] = useState("");
@@ -220,117 +229,222 @@ export function MarkdownEditorDialog({ overlay, onSave, onQuickSave, onCancel }:
           </span>
         </div>
         <div className="markdown-editor-style-bar">
-          <label className="markdown-editor-style-field">
-            <span className="markdown-editor-style-label">Width</span>
-            <input
-              type="text"
-              inputMode="decimal"
-              value={renderWidthStr}
-              onChange={(e) => setRenderWidthStr(e.target.value)}
-              onBlur={() => {
-                const v = parseFloat(renderWidthStr);
-                if (!isNaN(v) && v >= 1 && v <= 100) {
-                  updateStyle({ render_width_pct: v });
-                  setRenderWidthStr(String(v));
-                } else {
-                  setRenderWidthStr(String(style.render_width_pct));
-                }
-              }}
-              className="markdown-editor-size-input"
-              aria-label="Render width as percent of canvas"
-            />
-            <span className="markdown-editor-style-unit">%</span>
-          </label>
-          <label className="markdown-editor-style-field">
-            <span className="markdown-editor-style-label">Size</span>
-            <input
-              type="text"
-              inputMode="decimal"
-              value={fontSizeStr}
-              onChange={(e) => setFontSizeStr(e.target.value)}
-              onBlur={() => {
-                const v = parseFloat(fontSizeStr);
-                if (!isNaN(v) && v >= 4 && v <= 72) {
-                  updateStyle({ font_size_pt: v });
-                  setFontSizeStr(String(v));
-                } else {
-                  setFontSizeStr(String(style.font_size_pt));
-                }
-              }}
-              className="markdown-editor-size-input"
-              aria-label="Font size in pt"
-            />
-            <span className="markdown-editor-style-unit">pt</span>
-          </label>
-          <div className="markdown-editor-style-field">
-            <span className="markdown-editor-style-label">Font</span>
-            <div ref={fontPickerRef} className="markdown-editor-font-picker">
+          {/* ── General row: Width, Alignment, Font size, Font family, Font color ── */}
+          <div className="markdown-editor-style-row">
+            <label className="markdown-editor-style-field">
+              <span className="markdown-editor-style-label">Width</span>
               <input
                 type="text"
-                value={fontPickerOpen ? fontSearch : style.font_family}
-                placeholder={fontPickerOpen ? style.font_family : undefined}
-                onChange={(e) => { setFontSearch(e.target.value); setFontHighlightIndex(-1); }}
-                onFocus={openFontPicker}
-                onKeyDown={handleFontKeyDown}
-                className="markdown-editor-font-input"
-                aria-label="Font family"
-                aria-expanded={fontPickerOpen}
-                aria-haspopup="listbox"
-                autoComplete="off"
-                spellCheck={false}
+                inputMode="decimal"
+                value={renderWidthStr}
+                onChange={(e) => setRenderWidthStr(e.target.value)}
+                onBlur={() => {
+                  const v = parseFloat(renderWidthStr);
+                  if (!isNaN(v) && v >= 1 && v <= 100) {
+                    updateStyle({ render_width_pct: v });
+                    setRenderWidthStr(String(v));
+                  } else {
+                    setRenderWidthStr(String(style.render_width_pct));
+                  }
+                }}
+                className="markdown-editor-size-input"
+                aria-label="Render width as percent of canvas"
               />
-              {fontPickerOpen && (
-                <ul
-                  ref={fontListRef}
-                  className="markdown-editor-font-dropdown"
-                  role="listbox"
-                  aria-label="Font families"
+              <span className="markdown-editor-style-unit">%</span>
+            </label>
+            <div className="markdown-editor-align-toggle" role="group" aria-label="Text alignment">
+              <span className="markdown-editor-style-label">Align</span>
+              {(["left", "center", "right"] as const).map((a) => (
+                <button
+                  key={a}
+                  className={`markdown-editor-align-btn${style.text_align === a ? " markdown-editor-align-btn--active" : ""}`}
+                  onClick={() => updateStyle({ text_align: a })}
+                  aria-pressed={style.text_align === a}
+                  title={`Align ${a}`}
                 >
-                  {filteredFonts.length === 0 ? (
-                    <li className="markdown-editor-font-option markdown-editor-font-option--empty">
-                      No matches
-                    </li>
-                  ) : filteredFonts.map((font, i) => (
-                    <li
-                      key={font}
-                      role="option"
-                      aria-selected={font === style.font_family}
-                      className={[
-                        "markdown-editor-font-option",
-                        i === fontHighlightIndex ? "markdown-editor-font-option--highlighted" : "",
-                        font === style.font_family ? "markdown-editor-font-option--selected" : "",
-                      ].filter(Boolean).join(" ")}
-                      onMouseDown={(e) => { e.preventDefault(); selectFont(font); }}
-                    >
-                      {font}
-                    </li>
-                  ))}
-                </ul>
-              )}
+                  {a === "left" ? "⫷" : a === "center" ? "≡" : "⫸"}
+                </button>
+              ))}
             </div>
+            <label className="markdown-editor-style-field">
+              <span className="markdown-editor-style-label">Font size</span>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={fontSizeStr}
+                onChange={(e) => setFontSizeStr(e.target.value)}
+                onBlur={() => {
+                  const v = parseFloat(fontSizeStr);
+                  if (!isNaN(v) && v >= 4 && v <= 72) {
+                    updateStyle({ font_size_pt: v });
+                    setFontSizeStr(String(v));
+                  } else {
+                    setFontSizeStr(String(style.font_size_pt));
+                  }
+                }}
+                className="markdown-editor-size-input"
+                aria-label="Font size in pt"
+              />
+              <span className="markdown-editor-style-unit">pt</span>
+            </label>
+            <div className="markdown-editor-style-field">
+              <span className="markdown-editor-style-label">Font family</span>
+              <div ref={fontPickerRef} className="markdown-editor-font-picker">
+                <input
+                  type="text"
+                  value={fontPickerOpen ? fontSearch : style.font_family}
+                  placeholder={fontPickerOpen ? style.font_family : undefined}
+                  onChange={(e) => { setFontSearch(e.target.value); setFontHighlightIndex(-1); }}
+                  onFocus={openFontPicker}
+                  onKeyDown={handleFontKeyDown}
+                  className="markdown-editor-font-input"
+                  aria-label="Font family"
+                  aria-expanded={fontPickerOpen}
+                  aria-haspopup="listbox"
+                  autoComplete="off"
+                  spellCheck={false}
+                />
+                {fontPickerOpen && (
+                  <ul
+                    ref={fontListRef}
+                    className="markdown-editor-font-dropdown"
+                    role="listbox"
+                    aria-label="Font families"
+                  >
+                    {filteredFonts.length === 0 ? (
+                      <li className="markdown-editor-font-option markdown-editor-font-option--empty">
+                        No matches
+                      </li>
+                    ) : filteredFonts.map((font, i) => (
+                      <li
+                        key={font}
+                        role="option"
+                        aria-selected={font === style.font_family}
+                        className={[
+                          "markdown-editor-font-option",
+                          i === fontHighlightIndex ? "markdown-editor-font-option--highlighted" : "",
+                          font === style.font_family ? "markdown-editor-font-option--selected" : "",
+                        ].filter(Boolean).join(" ")}
+                        onMouseDown={(e) => { e.preventDefault(); selectFont(font); }}
+                      >
+                        {font}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+            <label className="markdown-editor-style-field">
+              <span className="markdown-editor-style-label">Font color</span>
+              <input
+                type="color"
+                value={style.text_color}
+                onChange={(e) => updateStyle({ text_color: e.target.value })}
+                className="markdown-editor-color-input"
+                aria-label="Text color"
+              />
+            </label>
           </div>
-          <label className="markdown-editor-style-field">
-            <span className="markdown-editor-style-label">Color</span>
-            <input
-              type="color"
-              value={style.text_color}
-              onChange={(e) => updateStyle({ text_color: e.target.value })}
-              className="markdown-editor-color-input"
-              aria-label="Text color"
-            />
-          </label>
-          <div className="markdown-editor-align-toggle" role="group" aria-label="Text alignment">
-            {(["left", "center", "right"] as const).map((a) => (
-              <button
-                key={a}
-                className={`markdown-editor-align-btn${style.text_align === a ? " markdown-editor-align-btn--active" : ""}`}
-                onClick={() => updateStyle({ text_align: a })}
-                aria-pressed={style.text_align === a}
-                title={`Align ${a}`}
-              >
-                {a === "left" ? "⫷" : a === "center" ? "≡" : "⫸"}
-              </button>
-            ))}
+          {/* ── Background row: Background color, Padding ── */}
+          <div className="markdown-editor-style-row">
+            <label className="markdown-editor-style-field">
+              <span className="markdown-editor-style-label">Background color</span>
+              <input
+                type="color"
+                value={style.background_color || "#ffffff"}
+                onChange={(e) => updateStyle({ background_color: e.target.value })}
+                className="markdown-editor-color-input"
+                aria-label="Background color"
+              />
+            </label>
+            <label className="markdown-editor-style-field">
+              <span className="markdown-editor-style-label">Padding</span>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={paddingStr}
+                onChange={(e) => setPaddingStr(e.target.value)}
+                onBlur={() => {
+                  const v = parseFloat(paddingStr);
+                  if (!isNaN(v) && v >= 0 && v <= 50) {
+                    updateStyle({ padding: v });
+                    setPaddingStr(String(v));
+                  } else {
+                    setPaddingStr(String(style.padding));
+                  }
+                }}
+                className="markdown-editor-size-input"
+                aria-label="Padding in pt"
+              />
+              <span className="markdown-editor-style-unit">pt</span>
+            </label>
+          </div>
+          {/* ── Border row: Border width, Border style, Border color, Border radius ── */}
+          <div className="markdown-editor-style-row">
+            <label className="markdown-editor-style-field">
+              <span className="markdown-editor-style-label">Border width</span>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={borderWidthStr}
+                onChange={(e) => setBorderWidthStr(e.target.value)}
+                onBlur={() => {
+                  const v = parseFloat(borderWidthStr);
+                  if (!isNaN(v) && v >= 0 && v <= 20) {
+                    updateStyle({ border_width: v });
+                    setBorderWidthStr(String(v));
+                  } else {
+                    setBorderWidthStr(String(style.border_width));
+                  }
+                }}
+                className="markdown-editor-size-input"
+                aria-label="Border width in pt"
+              />
+            </label>
+            <label className="markdown-editor-style-field markdown-editor-border-toggle" role="group" aria-label="Border style">
+              <span className="markdown-editor-style-label">Style</span>
+              {(["solid", "dashed", "dotted"] as const).map((s) => (
+                <button
+                  key={s}
+                  className={`markdown-editor-align-btn${style.border_style === s ? " markdown-editor-align-btn--active" : ""}`}
+                  onClick={() => updateStyle({ border_style: s })}
+                  aria-pressed={style.border_style === s}
+                  title={s}
+                >
+                  {s === "solid" ? "━" : s === "dashed" ? "╌" : "┅"}
+                </button>
+              ))}
+            </label>
+            <label className="markdown-editor-style-field">
+              <span className="markdown-editor-style-label">Border color</span>
+              <input
+                type="color"
+                value={style.border_color}
+                onChange={(e) => updateStyle({ border_color: e.target.value })}
+                className="markdown-editor-color-input"
+                aria-label="Border color"
+              />
+            </label>
+            <label className="markdown-editor-style-field">
+              <span className="markdown-editor-style-label">Border radius</span>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={borderRadiusStr}
+                onChange={(e) => setBorderRadiusStr(e.target.value)}
+                onBlur={() => {
+                  const v = parseFloat(borderRadiusStr);
+                  if (!isNaN(v) && v >= 0 && v <= 50) {
+                    updateStyle({ border_radius: v });
+                    setBorderRadiusStr(String(v));
+                  } else {
+                    setBorderRadiusStr(String(style.border_radius));
+                  }
+                }}
+                className="markdown-editor-size-input"
+                aria-label="Border radius in pt"
+              />
+            </label>
           </div>
         </div>
         <div className="markdown-editor-panes">

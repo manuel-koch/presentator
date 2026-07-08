@@ -26,6 +26,12 @@ export interface OverlayStyle {
   font_family?: string;
   text_align?: "left" | "center" | "right";
   render_width_pct?: number;
+  background_color?: string;
+  border_width?: number;
+  border_style?: "solid" | "dashed" | "dotted";
+  border_color?: string;
+  border_radius?: number;
+  padding?: number;
 }
 
 export interface MarkdownOverlay {

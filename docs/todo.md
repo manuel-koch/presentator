@@ -66,15 +66,39 @@ Render pipeline (all Rust, no browser engine):
 
 ### Snippet Styling
 
-- [ ] Allow configuring background color for a markdown snippet
+- [x] Allow configuring background color for a markdown snippet
       when it gets rendered to SVG.
-  - [ ] Update sidecar config for overlays
-  - [ ] Update sidecar config schema definition
-
-- [ ] Allow configuring border width/style/color for a markdown snippet when
+  - color can be configured like "#12aa56" or via color-picker
+- [x] Allow configuring border width/style/color/rounding-radius for a markdown snippet when
       it gets rendered to SVG.
-  - [ ] Update sidecar config for overlays
-  - [ ] Update sidecar config schema definition
+  - color can be configured like "#12aa56" or via color-picker
+  - width is a float number
+  - rounding-radius is a float number, affects all four sides of the overlay-bounds
+  - style is a dropdown with line styles like "dashed", "dotted" or "solid"
+- [x] Allow configuring padding for a markdown snippet when
+      it gets rendered to SVG. This is useful when using a border style.
+- Open question: should the float numbers be based on the internal "width" used to render
+  the markdown to SVG ?
+  Lets try the float numbers first and revise the implementation after we have tested its UX.
+- [x] Include the additional styles in the cache-key of the generated SVG
+- [x] Update sidecar config for overlays
+- [x] Update sidecar config schema definition
+
+- [ ] Can't select "no" (transparent) color for background, thus reverting
+      to the initial default background color is not possible
+
+- [ ] Can't select "no" (transparent) color for border, thus reverting
+      to the initial default background color is not possible
+
+- [ ] The "dashed" border button is narrower as the "solid" or "dotted" button
+
+- [ ] The border is half-in/half-out of the background-colored-area.
+      Should be completely inside the background-colored-area
+
+- [ ] The (colored) background bounding box of a rendered markdown text
+      is not correct. If the bottom text contains characters with decenders
+      like "j" then the lower part of the "y" is outside the background-colored
+      bounding-box.
 
 ## Presentation Mode (basic)
 
@@ -176,3 +200,9 @@ project-wide asset libraries.
         CSS rules since those headings are replaced by tab / section headers
   - [ ] Ensure the asset sections scroll independently when their content
         overflows the available tab height
+
+## Tooling
+
+- [ ] Apply opinionated source formatting using tools for
+      rust & typescript source files
+ - [ ] Add make target "format" to apply source code formatting

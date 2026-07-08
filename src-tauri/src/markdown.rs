@@ -13,6 +13,15 @@ fn default_font_family() -> String {
 fn default_text_align() -> String {
     "left".to_string()
 }
+fn default_border_style() -> String {
+    "solid".to_string()
+}
+fn default_border_color() -> String {
+    "#000000".to_string()
+}
+fn default_padding() -> f32 {
+    0.0
+}
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct RenderOptions {
@@ -24,6 +33,18 @@ pub struct RenderOptions {
     pub font_family: String,
     #[serde(default = "default_text_align")]
     pub text_align: String,
+    #[serde(default)]
+    pub background_color: Option<String>,
+    #[serde(default)]
+    pub border_width: f32,
+    #[serde(default = "default_border_style")]
+    pub border_style: String,
+    #[serde(default = "default_border_color")]
+    pub border_color: String,
+    #[serde(default)]
+    pub border_radius: f32,
+    #[serde(default = "default_padding")]
+    pub padding: f32,
 }
 
 impl Default for RenderOptions {
@@ -33,6 +54,12 @@ impl Default for RenderOptions {
             text_color: default_text_color(),
             font_family: default_font_family(),
             text_align: default_text_align(),
+            background_color: None,
+            border_width: 0.0,
+            border_style: default_border_style(),
+            border_color: default_border_color(),
+            border_radius: 0.0,
+            padding: default_padding(),
         }
     }
 }
@@ -65,8 +92,8 @@ fn compile_typst_to_svg(source: &str) -> Result<String, String> {
 pub fn markdown_to_typst(content: &str, opts: &RenderOptions, page_width_pt: u32) -> String {
     let align_line = match opts.text_align.as_str() {
         "center" => "#set align(center)\n",
-        "right"  => "#set align(right)\n",
-        _        => "",
+        "right" => "#set align(right)\n",
+        _ => "",
     };
     let mut out = format!(
         "#set page(width: {}pt, height: auto, margin: 1em, fill: none)\n\
@@ -86,8 +113,10 @@ pub fn markdown_to_typst(content: &str, opts: &RenderOptions, page_width_pt: u32
     let mut code_content = String::new();
     let mut list_stack: Vec<bool> = Vec::new(); // true = ordered
     let mut in_table_head = false;
+    let mut body = String::new();
 
     for event in parser {
+        // ... (same event processing, push to `body` instead of `out`)
         match event {
             Event::Start(Tag::Heading { level, .. }) => {
                 let prefix = match level {
@@ -98,57 +127,67 @@ pub fn markdown_to_typst(content: &str, opts: &RenderOptions, page_width_pt: u32
                     HeadingLevel::H5 => "=====",
                     HeadingLevel::H6 => "======",
                 };
-                out.push_str(prefix);
-                out.push(' ');
+                body.push_str(prefix);
+                body.push(' ');
             }
-            Event::End(TagEnd::Heading(_)) => out.push('\n'),
+            Event::End(TagEnd::Heading(_)) => body.push('\n'),
             Event::Start(Tag::Paragraph) => {}
-            Event::End(TagEnd::Paragraph) => out.push_str("\n\n"),
-            Event::Start(Tag::Emphasis) => out.push('_'),
-            Event::End(TagEnd::Emphasis) => out.push('_'),
-            Event::Start(Tag::Strong) => out.push('*'),
-            Event::End(TagEnd::Strong) => out.push('*'),
-            Event::Start(Tag::Strikethrough) => out.push_str("#strike["),
-            Event::End(TagEnd::Strikethrough) => out.push(']'),
-            Event::Start(Tag::BlockQuote(_)) => out.push_str("#block(inset: (left: 0.75em), stroke: (left: 2pt + luma(160)))[\n"),
-            Event::End(TagEnd::BlockQuote(_)) => out.push_str("]\n\n"),
-            Event::Start(Tag::Table(alignments)) => {
-                out.push_str(&format!("#table(columns: {},\n", alignments.len()));
+            Event::End(TagEnd::Paragraph) => body.push_str("\n\n"),
+            Event::Start(Tag::Emphasis) => body.push('_'),
+            Event::End(TagEnd::Emphasis) => body.push('_'),
+            Event::Start(Tag::Strong) => body.push('*'),
+            Event::End(TagEnd::Strong) => body.push('*'),
+            Event::Start(Tag::Strikethrough) => body.push_str("#strike["),
+            Event::End(TagEnd::Strikethrough) => body.push(']'),
+            Event::Start(Tag::BlockQuote(_)) => {
+                body.push_str("#block(inset: (left: 0.75em), stroke: (left: 2pt + luma(160)))[\n")
             }
-            Event::End(TagEnd::Table) => out.push_str(")\n\n"),
-            Event::Start(Tag::TableHead) => { in_table_head = true; }
-            Event::End(TagEnd::TableHead) => { in_table_head = false; }
+            Event::End(TagEnd::BlockQuote(_)) => body.push_str("]\n\n"),
+            Event::Start(Tag::Table(alignments)) => {
+                body.push_str(&format!("#table(columns: {},\n", alignments.len()));
+            }
+            Event::End(TagEnd::Table) => body.push_str(")\n\n"),
+            Event::Start(Tag::TableHead) => {
+                in_table_head = true;
+            }
+            Event::End(TagEnd::TableHead) => {
+                in_table_head = false;
+            }
             Event::Start(Tag::TableRow) | Event::End(TagEnd::TableRow) => {}
             Event::Start(Tag::TableCell) => {
-                out.push('[');
-                if in_table_head { out.push('*'); }
+                body.push('[');
+                if in_table_head {
+                    body.push('*');
+                }
             }
             Event::End(TagEnd::TableCell) => {
-                if in_table_head { out.push('*'); }
-                out.push_str("], ");
+                if in_table_head {
+                    body.push('*');
+                }
+                body.push_str("], ");
             }
-            Event::Start(Tag::Image { .. }) => out.push_str("\\[image: "),
-            Event::End(TagEnd::Image) => out.push_str("\\]"),
+            Event::Start(Tag::Image { .. }) => body.push_str("\\[image: "),
+            Event::End(TagEnd::Image) => body.push_str("\\]"),
             Event::TaskListMarker(checked) => {
                 if checked {
-                    out.push_str("#box(stroke: 0.6pt, width: 0.65em, height: 0.65em)[#place(center + horizon)[#text(size: 0.7em)[×]]] ");
+                    body.push_str("#box(stroke: 0.6pt, width: 0.65em, height: 0.65em)[#place(center + horizon)[#text(size: 0.7em)[×]]] ");
                 } else {
-                    out.push_str("#box(stroke: 0.6pt, width: 0.65em, height: 0.65em)[] ");
+                    body.push_str("#box(stroke: 0.6pt, width: 0.65em, height: 0.65em)[] ");
                 }
             }
             Event::Start(Tag::List(start)) => list_stack.push(start.is_some()),
             Event::End(TagEnd::List(_)) => {
                 list_stack.pop();
-                out.push('\n');
+                body.push('\n');
             }
             Event::Start(Tag::Item) => {
                 let depth = list_stack.len().saturating_sub(1);
                 let indent = "  ".repeat(depth);
                 let ordered = list_stack.last().copied().unwrap_or(false);
-                out.push_str(&indent);
-                out.push_str(if ordered { "+ " } else { "- " });
+                body.push_str(&indent);
+                body.push_str(if ordered { "+ " } else { "- " });
             }
-            Event::End(TagEnd::Item) => out.push('\n'),
+            Event::End(TagEnd::Item) => body.push('\n'),
             Event::Start(Tag::CodeBlock(kind)) => {
                 in_code_block = true;
                 code_content.clear();
@@ -158,62 +197,111 @@ pub fn markdown_to_typst(content: &str, opts: &RenderOptions, page_width_pt: u32
                 };
             }
             Event::End(TagEnd::CodeBlock) => {
-                out.push_str("#raw(block: true");
+                body.push_str("#raw(block: true");
                 if !code_lang.is_empty() {
-                    out.push_str(&format!(", lang: \"{}\"", escape_typst_str(&code_lang)));
+                    body.push_str(&format!(", lang: \"{}\"", escape_typst_str(&code_lang)));
                 }
-                out.push_str(&format!(", \"{}\")\n\n", escape_typst_str(&code_content)));
+                body.push_str(&format!(", \"{}\")\n\n", escape_typst_str(&code_content)));
                 in_code_block = false;
                 code_content.clear();
             }
             Event::Start(Tag::Link { dest_url, .. }) => {
-                out.push_str("#link(\"");
-                out.push_str(&escape_typst_str(&dest_url));
-                out.push_str("\")[");
+                body.push_str("#link(\"");
+                body.push_str(&escape_typst_str(&dest_url));
+                body.push_str("\")[");
             }
-            Event::End(TagEnd::Link) => out.push(']'),
+            Event::End(TagEnd::Link) => body.push(']'),
             Event::Code(text) => {
-                out.push_str("#raw(\"");
-                out.push_str(&escape_typst_str(&text));
-                out.push_str("\")");
+                body.push_str("#raw(\"");
+                body.push_str(&escape_typst_str(&text));
+                body.push_str("\")");
             }
             Event::Text(text) => {
                 if in_code_block {
                     code_content.push_str(&text);
                 } else {
-                    out.push_str(&escape_typst_markup(&text));
+                    body.push_str(&escape_typst_markup(&text));
                 }
             }
-            Event::SoftBreak => out.push(' '),
-            Event::HardBreak => out.push_str("\\\n"),
-            Event::Rule => out.push_str("\n#line(length: 100%)\n\n"),
+            Event::SoftBreak => body.push(' '),
+            Event::HardBreak => body.push_str("\\\n"),
+            Event::Rule => body.push_str("\n#line(length: 100%)\n\n"),
             // Inline HTML: <br/> → hard line break; other tags are dropped (their
             // text content still arrives via Event::Text and is not lost).
             Event::InlineHtml(tag) => {
                 if html_tag_name(&tag) == "br" {
-                    out.push_str("\\\n");
+                    body.push_str("\\\n");
                 }
             }
             // Block HTML: <hr/> → horizontal rule. For everything else, strip the
             // tags and emit the remaining plain text so that content CommonMark
             // absorbed into the HTML block is not silently lost.
             Event::Html(block) => {
-                let first_tag = block.lines()
+                let first_tag = block
+                    .lines()
                     .next()
                     .map(|l| html_tag_name(l.trim()))
                     .unwrap_or_default();
                 if first_tag == "hr" {
-                    out.push_str("\n#line(length: 100%)\n\n");
+                    body.push_str("\n#line(length: 100%)\n\n");
                 }
                 let text = strip_html_tags(&block);
                 let text = text.trim();
                 if !text.is_empty() {
-                    out.push_str(&escape_typst_markup(text));
-                    out.push_str("\n\n");
+                    body.push_str(&escape_typst_markup(text));
+                    body.push_str("\n\n");
                 }
             }
             _ => {}
         }
+    }
+
+    let body = body.trim();
+    if body.is_empty() {
+        return out;
+    }
+
+    // Wrap in styling block if background, border, or padding is requested
+    if opts.background_color.is_some() || opts.border_width > 0.0 || opts.padding > 0.0 {
+        out.push_str("#block(\n");
+        out.push_str("  width: 100%,\n");
+        if let Some(ref bg) = opts.background_color {
+            if !bg.is_empty() {
+                out.push_str(&format!("  fill: rgb(\"{}\"),\n", escape_typst_str(bg)));
+            }
+        }
+        if opts.border_width > 0.0 {
+            match opts.border_style.as_str() {
+                "dashed" | "dotted" => {
+                    let style = opts.border_style.as_str();
+                    out.push_str(&format!(
+                        "  stroke: (paint: rgb(\"{}\"), thickness: {}pt, dash: \"{}\"),\n",
+                        escape_typst_str(&opts.border_color),
+                        opts.border_width,
+                        style,
+                    ));
+                }
+                _ => {
+                    out.push_str(&format!(
+                        "  stroke: {}pt + rgb(\"{}\"),\n",
+                        opts.border_width,
+                        escape_typst_str(&opts.border_color),
+                    ));
+                }
+            }
+        }
+        if opts.border_radius > 0.0 {
+            out.push_str(&format!("  radius: {}pt,\n", opts.border_radius));
+        }
+        if opts.padding > 0.0 {
+            out.push_str(&format!("  inset: {}pt,\n", opts.padding));
+        }
+        out.push_str(")[\n");
+        out.push_str(&escape_typst_markup(body));
+        out.push_str("\n]\n");
+    } else {
+        out.push_str(body);
+        out.push('\n');
     }
 
     out
@@ -329,6 +417,7 @@ mod tests {
             text_color: "#ff0000".to_string(),
             font_family: "Monaco".to_string(),
             text_align: "left".to_string(),
+            ..Default::default()
         };
         let out = markdown_to_typst("x", &opts, DEFAULT_WIDTH_PT);
         assert!(out.contains("size: 18pt"));
@@ -710,5 +799,167 @@ mod tests {
             long_h > short_h,
             "long content (height={long_h}) should be taller than short content (height={short_h})"
         );
+    }
+
+    // ── Styling wrapper ─────────────────────────────────────────────────────
+
+    fn styled_opts() -> RenderOptions {
+        RenderOptions {
+            background_color: Some("#ffff00".to_string()),
+            border_width: 2.0,
+            border_style: "dashed".to_string(),
+            border_color: "#ff0000".to_string(),
+            border_radius: 4.0,
+            ..RenderOptions::default()
+        }
+    }
+
+    #[test]
+    fn no_wrapper_when_styling_is_default() {
+        let out = markdown_to_typst("Hello", &opts(), DEFAULT_WIDTH_PT);
+        assert!(!out.contains("#block("), "default styling must not emit a block wrapper");
+    }
+
+    #[test]
+    fn wrapper_emitted_when_background_color_set() {
+        let opts = RenderOptions {
+            background_color: Some("#ff0000".to_string()),
+            ..RenderOptions::default()
+        };
+        let out = markdown_to_typst("Hello", &opts, DEFAULT_WIDTH_PT);
+        assert!(out.contains("#block("), "background color must emit a block wrapper");
+        assert!(out.contains("fill: rgb(\"#ff0000\")"), "block must contain fill");
+    }
+
+    #[test]
+    fn wrapper_emitted_when_border_width_set() {
+        let opts = RenderOptions {
+            border_width: 1.0,
+            ..RenderOptions::default()
+        };
+        let out = markdown_to_typst("Hello", &opts, DEFAULT_WIDTH_PT);
+        assert!(out.contains("#block("), "border width must emit a block wrapper");
+        assert!(out.contains("stroke:"), "block must contain stroke");
+    }
+
+    #[test]
+    fn wrapper_contains_background_fill() {
+        let out = markdown_to_typst("Hello", &styled_opts(), DEFAULT_WIDTH_PT);
+        assert!(out.contains("fill: rgb(\"#ffff00\")"));
+    }
+
+    #[test]
+    fn wrapper_contains_border_stroke_with_style_and_color() {
+        let out = markdown_to_typst("Hello", &styled_opts(), DEFAULT_WIDTH_PT);
+        assert!(out.contains("stroke: (paint: rgb(\"#ff0000\"), thickness: 2pt, dash: \"dashed\")"));
+    }
+
+    #[test]
+    fn wrapper_contains_radius() {
+        let out = markdown_to_typst("Hello", &styled_opts(), DEFAULT_WIDTH_PT);
+        assert!(out.contains("radius: 4pt"));
+    }
+
+    #[test]
+    fn wrapper_dashed_style_emitted_correctly() {
+        let opts = RenderOptions {
+            border_width: 1.0,
+            border_style: "dashed".to_string(),
+            border_color: "#333".to_string(),
+            ..RenderOptions::default()
+        };
+        let out = markdown_to_typst("Hello", &opts, DEFAULT_WIDTH_PT);
+        assert!(out.contains("dash: \"dashed\""));
+    }
+
+    #[test]
+    fn wrapper_dotted_style_emitted_correctly() {
+        let opts = RenderOptions {
+            border_width: 1.5,
+            border_style: "dotted".to_string(),
+            border_color: "#00f".to_string(),
+            ..RenderOptions::default()
+        };
+        let out = markdown_to_typst("Hello", &opts, DEFAULT_WIDTH_PT);
+        assert!(out.contains("dash: \"dotted\""));
+        assert!(out.contains("1.5pt"));
+    }
+
+    #[test]
+    fn wrapper_contains_width_100_percent() {
+        let out = markdown_to_typst("Hello", &styled_opts(), DEFAULT_WIDTH_PT);
+        assert!(out.contains("width: 100%"));
+    }
+
+    #[test]
+    fn wrapper_content_is_present_inside_block() {
+        let out = markdown_to_typst("Hello World", &styled_opts(), DEFAULT_WIDTH_PT);
+        // The content should appear after the #[ opening of the block
+        assert!(out.contains(")[\nHello World\n]"), "styled wrapper must contain content inside block brackets");
+    }
+
+    #[test]
+    fn wrapper_no_radius_when_zero() {
+        let opts = RenderOptions {
+            border_width: 1.0,
+            border_radius: 0.0,
+            ..RenderOptions::default()
+        };
+        let out = markdown_to_typst("Hello", &opts, DEFAULT_WIDTH_PT);
+        assert!(!out.contains("radius:"), "radius should not be emitted when zero");
+    }
+
+    #[test]
+    fn wrapper_no_fill_when_background_none() {
+        let opts = RenderOptions {
+            border_width: 1.0,
+            background_color: None,
+            ..RenderOptions::default()
+        };
+        let out = markdown_to_typst("Hello", &opts, DEFAULT_WIDTH_PT);
+        // Split on the first double-newline to skip the preamble (which has "fill: none")
+        let body_section = out.splitn(2, "\n\n").nth(1).unwrap_or(&out);
+        assert!(!body_section.contains("fill:"), "fill should not be emitted when background is None");
+    }
+
+    #[test]
+    fn styled_render_produces_valid_svg() {
+        render_markdown_to_svg("# Styled\n\nWith a background.", &styled_opts(), DEFAULT_WIDTH)
+            .expect("styled render failed");
+    }
+
+    #[test]
+    fn wrapper_emitted_when_padding_set() {
+        let opts = RenderOptions {
+            padding: 8.0,
+            ..RenderOptions::default()
+        };
+        let out = markdown_to_typst("Hello", &opts, DEFAULT_WIDTH_PT);
+        assert!(out.contains("#block("), "padding must emit a block wrapper");
+        assert!(out.contains("inset: 8pt"), "block must contain inset with padding");
+    }
+
+    #[test]
+    fn wrapper_contains_inset_when_padding_set() {
+        let opts = RenderOptions {
+            padding: 12.0,
+            border_width: 1.0,
+            border_style: "solid".to_string(),
+            border_color: "#000".to_string(),
+            ..RenderOptions::default()
+        };
+        let out = markdown_to_typst("Hello", &opts, DEFAULT_WIDTH_PT);
+        assert!(out.contains("inset: 12pt"), "block must contain inset with padding value");
+    }
+
+    #[test]
+    fn no_inset_when_padding_zero() {
+        let opts = RenderOptions {
+            border_width: 1.0,
+            padding: 0.0,
+            ..RenderOptions::default()
+        };
+        let out = markdown_to_typst("Hello", &opts, DEFAULT_WIDTH_PT);
+        assert!(!out.contains("inset:"), "inset should not be emitted when padding is zero");
     }
 }

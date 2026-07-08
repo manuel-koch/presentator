@@ -192,11 +192,8 @@ async fn render_markdown_to_svg<R: Runtime>(
 ) -> Result<String, String> {
     let key = overlay_cache::cache_key(
         &content,
-        options.font_size_pt,
-        &options.text_color,
-        &options.font_family,
-        &options.text_align,
         width,
+        &options,
         env!("CARGO_PKG_VERSION"),
     );
     let cache_dir = app

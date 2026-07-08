@@ -227,6 +227,44 @@
           "exclusiveMinimum": 0,
           "maximum": 100,
           "examples": [10, 20, 40]
+        },
+        "background_color": {
+          "type": "string",
+          "description": "CSS color for the snippet background. When unset (default), the background is transparent. Set to a color value like \"#ff0000\" to fill the snippet area.",
+          "examples": ["#fffde7", "#e3f2fd", "#ffebee"]
+        },
+        "border_width": {
+          "type": "number",
+          "description": "Border thickness in typographic points. Set to 0 (default) for no border.",
+          "default": 0,
+          "minimum": 0,
+          "examples": [0, 1, 2, 3]
+        },
+        "border_style": {
+          "type": "string",
+          "description": "Border line style. Only applied when border_width > 0.",
+          "enum": ["solid", "dashed", "dotted"],
+          "default": "solid"
+        },
+        "border_color": {
+          "type": "string",
+          "description": "CSS color for the border. Only applied when border_width > 0.",
+          "default": "#000000",
+          "examples": ["#000000", "#333333", "#ff0000"]
+        },
+        "border_radius": {
+          "type": "number",
+          "description": "Corner rounding radius in typographic points. Affects all four corners equally.",
+          "default": 0,
+          "minimum": 0,
+          "examples": [0, 4, 8, 12]
+        },
+        "padding": {
+          "type": "number",
+          "description": "Padding inside the snippet bounds in typographic points. Adds space between the content and the border/background edge. Useful when a border or background is applied.",
+          "default": 0,
+          "minimum": 0,
+          "examples": [0, 4, 8, 12]
         }
       }
     }

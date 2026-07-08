@@ -1849,11 +1849,17 @@ button:active {
 
 .markdown-editor-style-bar {
     display: flex;
-    align-items: center;
-    gap: 0.75rem;
+    flex-direction: column;
+    gap: 0.25rem;
     padding: 0.4rem 1rem;
     border-bottom: 1px solid var(--border-divider);
     flex-shrink: 0;
+}
+
+.markdown-editor-style-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
     flex-wrap: wrap;
 }
 
@@ -1872,6 +1878,11 @@ button:active {
 .markdown-editor-style-unit {
     font-size: 0.75rem;
     color: var(--text-secondary);
+}
+
+.markdown-editor-border-toggle {
+    display: flex;
+    gap: 2px;
 }
 
 .markdown-editor-size-input {
@@ -1952,8 +1963,8 @@ button:active {
 
 .markdown-editor-align-toggle {
     display: flex;
-    gap: 2px;
-    margin-left: auto;
+    align-items: center;
+    gap: 0.3rem;
 }
 
 .markdown-editor-align-btn {

@@ -1,6 +1,8 @@
 use std::path::{Path, PathBuf};
 use sha2::{Digest, Sha256};
 
+use crate::markdown::RenderOptions;
+
 #[derive(serde::Serialize, Clone)]
 pub struct CacheStats {
     pub entry_count: usize,
@@ -13,25 +15,37 @@ pub struct CacheStats {
 /// happen whenever rendering dependencies change.
 pub fn cache_key(
     content: &str,
-    font_size_pt: f32,
-    text_color: &str,
-    font_family: &str,
-    text_align: &str,
     width: f64,
+    opts: &RenderOptions,
     app_version: &str,
 ) -> String {
     let mut h = Sha256::new();
     h.update(content.as_bytes());
     h.update(b"\0");
-    h.update(font_size_pt.to_le_bytes());
+    h.update(opts.font_size_pt.to_le_bytes());
     h.update(b"\0");
-    h.update(text_color.as_bytes());
+    h.update(opts.text_color.as_bytes());
     h.update(b"\0");
-    h.update(font_family.as_bytes());
+    h.update(opts.font_family.as_bytes());
     h.update(b"\0");
-    h.update(text_align.as_bytes());
+    h.update(opts.text_align.as_bytes());
     h.update(b"\0");
     h.update(width.to_le_bytes());
+    h.update(b"\0");
+    match opts.background_color {
+        Some(ref bg) => h.update(bg.as_bytes()),
+        None => h.update(b"null"),
+    }
+    h.update(b"\0");
+    h.update(opts.border_width.to_le_bytes());
+    h.update(b"\0");
+    h.update(opts.border_style.as_bytes());
+    h.update(b"\0");
+    h.update(opts.border_color.as_bytes());
+    h.update(b"\0");
+    h.update(opts.border_radius.to_le_bytes());
+    h.update(b"\0");
+    h.update(opts.padding.to_le_bytes());
     h.update(b"\0");
     h.update(app_version.as_bytes());
     h.finalize().iter().map(|b| format!("{b:02x}")).collect()
@@ -105,68 +119,146 @@ mod tests {
         dir
     }
 
+    fn default_opts() -> RenderOptions {
+        RenderOptions::default()
+    }
+
+    fn opts_with(
+        font_size_pt: f32,
+        text_color: &str,
+        font_family: &str,
+        text_align: &str,
+        background_color: Option<&str>,
+        border_width: f32,
+        border_style: &str,
+        border_color: &str,
+        border_radius: f32,
+        padding: f32,
+    ) -> RenderOptions {
+        RenderOptions {
+            font_size_pt,
+            text_color: text_color.to_string(),
+            font_family: font_family.to_string(),
+            text_align: text_align.to_string(),
+            background_color: background_color.map(String::from),
+            border_width,
+            border_style: border_style.to_string(),
+            border_color: border_color.to_string(),
+            border_radius,
+            padding,
+        }
+    }
+
     // ── cache_key ─────────────────────────────────────────────────────────────
 
     #[test]
     fn cache_key_is_deterministic() {
-        let k1 = cache_key("hello", 14.0, "#000", "Helvetica Neue", "left", 280.0, "1.0.0");
-        let k2 = cache_key("hello", 14.0, "#000", "Helvetica Neue", "left", 280.0, "1.0.0");
+        let opts = default_opts();
+        let k1 = cache_key("hello", 280.0, &opts, "1.0.0");
+        let k2 = cache_key("hello", 280.0, &opts, "1.0.0");
         assert_eq!(k1, k2);
     }
 
     #[test]
     fn cache_key_is_64_hex_chars() {
-        let k = cache_key("x", 14.0, "#000", "Arial", "left", 100.0, "1.0.0");
+        let k = cache_key("x", 100.0, &default_opts(), "1.0.0");
         assert_eq!(k.len(), 64);
         assert!(k.chars().all(|c| c.is_ascii_hexdigit()));
     }
 
     #[test]
     fn cache_key_changes_with_content() {
-        let k1 = cache_key("foo", 14.0, "#000", "Arial", "left", 100.0, "1.0.0");
-        let k2 = cache_key("bar", 14.0, "#000", "Arial", "left", 100.0, "1.0.0");
+        let opts = default_opts();
+        let k1 = cache_key("foo", 100.0, &opts, "1.0.0");
+        let k2 = cache_key("bar", 100.0, &opts, "1.0.0");
         assert_ne!(k1, k2);
     }
 
     #[test]
     fn cache_key_changes_with_width() {
-        let k1 = cache_key("foo", 14.0, "#000", "Arial", "left", 100.0, "1.0.0");
-        let k2 = cache_key("foo", 14.0, "#000", "Arial", "left", 200.0, "1.0.0");
+        let opts = default_opts();
+        let k1 = cache_key("foo", 100.0, &opts, "1.0.0");
+        let k2 = cache_key("foo", 200.0, &opts, "1.0.0");
         assert_ne!(k1, k2);
     }
 
     #[test]
     fn cache_key_changes_with_font_size() {
-        let k1 = cache_key("foo", 13.0, "#000", "Arial", "left", 100.0, "1.0.0");
-        let k2 = cache_key("foo", 14.0, "#000", "Arial", "left", 100.0, "1.0.0");
+        let k1 = cache_key("foo", 100.0, &opts_with(13.0, "#000", "Arial", "left", None, 0.0, "solid", "#000000", 0.0, 0.0), "1.0.0");
+        let k2 = cache_key("foo", 100.0, &opts_with(14.0, "#000", "Arial", "left", None, 0.0, "solid", "#000000", 0.0, 0.0), "1.0.0");
         assert_ne!(k1, k2);
     }
 
     #[test]
     fn cache_key_changes_with_color() {
-        let k1 = cache_key("foo", 14.0, "#000", "Arial", "left", 100.0, "1.0.0");
-        let k2 = cache_key("foo", 14.0, "#fff", "Arial", "left", 100.0, "1.0.0");
+        let k1 = cache_key("foo", 100.0, &opts_with(14.0, "#000", "Arial", "left", None, 0.0, "solid", "#000000", 0.0, 0.0), "1.0.0");
+        let k2 = cache_key("foo", 100.0, &opts_with(14.0, "#fff", "Arial", "left", None, 0.0, "solid", "#000000", 0.0, 0.0), "1.0.0");
         assert_ne!(k1, k2);
     }
 
     #[test]
     fn cache_key_changes_with_font_family() {
-        let k1 = cache_key("foo", 14.0, "#000", "Arial", "left", 100.0, "1.0.0");
-        let k2 = cache_key("foo", 14.0, "#000", "Menlo", "left", 100.0, "1.0.0");
+        let k1 = cache_key("foo", 100.0, &opts_with(14.0, "#000", "Arial", "left", None, 0.0, "solid", "#000000", 0.0, 0.0), "1.0.0");
+        let k2 = cache_key("foo", 100.0, &opts_with(14.0, "#000", "Menlo", "left", None, 0.0, "solid", "#000000", 0.0, 0.0), "1.0.0");
         assert_ne!(k1, k2);
     }
 
     #[test]
     fn cache_key_changes_with_text_align() {
-        let k1 = cache_key("foo", 14.0, "#000", "Arial", "left", 100.0, "1.0.0");
-        let k2 = cache_key("foo", 14.0, "#000", "Arial", "center", 100.0, "1.0.0");
+        let k1 = cache_key("foo", 100.0, &opts_with(14.0, "#000", "Arial", "left", None, 0.0, "solid", "#000000", 0.0, 0.0), "1.0.0");
+        let k2 = cache_key("foo", 100.0, &opts_with(14.0, "#000", "Arial", "center", None, 0.0, "solid", "#000000", 0.0, 0.0), "1.0.0");
         assert_ne!(k1, k2);
     }
 
     #[test]
     fn cache_key_changes_with_app_version() {
-        let k1 = cache_key("foo", 14.0, "#000", "Arial", "left", 100.0, "1.0.0");
-        let k2 = cache_key("foo", 14.0, "#000", "Arial", "left", 100.0, "1.0.1");
+        let opts = default_opts();
+        let k1 = cache_key("foo", 100.0, &opts, "1.0.0");
+        let k2 = cache_key("foo", 100.0, &opts, "1.0.1");
+        assert_ne!(k1, k2);
+    }
+
+    // ── cache_key: new styling params ────────────────────────────────────────
+
+    #[test]
+    fn cache_key_changes_with_background_color() {
+        let k1 = cache_key("foo", 100.0, &opts_with(14.0, "#000", "Arial", "left", None, 0.0, "solid", "#000000", 0.0, 0.0), "1.0.0");
+        let k2 = cache_key("foo", 100.0, &opts_with(14.0, "#000", "Arial", "left", Some("#ff0000"), 0.0, "solid", "#000000", 0.0, 0.0), "1.0.0");
+        assert_ne!(k1, k2);
+    }
+
+    #[test]
+    fn cache_key_changes_with_border_width() {
+        let k1 = cache_key("foo", 100.0, &opts_with(14.0, "#000", "Arial", "left", None, 0.0, "solid", "#000000", 0.0, 0.0), "1.0.0");
+        let k2 = cache_key("foo", 100.0, &opts_with(14.0, "#000", "Arial", "left", None, 2.0, "solid", "#000000", 0.0, 0.0), "1.0.0");
+        assert_ne!(k1, k2);
+    }
+
+    #[test]
+    fn cache_key_changes_with_border_style() {
+        let k1 = cache_key("foo", 100.0, &opts_with(14.0, "#000", "Arial", "left", None, 1.0, "solid", "#000000", 0.0, 0.0), "1.0.0");
+        let k2 = cache_key("foo", 100.0, &opts_with(14.0, "#000", "Arial", "left", None, 1.0, "dashed", "#000000", 0.0, 0.0), "1.0.0");
+        assert_ne!(k1, k2);
+    }
+
+    #[test]
+    fn cache_key_changes_with_border_color() {
+        let k1 = cache_key("foo", 100.0, &opts_with(14.0, "#000", "Arial", "left", None, 1.0, "solid", "#000000", 0.0, 0.0), "1.0.0");
+        let k2 = cache_key("foo", 100.0, &opts_with(14.0, "#000", "Arial", "left", None, 1.0, "solid", "#ff0000", 0.0, 0.0), "1.0.0");
+        assert_ne!(k1, k2);
+    }
+
+    #[test]
+    fn cache_key_changes_with_border_radius() {
+        let k1 = cache_key("foo", 100.0, &opts_with(14.0, "#000", "Arial", "left", None, 1.0, "solid", "#000000", 0.0, 0.0), "1.0.0");
+        let k2 = cache_key("foo", 100.0, &opts_with(14.0, "#000", "Arial", "left", None, 1.0, "solid", "#000000", 4.0, 0.0), "1.0.0");
+        assert_ne!(k1, k2);
+    }
+
+    #[test]
+    fn cache_key_changes_with_padding() {
+        let k1 = cache_key("foo", 100.0, &opts_with(14.0, "#000", "Arial", "left", None, 0.0, "solid", "#000000", 0.0, 0.0), "1.0.0");
+        let k2 = cache_key("foo", 100.0, &opts_with(14.0, "#000", "Arial", "left", None, 0.0, "solid", "#000000", 0.0, 8.0), "1.0.0");
         assert_ne!(k1, k2);
     }
 

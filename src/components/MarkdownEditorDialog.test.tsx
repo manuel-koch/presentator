@@ -73,13 +73,15 @@ describe("MarkdownEditorDialog — rendering", () => {
     expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
   });
 
-  it("shows style controls: width, size, font, color, and alignment", async () => {
+  it("shows style controls: width, size, font, color, alignment, and padding", async () => {
     await renderDialog();
     expect(screen.getByLabelText("Render width as percent of canvas")).toBeInTheDocument();
     expect(screen.getByLabelText("Font size in pt")).toBeInTheDocument();
     expect(screen.getByLabelText("Font family")).toBeInTheDocument();
     expect(screen.getByLabelText("Text color")).toBeInTheDocument();
     expect(screen.getByRole("group", { name: "Text alignment" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Background color")).toBeInTheDocument();
+    expect(screen.getByLabelText("Padding in pt")).toBeInTheDocument();
   });
 
   it("shows the preview placeholder while waiting for first render", async () => {
