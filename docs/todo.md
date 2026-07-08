@@ -68,9 +68,13 @@ Render pipeline (all Rust, no browser engine):
 
 - [ ] Allow configuring background color for a markdown snippet
       when it gets rendered to SVG.
+  - [ ] Update sidecar config for overlays
+  - [ ] Update sidecar config schema definition
 
 - [ ] Allow configuring border width/style/color for a markdown snippet when
       it gets rendered to SVG.
+  - [ ] Update sidecar config for overlays
+  - [ ] Update sidecar config schema definition
 
 ## Presentation Mode (basic)
 
