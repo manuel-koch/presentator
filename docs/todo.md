@@ -188,7 +188,7 @@ and keep a single shared "Fit alignment" defaults panel.
       - [x] Remove dead CSS (`.overlay-align-*` classes) or refactor them as a
         `.floating` modifier on the existing panel styles.
 
-- [ ] The right-click context menu has unexpected entries.
+- [x] The right-click context menu has unexpected entries.
       E.g. when I right-click on a overlay-rect within a
       step-viewport-rect without a step selected then the following
       entries are shown:
@@ -200,7 +200,7 @@ and keep a single shared "Fit alignment" defaults panel.
   - "Duplicate": duplicate what ? Why not "Clone snippet <id>" ?
   - "Delete": delete what ? Why not "Delete snippet <id>" ?
 
-- [ ] The right-click context menu has unexpected entries.
+- [x] The right-click context menu has unexpected entries.
       E.g. when I right-click on a svg-element-rect without a step
       selected then the following entries are shown:
   - "Fit step viewport to this element": this is grayed out, why ?
@@ -210,6 +210,20 @@ and keep a single shared "Fit alignment" defaults panel.
   - "Edit snippet <id>..."
   - "Duplicate": duplicate what ? Why not "Clone snippet <id>" ?
   - "Delete": delete what ? Why not "Delete snippet <id>" ?
+
+  **Fix:** Drop greyed-out items entirely (consistent with the existing
+  "no targets = no menu" behavior). Qualify all menu labels with the
+  target identifier (e.g. "Focus snippet <id> in viewport",
+  "Duplicate snippet <id>"). Show section headers ("Snippet: <id>" /
+  "Element: <id>") when both overlay and element are resolved.
+
+- [ ] Right-click on canvas where hit-point is in step-viewport-rect
+      doesn't show context-menu, but the step-viewport-rect is highlighted.
+      I would expect a context-menu to fit canvas to step-viewport like
+      fit-to-element-rect or fit-to-overlay-rect.
+
+- [ ] Right-click context-menu on canvas has no action item to align
+      step-viewport to element/overlay.
 
 ### Sidebar layout (deferred until context-menu fit is in place)
 

@@ -869,11 +869,11 @@ describe("App — overlay-align widget (floating)", () => {
     await userEvent.click(screen.getByRole("button", { name: "Open SVG file" }));
     await waitFor(() => expect(screen.getByTestId("editing-canvas")).toBeInTheDocument());
 
-    // Right-click on the editing canvas to open context menu (which shows the widget)
+    // Right-click inside the overlay rect to open context menu (which shows the widget)
     const canvas = screen.getByTestId("editing-canvas");
     await act(async () => {
       canvas.dispatchEvent(new MouseEvent("contextmenu", {
-        bubbles: true, cancelable: true, clientX: 400, clientY: 200,
+        bubbles: true, cancelable: true, clientX: 200, clientY: 120,
       }));
     });
 
@@ -889,6 +889,108 @@ describe("App — overlay-align widget (floating)", () => {
     const slider = screen.getByRole("slider");
     expect(slider).toBeInTheDocument();
     expect(screen.getByText("5%")).toBeInTheDocument();
+  });
+});
+
+describe("App — context menu integration", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    setupListenMock();
+  });
+
+  /** Load an SVG + overlays config and wait for overlay SVG render. */
+  async function loadWithOverlays() {
+    vi.mocked(open).mockResolvedValue("/path/to/slides.svg");
+    mockInvokeWithConfig(SVG_WITH_VIEWBOX, CONFIG_WITH_OVERLAYS);
+    render(<App />);
+    await userEvent.click(screen.getByRole("button", { name: "Open SVG file" }));
+    await waitFor(() => expect(screen.getByTestId("editing-canvas")).toBeInTheDocument());
+    // Wait until overlay SVG render is dispatched
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("render_markdown_to_svg", expect.anything());
+    });
+  }
+
+  function rightClickOnCanvas(clientX: number, clientY: number) {
+    const canvas = screen.getByTestId("editing-canvas");
+    act(() => {
+      canvas.dispatchEvent(new MouseEvent("contextmenu", {
+        bubbles: true, cancelable: true, clientX, clientY,
+      }));
+    });
+  }
+
+  it("shows overlay context menu with qualified labels after right-clicking inside the overlay rect", async () => {
+    await loadWithOverlays();
+    // Overlay is at x=100, y=100, width=200 → SVG center (200, 120).
+    // In jsdom with default pan/zoom the SVG coords ≈ client coords.
+    rightClickOnCanvas(200, 120);
+
+    await waitFor(() => {
+      expect(screen.getByText("Focus snippet snippet-1 in viewport")).toBeInTheDocument();
+      expect(screen.getByText("Edit snippet snippet-1…")).toBeInTheDocument();
+      expect(screen.getByText("Duplicate snippet snippet-1")).toBeInTheDocument();
+      expect(screen.getByText("Delete snippet snippet-1")).toBeInTheDocument();
+    });
+    // "Fit" should NOT appear because no step is selected yet
+    expect(screen.queryByText("Fit step viewport to this snippet")).not.toBeInTheDocument();
+  });
+
+  it("includes Fit item when a step is selected", async () => {
+    await loadWithOverlays();
+    await userEvent.click(screen.getByText("Step 1"));
+    rightClickOnCanvas(200, 120);
+
+    await waitFor(() => {
+      expect(screen.getByText("Fit step viewport to this snippet")).toBeInTheDocument();
+    });
+    expect(screen.getByText("Focus snippet snippet-1 in viewport")).toBeInTheDocument();
+  });
+
+  it("drops the context menu entirely when right-clicking outside any target", async () => {
+    await loadWithOverlays();
+    // Click far outside the overlay and viewport area
+    rightClickOnCanvas(0, 0);
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("canvas-context-menu")).not.toBeInTheDocument();
+    });
+  });
+
+  it("hides the alignment widget when right-clicking whitespace with no targets", async () => {
+    await loadWithOverlays();
+    // Whitespace right-click should NOT show the widget
+    rightClickOnCanvas(0, 0);
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("overlay-align-widget")).not.toBeInTheDocument();
+    });
+  });
+
+  it("opens the markdown editor when clicking Edit snippet", async () => {
+    await loadWithOverlays();
+    rightClickOnCanvas(200, 120);
+    await waitFor(() => {
+      expect(screen.getByText("Edit snippet snippet-1…")).toBeInTheDocument();
+    });
+    await userEvent.click(screen.getByText("Edit snippet snippet-1…"));
+    await waitFor(() => {
+      expect(screen.getByRole("dialog")).toBeInTheDocument();
+    });
+  });
+
+  it("closes the context menu and widget on Escape", async () => {
+    await loadWithOverlays();
+    rightClickOnCanvas(200, 120);
+    await waitFor(() => {
+      expect(screen.getByText("Edit snippet snippet-1…")).toBeInTheDocument();
+    });
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    });
+    await waitFor(() => {
+      expect(screen.queryByTestId("overlay-align-widget")).not.toBeInTheDocument();
+    });
   });
 });
 

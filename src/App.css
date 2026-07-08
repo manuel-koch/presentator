@@ -1791,6 +1791,16 @@ button:active {
     background: rgba(160, 160, 160, 0.3);
 }
 
+.canvas-context-menu-header {
+    padding: 4px 14px 2px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: rgba(160, 160, 160, 0.75);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    user-select: none;
+}
+
 /* Markdown editor dialog */
 .markdown-editor-overlay {
     position: fixed;

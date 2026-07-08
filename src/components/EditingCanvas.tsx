@@ -395,6 +395,11 @@ export const EditingCanvas = forwardRef<EditingCanvasHandle, Props>(function Edi
     clearFlash();
     setFlashTargets({ stepRect, overlayRect, elementBbox });
 
+    // Only fire onContextMenu when at least one actionable target (overlay or element)
+    // is resolved. A step-only hit (whitespace inside the viewport rect but not on
+    // an overlay or named element) should not open a context menu nor show the widget.
+    if (!resolved.overlay && !resolved.elementId) return;
+
     onContextMenu({
       clientX: e.clientX,
       clientY: e.clientY,

@@ -30,13 +30,13 @@ describe("CanvasContextMenu", () => {
       />
     );
     expect(screen.getByText("Fit step viewport to this snippet")).toBeInTheDocument();
-    expect(screen.getByText("Edit snippet…")).toBeInTheDocument();
-    expect(screen.getByText("Duplicate")).toBeInTheDocument();
-    expect(screen.getByText("Delete")).toBeInTheDocument();
-    expect(screen.getByText("Focus in viewport")).toBeInTheDocument();
+    expect(screen.getByText("Focus snippet snippet-1 in viewport")).toBeInTheDocument();
+    expect(screen.getByText("Edit snippet snippet-1…")).toBeInTheDocument();
+    expect(screen.getByText("Duplicate snippet snippet-1")).toBeInTheDocument();
+    expect(screen.getByText("Delete snippet snippet-1")).toBeInTheDocument();
   });
 
-  it("disables Fit when no step is selected", () => {
+  it("drops Fit overlay when no step is selected", () => {
     render(
       <CanvasContextMenu
         {...baseProps}
@@ -44,17 +44,21 @@ describe("CanvasContextMenu", () => {
         target={{ overlayId: "snippet-1", overlaySvgReady: true, elementId: null }}
       />
     );
-    expect(screen.getByText("Fit step viewport to this snippet")).toBeDisabled();
+    expect(screen.queryByText("Fit step viewport to this snippet")).not.toBeInTheDocument();
+    // Other items still render
+    expect(screen.getByText("Focus snippet snippet-1 in viewport")).toBeInTheDocument();
+    expect(screen.getByText("Edit snippet snippet-1…")).toBeInTheDocument();
   });
 
-  it("disables Fit when overlay SVG is not ready", () => {
+  it("drops Fit overlay when overlay SVG is not ready", () => {
     render(
       <CanvasContextMenu
         {...baseProps}
         target={{ overlayId: "snippet-1", overlaySvgReady: false, elementId: null }}
       />
     );
-    expect(screen.getByText("Fit step viewport to this snippet")).toBeDisabled();
+    expect(screen.queryByText("Fit step viewport to this snippet")).not.toBeInTheDocument();
+    expect(screen.getByText("Focus snippet snippet-1 in viewport")).toBeInTheDocument();
   });
 
   it("fires fit-overlay action and closes when Fit is clicked", () => {
@@ -81,10 +85,10 @@ describe("CanvasContextMenu", () => {
       />
     );
     expect(screen.getByText("Fit step viewport to this element")).toBeInTheDocument();
-    expect(screen.getByText("Focus in viewport")).toBeInTheDocument();
+    expect(screen.getByText("Focus element box-1 in viewport")).toBeInTheDocument();
   });
 
-  it("groups overlay and element actions with a separator when both resolve", () => {
+  it("groups overlay and element actions with a separator and headers when both resolve", () => {
     render(
       <CanvasContextMenu
         {...baseProps}
@@ -93,7 +97,11 @@ describe("CanvasContextMenu", () => {
     );
     expect(screen.getByText("Fit step viewport to this snippet")).toBeInTheDocument();
     expect(screen.getByText("Fit step viewport to this element")).toBeInTheDocument();
-    expect(screen.getAllByText("Focus in viewport").length).toBe(2);
+    expect(screen.getByText("Focus snippet snippet-1 in viewport")).toBeInTheDocument();
+    expect(screen.getByText("Focus element box-1 in viewport")).toBeInTheDocument();
+    // Section headers
+    expect(screen.getByText("Snippet: snippet-1")).toBeInTheDocument();
+    expect(screen.getByText("Element: box-1")).toBeInTheDocument();
   });
 
   it("closes on Escape", () => {
@@ -111,7 +119,7 @@ describe("CanvasContextMenu", () => {
     expect(onClose).toHaveBeenCalled();
   });
 
-  it("disables Fit element when no step is selected", () => {
+  it("drops Fit element when no step is selected", () => {
     render(
       <CanvasContextMenu
         {...baseProps}
@@ -119,7 +127,8 @@ describe("CanvasContextMenu", () => {
         target={{ overlayId: null, overlaySvgReady: false, elementId: "box-1" }}
       />
     );
-    expect(screen.getByText("Fit step viewport to this element")).toBeDisabled();
+    expect(screen.queryByText("Fit step viewport to this element")).not.toBeInTheDocument();
+    expect(screen.getByText("Focus element box-1 in viewport")).toBeInTheDocument();
   });
 
   it("does not close when clicking inside the keepOpenRef element", () => {

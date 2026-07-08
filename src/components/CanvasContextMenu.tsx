@@ -37,9 +37,12 @@ interface MenuItem {
   key: string;
   label: string;
   action: ContextMenuAction;
-  disabled?: boolean;
-  disabledReason?: string;
 }
+
+type FlatNode =
+  | { type: "item"; item: MenuItem }
+  | { type: "separator"; key: string }
+  | { type: "header"; key: string; title: string };
 
 export function CanvasContextMenu({ x, y, target, hasSelectedStep, onAction, onClose, keepOpenRef }: Props) {
   const menuRef = useRef<HTMLDivElement>(null);
@@ -88,65 +91,85 @@ export function CanvasContextMenu({ x, y, target, hasSelectedStep, onAction, onC
       clearTimeout(id);
       document.removeEventListener("mousedown", onDown);
       window.removeEventListener("keydown", onKey);
-      window.removeEventListener("scroll", onScroll, true);
       window.removeEventListener("resize", onClose);
     };
   }, [onClose, keepOpenRef]);
 
-  const items: MenuItem[] = [];
+  // --- Build sections; disabled items are dropped entirely ---
+
+  interface Section {
+    title: string;
+    items: MenuItem[];
+  }
+  const sections: Section[] = [];
 
   if (target.overlayId) {
-    const fitDisabled = !hasSelectedStep || !target.overlaySvgReady;
-    let fitReason: string | undefined;
-    if (!hasSelectedStep) fitReason = "No step selected";
-    else if (!target.overlaySvgReady) fitReason = "Snippet is still rendering";
-    items.push({
-      key: "fit-overlay",
-      label: "Fit step viewport to this snippet",
-      action: { type: "fit-overlay", overlayId: target.overlayId },
-      disabled: fitDisabled,
-      disabledReason: fitReason,
-    });
+    const items: MenuItem[] = [];
+    // Only add Fit if it would be enabled
+    if (hasSelectedStep && target.overlaySvgReady) {
+      items.push({
+        key: "fit-overlay",
+        label: "Fit step viewport to this snippet",
+        action: { type: "fit-overlay", overlayId: target.overlayId },
+      });
+    }
     items.push({
       key: "focus-overlay",
-      label: "Focus in viewport",
+      label: `Focus snippet ${target.overlayId} in viewport`,
       action: { type: "focus-overlay", overlayId: target.overlayId },
     });
     items.push({
       key: "edit-overlay",
-      label: "Edit snippet…",
+      label: `Edit snippet ${target.overlayId}…`,
       action: { type: "edit-overlay", overlayId: target.overlayId },
     });
     items.push({
       key: "duplicate-overlay",
-      label: "Duplicate",
+      label: `Duplicate snippet ${target.overlayId}`,
       action: { type: "duplicate-overlay", overlayId: target.overlayId },
     });
     items.push({
       key: "delete-overlay",
-      label: "Delete",
+      label: `Delete snippet ${target.overlayId}`,
       action: { type: "delete-overlay", overlayId: target.overlayId },
     });
+    sections.push({ title: `Snippet: ${target.overlayId}`, items });
   }
 
   if (target.elementId) {
-    if (items.length > 0) items.push({ key: "sep-element", label: "---", action: { type: "fit-element" } });
-    const fitDisabled = !hasSelectedStep;
-    items.push({
-      key: "fit-element",
-      label: "Fit step viewport to this element",
-      action: { type: "fit-element", elementId: target.elementId },
-      disabled: fitDisabled,
-      disabledReason: fitDisabled ? "No step selected" : undefined,
-    });
+    const items: MenuItem[] = [];
+    if (hasSelectedStep) {
+      items.push({
+        key: "fit-element",
+        label: "Fit step viewport to this element",
+        action: { type: "fit-element", elementId: target.elementId },
+      });
+    }
     items.push({
       key: "focus-element",
-      label: "Focus in viewport",
+      label: `Focus element ${target.elementId} in viewport`,
       action: { type: "focus-element", elementId: target.elementId },
     });
+    sections.push({ title: `Element: ${target.elementId}`, items });
   }
 
-  if (items.length === 0) return null;
+  // --- Flatten sections into renderable nodes ---
+
+  const flat: FlatNode[] = [];
+  sections.forEach((section, idx) => {
+    if (section.items.length === 0) return;
+    if (idx > 0) {
+      flat.push({ type: "separator", key: `sep-${idx}` });
+    }
+    if (sections.length > 1) {
+      flat.push({ type: "header", key: `hdr-${idx}`, title: section.title });
+    }
+    for (const item of section.items) {
+      flat.push({ type: "item", item });
+    }
+  });
+
+  if (flat.length === 0) return null;
 
   // Use raw position for first render (before useLayoutEffect fires—no paint yet),
   // then switch to clamped position.
@@ -166,26 +189,31 @@ export function CanvasContextMenu({ x, y, target, hasSelectedStep, onAction, onC
       role="menu"
       data-testid="canvas-context-menu"
     >
-      {items.map((item) =>
-        item.label === "---" ? (
-          <div key={item.key} className="canvas-context-menu-sep" />
-        ) : (
+      {flat.map((node) => {
+        if (node.type === "separator") {
+          return <div key={node.key} className="canvas-context-menu-sep" />;
+        }
+        if (node.type === "header") {
+          return (
+            <div key={node.key} className="canvas-context-menu-header">
+              {node.title}
+            </div>
+          );
+        }
+        return (
           <button
-            key={item.key}
+            key={node.item.key}
             role="menuitem"
             className="canvas-context-menu-item"
-            disabled={item.disabled}
-            title={item.disabledReason}
             onClick={() => {
-              if (item.disabled) return;
-              onAction(item.action);
+              onAction(node.item.action);
               onClose();
             }}
           >
-            {item.label}
+            {node.item.label}
           </button>
-        ),
-      )}
+        );
+      })}
     </div>
   );
 }
