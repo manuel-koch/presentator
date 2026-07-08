@@ -266,10 +266,74 @@ and keep a single shared "Fit alignment" defaults panel.
       instead of "Focus snippet <id> in viewport". Step section title is the step
       name (or "Step N" fallback), not an extra "Step: N" header.
 
-### Sidebar layout (deferred until context-menu fit is in place)
+## Sidebar layout
 
-- [ ] Re-evaluate sidebar clutter after the context-menu change
-      lands; remaining work likely:
-  - reduce step-row inline action buttons
-  - separate per-step config from asset libraries
-  - Track as a follow-up todo with concrete proposal then
+The sidebar uses a two-tab layout to separate per-step configuration from
+project-wide asset libraries.
+
+- **Tab 1 "Steps"** — contains the StepList (step rows, inline action buttons,
+  transition rows, thumbnails, copy-aspects popup, header with fit-all and add
+  buttons). Identical to current StepList content, only the "Steps" section header
+  text is replaced by the tab label.
+- **Tab 2 "Assets"** — contains the OverlayList and ElementPicker stacked vertically,
+  each under its own collapsible section header (chevron toggle). Both expanded by default.
+- No step-title bar above the tabs: the canvas nav widget shows the current step name.
+- Switching tabs preserves step selection, scroll position, overlay selection, and all
+  other state — only which tab is rendered changes.
+- When no step is selected and the Assets tab is active:
+  - The Snippet section remains fully usable (add, focus, edit, delete, reorder).
+  - The Elements section shows a placeholder text: "Select a step to edit element visibility."
+
+- [ ] Add a tab-bar component (`SidebarTabs`) at the top of `editor-sidebar`
+      replacing the current section titles for Steps / Snippets / Elements.
+      - Two tabs: "Steps" and "Assets"
+      - Active tab has a distinct background/highlight
+      - Clicking a tab dispatches the active tab state
+- [ ] Move the StepList out of its own `.step-list` wrapper and let it render
+      inside the "Steps" tab container:
+      - The `.step-list-title` (currently "Steps") is no longer rendered — the
+        tab label replaces it
+      - `.step-list-header` keeps the fit-all + add buttons but drops the title span
+      - StepList scroll area fills the available tab height
+- [ ] Create a new container component `AssetsTab` that stacks OverlayList and
+      ElementPicker with collapsible section headers:
+      - Section header for "Snippets" (chevron icon + title), toggles the OverlayList
+      - Section header for "Elements" (chevron icon + title), toggles the ElementPicker
+      - Both sections expanded by default
+      - The chevron animates 90° rotation between collapsed/expanded (matching the
+        ElementPicker tree chevron style)
+      - The ElementPicker section renders an empty-state message when no step is selected:
+        `<p className="element-picker-empty-hint">Select a step to edit element visibility</p>`
+- [ ] Handle the conditional rendering in App.tsx `editor-sidebar`:
+      - Replace the current `<StepList> + <OverlayList> + {selectedStep && <ElementPicker>}`
+        block with `<SidebarTabs>` containing the two tabs
+      - Pass all existing props through to StepList and OverlayList as-is
+      - Pass `selectedStepIndex !== null` as a prop to AssetsTab so it knows
+        whether to show the element picker or the placeholder
+- [ ] State: add `activeSidebarTab: "steps" | "assets"` state in App.tsx
+      (default `"steps"`); wire it as the active tab in SidebarTabs
+- [ ] Verify: switching tabs does not reset step selection, overlay selection,
+      element tree collapse state, or any other parent state
+- [ ] Verify: clicking the "Steps" tab and then "Assets" tab and back is
+      instantaneous (no re-fetch, no re-render of lists from scratch — just
+      `display:none` / conditional rendering)
+- [ ] Verify: Assets tab when no step is selected shows snippet controls
+      and the elements placeholder; when a step is selected, the element
+      picker is interactive
+- [ ] Update tests:
+  - [ ] StepList tests: update assertions that look for the "Steps" section
+        title text — it no longer exists in the sidebar (the tab label replaces it)
+  - [ ] OverlayList tests: ensure overlay content still renders correctly when
+        placed inside the Assets tab
+  - [ ] New test for SidebarTabs: clicking "Assets" tab shows snippet/element
+        content; clicking "Steps" tab shows step content
+  - [ ] New test for AssetsTab: collapsible sections toggle visibility of
+        their content; element picker placeholder shows when no step selected
+- [ ] CSS:
+  - [ ] Style the tab bar (`.sidebar-tabs`, `.sidebar-tab`, `.sidebar-tab--active`)
+  - [ ] Style the collapsible section headers (`.assets-section-header`,
+        `.assets-section-header--collapsed`)
+  - [ ] Remove or repurpose the `.step-list-title` and `.overlay-list-title`
+        CSS rules since those headings are replaced by tab / section headers
+  - [ ] Ensure the asset sections scroll independently when their content
+        overflows the available tab height
