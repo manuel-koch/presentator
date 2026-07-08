@@ -150,6 +150,16 @@ Markdown text blocks can be positioned on the presentation canvas as visual over
   * a jump-to-viewport button (rectangle icon, green hover) on each step in the list navigates to that step's viewport rectangle with a smooth 2-second ease-in-out animation
   * a fit-to-current-view button (expand icon, blue hover) on each step in the list resizes that step's viewport rectangle to cover the current canvas view (same sizing as adding a new step); rotation is reset to 0
   * when adding a new step, its viewport rectangle is positioned to cover the center of the current viewport (filling most of the viewport based on configured aspect ratio)
+* Right-clicking the editing canvas resolves all applicable targets at the hit point (overlay/snippet rectangles, SVG named element bounding boxes, step viewport rectangles) and opens a context menu with per-target actions:
+  * **Overlay target**: "Fit step viewport to \<snippet-id\>", "Focus \<snippet-id\> in viewport", "Edit \<snippet-id\>…", "Duplicate \<snippet-id\>", "Delete \<snippet-id\>"
+  * **Element target**: "Fit step viewport to \<element-id\>", "Focus \<element-id\> in viewport"
+  * **Step viewport target**: "Focus \<step-name\> in viewport"
+  * Section headers group items by target type; items that would be disabled (e.g. fit when no step is selected) are dropped entirely rather than shown greyed out
+  * Menu position is clamped to the canvas bounds so it stays fully visible regardless of click location
+  * Resolved targets are highlighted (rect/bbox stroke) on the canvas for the menu's duration
+* A floating fit-alignment widget sits at the upper-left edge of the editing canvas, visible only while the context menu is open:
+  * Contains a 3×3 anchor grid (left/center/right × top/center/bottom) and a padding slider (0–40% of viewport size)
+  * Controls how any "Fit step viewport to…" action positions the target within the viewport; state persists across right-click invocations
 
 ### Markdown snippet editing
 
@@ -170,9 +180,7 @@ Snippets (markdown overlays) can be authored, positioned, and styled directly in
   * a style bar above the panes controls render width (% of canvas), font size (pt), font family (searchable dropdown of system fonts via `list_fonts`), text color, and text alignment (left/center/right)
   * the preview re-renders ~300 ms after each keystroke or style change
   * Cmd-S quick-saves without closing the dialog; Escape cancels; the Save button commits and closes
-* A "Viewport → Snippet" panel appears in the editing sidebar whenever snippets exist and a step is selected:
-  * a 3×3 anchor picker (left/center/right × top/center/bottom) and a padding slider (0–40% of viewport size) control how "Fit to snippet" positions the snippet within the viewport
-  * "Fit to snippet" (enabled only when a snippet is selected) computes and writes the active step's viewport (center, zoom, rotation) so the selected snippet is placed at the chosen anchor, with viewport rotation matching the snippet's own rotation
+* Fit-alignment for overlays (and other targets) is performed via the right-click context menu on the editing canvas — see context menu and floating fit-alignment widget in Editing Mode above
 
 * SVG and config files are watched for external changes (e.g. hand-editing YAML, re-exporting SVG from a tool)
   * changes are reloaded automatically in editing mode
