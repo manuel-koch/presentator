@@ -1,6 +1,6 @@
 [package]
 name = "presentator"
-version = "0.4.11"
+version = "0.4.12"
 description = "Interactive presentation app built from SVG input file and markdown snippets"
 authors = []
 edition = "2021"

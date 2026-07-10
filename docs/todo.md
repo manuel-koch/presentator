@@ -145,7 +145,7 @@ Render pipeline (all Rust, no browser engine):
 - [x] When rendering markdown to svg and using border, the border is inside the
       background-colored-bounds, even more than the width of the border.
 
-- [ ] Improve the preview rendering in markdown-editor to distiguish between
+- [x] Improve the preview rendering in markdown-editor to distiguish between
       no-background-color==transparent vs background-color rendering.
       Currently the whole background in the markdown editor is white by default.
       Thus there is no real way to distinguish the rendered background of the
@@ -160,7 +160,7 @@ Render pipeline (all Rust, no browser engine):
 - [ ] Loading a new SVG. The background rendering of markdown-overlays and
       step-previews is triggered but there is no feedback about the progress.
       Can we add a progress indicator in the upper-right corner of the
-      edit-mode-canvas, showing the percentage of renderings done.
+      edit-mode-canvas, showing the percentage of renderings done?
       This will be shown whenever a markdown-overlay or a step-preview
       is re-rendered.
 

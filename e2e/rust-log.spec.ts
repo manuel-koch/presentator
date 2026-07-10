@@ -49,13 +49,14 @@ test("rustLog forwards log calls to the js_log Tauri command", async ({ page }) 
   await page.getByRole("button", { name: "Open SVG file" }).click();
   await expect(page.getByTestId("editing-canvas")).toBeVisible();
 
-  // Wait for the thumbnail effect to fire and produce at least one js_log call.
-  await expect
-    .poll(
-      () => page.evaluate(() => (window as unknown as Record<string, unknown[]>).__jsLogs__.length),
-      { timeout: 10_000 }
-    )
-    .toBeGreaterThan(0);
+  // Wait for the thumbnail effect to fire and produce its "started" log.
+  const thumbnailLogSeen = () =>
+    page.evaluate(() => {
+      const logs = (window as unknown as Record<string, { level: string; msg: string }[]>).__jsLogs__;
+      return logs.some((e) => e.level === "debug" && e.msg.startsWith("step-thumbnail: started"));
+    });
+
+  await expect.poll(thumbnailLogSeen, { timeout: 10_000 }).toBe(true);
 
   const logs = await page.evaluate(
     () => (window as unknown as Record<string, { level: string; msg: string }[]>).__jsLogs__
@@ -67,7 +68,4 @@ test("rustLog forwards log calls to the js_log Tauri command", async ({ page }) 
     expect(typeof entry.msg).toBe("string");
     expect(entry.msg.length).toBeGreaterThan(0);
   }
-
-  // The thumbnail async IIFE always logs this as its first statement.
-  expect(logs.some((e) => e.level === "debug" && e.msg.includes("step-thumbnail: effect started"))).toBe(true);
 });
