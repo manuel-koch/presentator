@@ -142,7 +142,7 @@ Render pipeline (all Rust, no browser engine):
       - The proper fix must handle mixed font sizes within the same overlay
         and work with the current `typst-as-lib 0.15` / `typst 0.14` versions.
 
-- [ ] When rendering markdown to svg and using border, the border is inside the
+- [x] When rendering markdown to svg and using border, the border is inside the
       background-colored-bounds, even more than the width of the border.
 
 ## Presentation Mode (basic)

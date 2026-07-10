@@ -265,13 +265,18 @@ pub fn markdown_to_typst(content: &str, opts: &RenderOptions, page_width_pt: u32
     }
 
     // Wrap in styling block if background, border, or padding is requested
-    if opts.background_color.is_some() || opts.border_width > 0.0 || opts.padding > 0.0 {
-        let has_fill = opts.background_color.as_deref().is_some_and(|s| !s.is_empty())
-            || opts.padding > 0.0;
-        let has_visible_stroke =
-            opts.border_width > 0.0 && !opts.border_color.is_empty();
-        // ── Open fill block (outer) ────────────────────────────────────────
-        if has_fill {
+        if opts.background_color.is_some() || opts.border_width > 0.0 || opts.padding > 0.0 {
+            let has_fill = opts.background_color.as_deref().is_some_and(|s| !s.is_empty())
+                || opts.padding > 0.0;
+            let has_visible_stroke =
+                opts.border_width > 0.0 && !opts.border_color.is_empty();
+
+            if has_visible_stroke {
+            // ── Single block with fill + stroke (same corner, no geometric mismatch) ──
+            // Fill extends under the stroke by border_width/2 — this eliminates the
+            // gap entirely at both straight edges and corners because fill and stroke
+            // share the same block corner as the radius center point. The inset pushes
+            // content past the stroke's inner edge.
             out.push_str("#block(\n");
             out.push_str("  width: 100%,\n");
             if let Some(ref bg) = opts.background_color {
@@ -279,56 +284,60 @@ pub fn markdown_to_typst(content: &str, opts: &RenderOptions, page_width_pt: u32
                     out.push_str(&format!("  fill: rgb(\"{}\"),\n", escape_typst_str(bg)));
                 }
             }
-            if opts.border_radius > 0.0 {
-                let inner_radius = (opts.border_radius - opts.border_width).max(0.0);
-                out.push_str(&format!("  radius: {}pt,\n", inner_radius));
+            match opts.border_style.as_str() {
+                "dashed" | "dotted" => {
+                    out.push_str(&format!(
+                        "  stroke: (paint: rgb(\"{}\"), thickness: {}pt, dash: \"{}\"),\n",
+                        escape_typst_str(&opts.border_color),
+                        opts.border_width,
+                        opts.border_style,
+                    ));
+                }
+                _ => {
+                    out.push_str(&format!(
+                        "  stroke: {}pt + rgb(\"{}\"),\n",
+                        opts.border_width,
+                        escape_typst_str(&opts.border_color),
+                    ));
+                }
             }
-            let total_inset = opts.border_width + opts.padding;
-            if total_inset > 0.0 {
+            if opts.border_radius > 0.0 {
+                out.push_str(&format!("  radius: {}pt,\n", opts.border_radius));
+            }
+            let content_inset = opts.border_width / 2.0 + opts.padding;
+            if content_inset > 0.0 {
                 out.push_str(&format!(
                     "  inset: (left: {}pt, right: {}pt, top: {}pt, bottom: {}pt),\n",
-                    total_inset, total_inset, total_inset, total_inset,
+                    content_inset, content_inset, content_inset, content_inset,
                 ));
             }
             out.push_str(")[\n");
-        }
-
-            // ── Open stroke block (inner, only when visible border) ────────────
-            if has_visible_stroke {
+            out.push_str(&escape_typst_markup(body));
+            out.push('\n');
+            out.push_str("]\n");
+        } else {
+                // ── No stroke: single block with fill and/or padding ─────────────
                 out.push_str("#block(\n");
                 out.push_str("  width: 100%,\n");
+                if has_fill {
+                    if let Some(ref bg) = opts.background_color {
+                        if !bg.is_empty() {
+                            out.push_str(&format!("  fill: rgb(\"{}\"),\n", escape_typst_str(bg)));
+                        }
+                    }
+                }
                 if opts.border_radius > 0.0 {
                     out.push_str(&format!("  radius: {}pt,\n", opts.border_radius));
                 }
-                match opts.border_style.as_str() {
-                    "dashed" | "dotted" => {
-                        out.push_str(&format!(
-                            "  stroke: (paint: rgb(\"{}\"), thickness: {}pt, dash: \"{}\"),\n",
-                            escape_typst_str(&opts.border_color),
-                            opts.border_width,
-                            opts.border_style,
-                        ));
-                    }
-                    _ => {
-                        out.push_str(&format!(
-                            "  stroke: {}pt + rgb(\"{}\"),\n",
-                            opts.border_width,
-                            escape_typst_str(&opts.border_color),
-                        ));
-                    }
+                if opts.padding > 0.0 {
+                    out.push_str(&format!(
+                        "  inset: (left: {}pt, right: {}pt, top: {}pt, bottom: {}pt),\n",
+                        opts.padding, opts.padding, opts.padding, opts.padding,
+                    ));
                 }
                 out.push_str(")[\n");
-            }
-
-            // ── Content ──────────────────────────────────────────────────────
-            out.push_str(&escape_typst_markup(body));
-            out.push('\n');
-
-            // ── Close blocks (in reverse order) ───────────────────────────────
-            if has_visible_stroke {
-                out.push_str("]\n");
-            }
-            if has_fill {
+                out.push_str(&escape_typst_markup(body));
+                out.push('\n');
                 out.push_str("]\n");
             }
         } else {
@@ -984,21 +993,36 @@ mod tests {
             ..RenderOptions::default()
         };
         let out = markdown_to_typst("Hello", &opts, DEFAULT_WIDTH_PT);
-        // total_inset = border_width(1) + padding(12) = 13
+        // content_inset = border_width/2(0.5) + padding(12) = 12.5
         assert!(
-            out.contains("bottom: 13pt"),
-            "block must contain combined inset"
+            out.contains("bottom: 12.5pt"),
+            "block must contain inset combining border/2 and padding"
         );
     }
 
     #[test]
-    fn no_inset_when_padding_zero() {
+    fn inset_equals_border_half_when_no_padding() {
         let opts = RenderOptions {
-            border_width: 1.0,
+            border_width: 4.0,
             padding: 0.0,
             ..RenderOptions::default()
         };
         let out = markdown_to_typst("Hello", &opts, DEFAULT_WIDTH_PT);
-        assert!(!out.contains("inset:"), "inset should not be emitted when padding is zero");
+        // content_inset = 4/2 + 0 = 2pt
+        assert!(
+            out.contains("bottom: 2pt"),
+            "inset must be border/2 when padding is zero"
+        );
+    }
+
+    #[test]
+    fn no_inset_when_padding_and_border_zero() {
+        let opts = RenderOptions {
+            border_width: 0.0,
+            padding: 0.0,
+            ..RenderOptions::default()
+        };
+        let out = markdown_to_typst("Hello", &opts, DEFAULT_WIDTH_PT);
+        assert!(!out.contains("inset:"), "inset should not be emitted when padding and border are zero");
     }
 }
