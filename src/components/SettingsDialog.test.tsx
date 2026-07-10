@@ -11,8 +11,8 @@ import type { PresentationConfig } from "../types/config";
 
 beforeEach(() => {
   vi.mocked(invoke).mockImplementation((cmd: string) => {
-    if (cmd === "get_overlay_cache_stats") return Promise.resolve({ entry_count: 3, total_bytes: 1536 });
-    if (cmd === "get_step_thumbnail_cache_stats") return Promise.resolve({ entry_count: 5, total_bytes: 2621440 });
+    if (cmd === "get_overlay_cache_stats") return Promise.resolve({ entry_count: 3, total_bytes: 1536, max_bytes: 52428800 });
+    if (cmd === "get_step_thumbnail_cache_stats") return Promise.resolve({ entry_count: 5, total_bytes: 2621440, max_bytes: 104857600 });
     if (cmd === "clear_overlay_svg_cache") return Promise.resolve(undefined);
     if (cmd === "clear_step_thumbnail_cache") return Promise.resolve(undefined);
     return Promise.resolve(undefined);
@@ -24,6 +24,8 @@ const BASE_SETTINGS: AppSettings = {
   pointer_linger_ms: 3000,
   pointer_stroke_width: 3,
   key_bindings: {},
+  cache_overlay_svg_max_mb: 50,
+  cache_step_thumbnail_max_mb: 100,
 };
 
 const BASE_CONFIG: PresentationConfig = {
@@ -194,10 +196,12 @@ describe("SettingsDialog — Caches tab", () => {
     return props;
   }
 
-  it("shows the Caches tab with cache stat labels", async () => {
+  it("shows the Caches tab with cache stat labels and limit inputs", async () => {
     await openCaches();
     expect(screen.getByText("Overlay render cache")).toBeInTheDocument();
     expect(screen.getByText("Step preview cache")).toBeInTheDocument();
+    expect(screen.getByLabelText("Overlay cache max size in MB")).toHaveValue(50);
+    expect(screen.getByLabelText("Step preview cache max size in MB")).toHaveValue(100);
   });
 
   it("displays cache entry counts after stats load", async () => {
@@ -206,11 +210,12 @@ describe("SettingsDialog — Caches tab", () => {
     await waitFor(() => expect(screen.getByText(/5 entr/)).toBeInTheDocument());
   });
 
-  it("displays sizes in KB/MB for larger caches", async () => {
+  it("displays sizes and utilization limits in KB/MB", async () => {
     await openCaches();
-    // 1536 B = 1.5 KB; 2621440 B = 2.5 MB
-    await waitFor(() => expect(screen.getByText(/1\.5 KB/)).toBeInTheDocument());
-    await waitFor(() => expect(screen.getByText(/2\.5 MB/)).toBeInTheDocument());
+    // 1536 B = 1.5 KB / 50.0 MB (52428800 B)
+    await waitFor(() => expect(screen.getByText(/1\.5 KB \/ 50\.0 MB/)).toBeInTheDocument());
+    // 2621440 B = 2.5 MB / 100.0 MB (104857600 B)
+    await waitFor(() => expect(screen.getByText(/2\.5 MB \/ 100\.0 MB/)).toBeInTheDocument());
   });
 
   it("calls clear_overlay_svg_cache and refreshes when Clear is clicked", async () => {

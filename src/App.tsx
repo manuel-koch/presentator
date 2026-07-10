@@ -66,6 +66,8 @@ function App() {
     pointer_linger_ms: 3000,
     pointer_stroke_width: 3,
     key_bindings: DEFAULT_KEY_BINDINGS,
+    cache_overlay_svg_max_mb: 50,
+    cache_step_thumbnail_max_mb: 100,
   });
   const [selectedStepIndex, setSelectedStepIndex] = useState<number | null>(null);
   const [hoveredStepIndex, setHoveredStepIndex] = useState<number | null>(null);

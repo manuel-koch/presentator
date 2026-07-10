@@ -45,6 +45,20 @@
           "presentation-prev-step": ["arrow-left", "arrow-up"]
         }
       ]
+    },
+    "cache_overlay_svg_max_mb": {
+      "type": "integer",
+      "description": "Maximum size in megabytes for the overlay SVG render cache. When the total size of cached overlay SVG files exceeds this limit, the oldest entries are evicted automatically. The limit is enforced after each new cache write.",
+      "default": 50,
+      "minimum": 1,
+      "examples": [20, 50, 100]
+    },
+    "cache_step_thumbnail_max_mb": {
+      "type": "integer",
+      "description": "Maximum size in megabytes for the step-preview thumbnail cache (PNG). When the total size of cached thumbnail files exceeds this limit, the oldest entries are evicted automatically. The limit is enforced after each new cache write.",
+      "default": 100,
+      "minimum": 1,
+      "examples": [50, 100, 200]
     }
   }
 }

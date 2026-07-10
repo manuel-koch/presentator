@@ -9,6 +9,8 @@ export interface AppSettings {
   pointer_linger_ms: number;
   pointer_stroke_width: number;
   key_bindings: Record<string, string[]>;
+  cache_overlay_svg_max_mb: number;
+  cache_step_thumbnail_max_mb: number;
 }
 
 interface Props {
@@ -39,9 +41,11 @@ export function SettingsDialog({ settings, onSave, onCancel, filename, presentat
   const learnRef = useRef<string | null>(null);
   learnRef.current = learningAction;
 
-  type CacheStats = { entry_count: number; total_bytes: number };
+  type CacheStats = { entry_count: number; total_bytes: number; max_bytes: number };
   const [cacheStats, setCacheStats] = useState<CacheStats | null>(null);
   const [thumbCacheStats, setThumbCacheStats] = useState<CacheStats | null>(null);
+  const [overlaySvgMaxMb, setOverlaySvgMaxMb] = useState(settings.cache_overlay_svg_max_mb ?? 50);
+  const [stepThumbMaxMb, setStepThumbMaxMb] = useState(settings.cache_step_thumbnail_max_mb ?? 100);
 
   useEffect(() => {
     invoke<CacheStats>("get_overlay_cache_stats").then(setCacheStats).catch(() => {});
@@ -123,7 +127,7 @@ export function SettingsDialog({ settings, onSave, onCancel, filename, presentat
 
   function handleSave() {
     if (hasConflicts || hasInvalid) return;
-    onSave({ fullscreen_on_presentation: fullscreen, pointer_linger_ms: lingerMs, pointer_stroke_width: strokeWidth, key_bindings: keyBindings });
+    onSave({ fullscreen_on_presentation: fullscreen, pointer_linger_ms: lingerMs, pointer_stroke_width: strokeWidth, key_bindings: keyBindings, cache_overlay_svg_max_mb: overlaySvgMaxMb, cache_step_thumbnail_max_mb: stepThumbMaxMb });
     if (presentationConfig && onSavePresentationConfig) {
       onSavePresentationConfig({ ...presentationConfig, aspect_ratio: aspectRatio, background_color: backgroundColor, pointer_color: pointerColor });
     }
@@ -271,33 +275,61 @@ export function SettingsDialog({ settings, onSave, onCancel, filename, presentat
             <div className="settings-general">
               <div className="settings-row">
                 <span className="settings-row-title">Overlay render cache</span>
-                <button
-                  className="settings-row-control settings-btn-clear-cache"
-                  onClick={handleClearCache}
-                  disabled={cacheStats?.entry_count === 0}
-                  aria-label="Clear overlay render cache"
-                >
-                  Clear
-                </button>
+                <div className="settings-row-cache-controls">
+                  <span className="settings-row-label">Limit</span>
+                  <input
+                    type="number"
+                    min={10}
+                    step={10}
+                    value={overlaySvgMaxMb}
+                    onChange={(e) => setOverlaySvgMaxMb(Math.max(10, parseInt(e.target.value, 10) || 50))}
+                    className="settings-number-input"
+                    style={{ width: "64px" }}
+                    aria-label="Overlay cache max size in MB"
+                  />
+                  <span className="settings-row-label settings-row-label-unit">MB</span>
+                  <button
+                    className="settings-btn-clear-cache"
+                    onClick={handleClearCache}
+                    disabled={cacheStats?.entry_count === 0}
+                    aria-label="Clear overlay render cache"
+                  >
+                    Clear
+                  </button>
+                </div>
                 <span className="settings-row-desc">
                   {cacheStats
-                    ? `${cacheStats.entry_count} entr${cacheStats.entry_count === 1 ? "y" : "ies"} · ${formatBytes(cacheStats.total_bytes)}`
+                    ? `${cacheStats.entry_count} entr${cacheStats.entry_count === 1 ? "y" : "ies"} · ${formatBytes(cacheStats.total_bytes)} / ${formatBytes(cacheStats.max_bytes)}`
                     : "Loading…"}
                 </span>
               </div>
               <div className="settings-row">
                 <span className="settings-row-title">Step preview cache</span>
-                <button
-                  className="settings-row-control settings-btn-clear-cache"
-                  onClick={handleClearThumbCache}
-                  disabled={thumbCacheStats?.entry_count === 0}
-                  aria-label="Clear step preview cache"
-                >
-                  Clear
-                </button>
+                <div className="settings-row-cache-controls">
+                  <span className="settings-row-label">Limit</span>
+                  <input
+                    type="number"
+                    min={10}
+                    step={10}
+                    value={stepThumbMaxMb}
+                    onChange={(e) => setStepThumbMaxMb(Math.max(10, parseInt(e.target.value, 10) || 100))}
+                    className="settings-number-input"
+                    style={{ width: "64px" }}
+                    aria-label="Step preview cache max size in MB"
+                  />
+                  <span className="settings-row-label settings-row-label-unit">MB</span>
+                  <button
+                    className="settings-btn-clear-cache"
+                    onClick={handleClearThumbCache}
+                    disabled={thumbCacheStats?.entry_count === 0}
+                    aria-label="Clear step preview cache"
+                  >
+                    Clear
+                  </button>
+                </div>
                 <span className="settings-row-desc">
                   {thumbCacheStats
-                    ? `${thumbCacheStats.entry_count} entr${thumbCacheStats.entry_count === 1 ? "y" : "ies"} · ${formatBytes(thumbCacheStats.total_bytes)}`
+                    ? `${thumbCacheStats.entry_count} entr${thumbCacheStats.entry_count === 1 ? "y" : "ies"} · ${formatBytes(thumbCacheStats.total_bytes)} / ${formatBytes(thumbCacheStats.max_bytes)}`
                     : "Loading…"}
                 </span>
               </div>

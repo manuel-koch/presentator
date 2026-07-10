@@ -1348,6 +1348,24 @@ button:active {
     cursor: not-allowed;
 }
 
+.settings-row-label {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+.settings-row-label-unit {
+    margin-inline-end: 0.75em;
+}
+
+.settings-row-cache-controls {
+    grid-area: control;
+    align-self: center;
+    display: flex;
+    align-items: center;
+    gap: 0.5em;
+}
+
 /* Overlay render progress indicator */
 @keyframes spin {
     to {

@@ -2,10 +2,13 @@ use std::path::{Path, PathBuf};
 use sha2::{Digest, Sha256};
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 
+use crate::cache_eviction;
+
 #[derive(serde::Serialize, Clone)]
 pub struct CacheStats {
     pub entry_count: usize,
     pub total_bytes: u64,
+    pub max_bytes: u64,
 }
 
 pub fn thumbnail_dir(cache_root: &Path) -> PathBuf {
@@ -24,9 +27,9 @@ pub fn get(cache_dir: &Path, key: &str) -> Option<String> {
     Some(STANDARD.encode(bytes))
 }
 
-/// Atomically writes PNG bytes (decoded from base64) to `<cache_dir>/<hash>.png`.
-/// Best-effort: silently ignores decode or I/O failures.
-pub fn put(cache_dir: &Path, key: &str, png_base64: &str) -> std::io::Result<()> {
+/// Atomically writes PNG bytes (decoded from base64) to `<cache_dir>/<hash>.png`,
+/// then evicts the oldest entries when the cache exceeds `max_bytes`.
+pub fn put(cache_dir: &Path, key: &str, png_base64: &str, max_bytes: u64) -> std::io::Result<()> {
     let bytes = STANDARD.decode(png_base64)
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
     std::fs::create_dir_all(cache_dir)?;
@@ -34,12 +37,14 @@ pub fn put(cache_dir: &Path, key: &str, png_base64: &str) -> std::io::Result<()>
     let tmp = cache_dir.join(format!("{hash}.tmp"));
     let target = cache_dir.join(format!("{hash}.png"));
     std::fs::write(&tmp, &bytes)?;
-    std::fs::rename(&tmp, &target)
+    std::fs::rename(&tmp, &target)?;
+    cache_eviction::evict_to_limit(cache_dir, max_bytes, "png");
+    Ok(())
 }
 
-pub fn stats(cache_dir: &Path) -> CacheStats {
+pub fn stats(cache_dir: &Path, max_bytes: u64) -> CacheStats {
     let Ok(entries) = std::fs::read_dir(cache_dir) else {
-        return CacheStats { entry_count: 0, total_bytes: 0 };
+        return CacheStats { entry_count: 0, total_bytes: 0, max_bytes };
     };
     let mut count = 0usize;
     let mut bytes = 0u64;
@@ -52,7 +57,7 @@ pub fn stats(cache_dir: &Path) -> CacheStats {
             }
         }
     }
-    CacheStats { entry_count: count, total_bytes: bytes }
+    CacheStats { entry_count: count, total_bytes: bytes, max_bytes }
 }
 
 /// Deletes every `.png` file in `cache_dir`. Returns the number of files removed.
@@ -105,7 +110,7 @@ mod tests {
     #[test]
     fn put_then_get_returns_same_png() {
         let dir = tmp_dir();
-        put(&dir, "key1", PNG_B64).unwrap();
+        put(&dir, "key1", PNG_B64, 10_000_000).unwrap();
         let retrieved = get(&dir, "key1").unwrap();
         assert_eq!(retrieved, PNG_B64);
     }
@@ -114,8 +119,8 @@ mod tests {
     fn put_overwrites_existing_entry() {
         let dir = tmp_dir();
         let png2 = "AAAA"; // not a real PNG but base64-decodable
-        put(&dir, "key2", PNG_B64).unwrap();
-        put(&dir, "key2", png2).unwrap();
+        put(&dir, "key2", PNG_B64, 10_000_000).unwrap();
+        put(&dir, "key2", png2, 10_000_000).unwrap();
         let got = get(&dir, "key2").unwrap();
         assert_eq!(got, png2);
     }
@@ -126,33 +131,55 @@ mod tests {
         let dir = parent.join("nested_new");
         // The nested dir must not exist yet — parent was just freshly created.
         assert!(!dir.exists());
-        put(&dir, "k", PNG_B64).unwrap();
+        put(&dir, "k", PNG_B64, 10_000_000).unwrap();
         assert!(dir.exists());
     }
 
     #[test]
     fn put_returns_err_for_invalid_base64() {
         let dir = tmp_dir();
-        let result = put(&dir, "bad", "not!valid!base64!!!");
+        let result = put(&dir, "bad", "not!valid!base64!!!", 10_000_000);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn put_evicts_oldest_when_over_limit() {
+        let dir = tmp_dir();
+        // Write two entries, then a third with a tight limit.
+        put(&dir, "old", PNG_B64, 10_000_000).unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(10));
+        put(&dir, "new", PNG_B64, 10_000_000).unwrap();
+        // Both exist.
+        assert!(get(&dir, "old").is_some());
+        assert!(get(&dir, "new").is_some());
+
+        // The PNG is ~67 bytes. 2 entries = ~134 bytes.
+        // Write with a limit of 80: total after write = ~201, need to remove ~121.
+        // Remove old (67) → 134, still > 80, remove new (67) → 67 ≤ 80. newer stays.
+        put(&dir, "newer", PNG_B64, 80).unwrap();
+        assert!(get(&dir, "old").is_none(), "old should have been evicted");
+        assert!(get(&dir, "new").is_none(), "new should have been evicted");
+        assert!(get(&dir, "newer").is_some(), "newer should exist");
     }
 
     #[test]
     fn stats_returns_zeros_for_missing_dir() {
         let dir = std::path::Path::new("/tmp/nonexistent_thumb_cache_xyz");
-        let s = stats(dir);
+        let s = stats(dir, 100_000_000);
         assert_eq!(s.entry_count, 0);
         assert_eq!(s.total_bytes, 0);
+        assert_eq!(s.max_bytes, 100_000_000);
     }
 
     #[test]
     fn stats_counts_png_files_and_bytes() {
         let dir = tmp_dir();
-        put(&dir, "a", PNG_B64).unwrap();
-        put(&dir, "b", PNG_B64).unwrap();
-        let s = stats(&dir);
+        put(&dir, "a", PNG_B64, 10_000_000).unwrap();
+        put(&dir, "b", PNG_B64, 10_000_000).unwrap();
+        let s = stats(&dir, 10_000_000);
         assert_eq!(s.entry_count, 2);
         assert!(s.total_bytes > 0);
+        assert_eq!(s.max_bytes, 10_000_000);
     }
 
     #[test]
@@ -160,19 +187,19 @@ mod tests {
         let dir = tmp_dir();
         std::fs::write(dir.join("file.tmp"), b"tmp").unwrap();
         std::fs::write(dir.join("file.txt"), b"txt").unwrap();
-        put(&dir, "real", PNG_B64).unwrap();
-        let s = stats(&dir);
+        put(&dir, "real", PNG_B64, 10_000_000).unwrap();
+        let s = stats(&dir, 50_000_000);
         assert_eq!(s.entry_count, 1);
     }
 
     #[test]
     fn clear_removes_all_png_files_and_returns_count() {
         let dir = tmp_dir();
-        put(&dir, "x", PNG_B64).unwrap();
-        put(&dir, "y", PNG_B64).unwrap();
+        put(&dir, "x", PNG_B64, 10_000_000).unwrap();
+        put(&dir, "y", PNG_B64, 10_000_000).unwrap();
         let removed = clear(&dir);
         assert_eq!(removed, 2);
-        assert_eq!(stats(&dir).entry_count, 0);
+        assert_eq!(stats(&dir, 50_000_000).entry_count, 0);
     }
 
     #[test]
@@ -185,7 +212,7 @@ mod tests {
     fn clear_does_not_remove_non_png_files() {
         let dir = tmp_dir();
         std::fs::write(dir.join("keep.tmp"), b"x").unwrap();
-        put(&dir, "gone", PNG_B64).unwrap();
+        put(&dir, "gone", PNG_B64, 10_000_000).unwrap();
         let removed = clear(&dir);
         assert_eq!(removed, 1);
         assert!(dir.join("keep.tmp").exists());

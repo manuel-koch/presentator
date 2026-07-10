@@ -1,12 +1,14 @@
 use std::path::{Path, PathBuf};
 use sha2::{Digest, Sha256};
 
+use crate::cache_eviction;
 use crate::markdown::RenderOptions;
 
 #[derive(serde::Serialize, Clone)]
 pub struct CacheStats {
     pub entry_count: usize,
     pub total_bytes: u64,
+    pub max_bytes: u64,
 }
 
 /// SHA-256 of all inputs that affect the rendered SVG output.
@@ -59,18 +61,25 @@ pub fn get(cache_dir: &Path, key: &str) -> Option<String> {
     std::fs::read_to_string(cache_dir.join(format!("{key}.svg"))).ok()
 }
 
-/// Atomically writes `svg` to `cache_dir/<key>.svg` via a temp file.
-pub fn put(cache_dir: &Path, key: &str, svg: &str) -> std::io::Result<()> {
+/// Atomically writes `svg` to `cache_dir/<key>.svg` via a temp file, then
+/// evicts the oldest entries when the cache exceeds `max_bytes`.
+pub fn put(cache_dir: &Path, key: &str, svg: &str, max_bytes: u64) -> std::io::Result<()> {
     std::fs::create_dir_all(cache_dir)?;
     let target = cache_dir.join(format!("{key}.svg"));
     let tmp = cache_dir.join(format!("{key}.tmp"));
     std::fs::write(&tmp, svg)?;
-    std::fs::rename(&tmp, &target)
+    std::fs::rename(&tmp, &target)?;
+    cache_eviction::evict_to_limit(cache_dir, max_bytes, "svg");
+    Ok(())
 }
 
-pub fn stats(cache_dir: &Path) -> CacheStats {
+pub fn stats(cache_dir: &Path, max_bytes: u64) -> CacheStats {
     let Ok(entries) = std::fs::read_dir(cache_dir) else {
-        return CacheStats { entry_count: 0, total_bytes: 0 };
+        return CacheStats {
+            entry_count: 0,
+            total_bytes: 0,
+            max_bytes,
+        };
     };
     let mut count = 0usize;
     let mut bytes = 0u64;
@@ -83,7 +92,11 @@ pub fn stats(cache_dir: &Path) -> CacheStats {
             }
         }
     }
-    CacheStats { entry_count: count, total_bytes: bytes }
+    CacheStats {
+        entry_count: count,
+        total_bytes: bytes,
+        max_bytes,
+    }
 }
 
 /// Deletes every `.svg` file in `cache_dir`. Returns the number of files removed.
@@ -184,29 +197,69 @@ mod tests {
 
     #[test]
     fn cache_key_changes_with_font_size() {
-        let k1 = cache_key("foo", 100.0, &opts_with(13.0, "#000", "Arial", "left", None, 0.0, "solid", "#000000", 0.0, 0.0), "1.0.0");
-        let k2 = cache_key("foo", 100.0, &opts_with(14.0, "#000", "Arial", "left", None, 0.0, "solid", "#000000", 0.0, 0.0), "1.0.0");
+        let k1 = cache_key(
+            "foo",
+            100.0,
+            &opts_with(13.0, "#000", "Arial", "left", None, 0.0, "solid", "#000000", 0.0, 0.0),
+            "1.0.0",
+        );
+        let k2 = cache_key(
+            "foo",
+            100.0,
+            &opts_with(14.0, "#000", "Arial", "left", None, 0.0, "solid", "#000000", 0.0, 0.0),
+            "1.0.0",
+        );
         assert_ne!(k1, k2);
     }
 
     #[test]
     fn cache_key_changes_with_color() {
-        let k1 = cache_key("foo", 100.0, &opts_with(14.0, "#000", "Arial", "left", None, 0.0, "solid", "#000000", 0.0, 0.0), "1.0.0");
-        let k2 = cache_key("foo", 100.0, &opts_with(14.0, "#fff", "Arial", "left", None, 0.0, "solid", "#000000", 0.0, 0.0), "1.0.0");
+        let k1 = cache_key(
+            "foo",
+            100.0,
+            &opts_with(14.0, "#000", "Arial", "left", None, 0.0, "solid", "#000000", 0.0, 0.0),
+            "1.0.0",
+        );
+        let k2 = cache_key(
+            "foo",
+            100.0,
+            &opts_with(14.0, "#fff", "Arial", "left", None, 0.0, "solid", "#000000", 0.0, 0.0),
+            "1.0.0",
+        );
         assert_ne!(k1, k2);
     }
 
     #[test]
     fn cache_key_changes_with_font_family() {
-        let k1 = cache_key("foo", 100.0, &opts_with(14.0, "#000", "Arial", "left", None, 0.0, "solid", "#000000", 0.0, 0.0), "1.0.0");
-        let k2 = cache_key("foo", 100.0, &opts_with(14.0, "#000", "Menlo", "left", None, 0.0, "solid", "#000000", 0.0, 0.0), "1.0.0");
+        let k1 = cache_key(
+            "foo",
+            100.0,
+            &opts_with(14.0, "#000", "Arial", "left", None, 0.0, "solid", "#000000", 0.0, 0.0),
+            "1.0.0",
+        );
+        let k2 = cache_key(
+            "foo",
+            100.0,
+            &opts_with(14.0, "#000", "Menlo", "left", None, 0.0, "solid", "#000000", 0.0, 0.0),
+            "1.0.0",
+        );
         assert_ne!(k1, k2);
     }
 
     #[test]
     fn cache_key_changes_with_text_align() {
-        let k1 = cache_key("foo", 100.0, &opts_with(14.0, "#000", "Arial", "left", None, 0.0, "solid", "#000000", 0.0, 0.0), "1.0.0");
-        let k2 = cache_key("foo", 100.0, &opts_with(14.0, "#000", "Arial", "center", None, 0.0, "solid", "#000000", 0.0, 0.0), "1.0.0");
+        let k1 = cache_key(
+            "foo",
+            100.0,
+            &opts_with(14.0, "#000", "Arial", "left", None, 0.0, "solid", "#000000", 0.0, 0.0),
+            "1.0.0",
+        );
+        let k2 = cache_key(
+            "foo",
+            100.0,
+            &opts_with(14.0, "#000", "Arial", "center", None, 0.0, "solid", "#000000", 0.0, 0.0),
+            "1.0.0",
+        );
         assert_ne!(k1, k2);
     }
 
@@ -222,43 +275,103 @@ mod tests {
 
     #[test]
     fn cache_key_changes_with_background_color() {
-        let k1 = cache_key("foo", 100.0, &opts_with(14.0, "#000", "Arial", "left", None, 0.0, "solid", "#000000", 0.0, 0.0), "1.0.0");
-        let k2 = cache_key("foo", 100.0, &opts_with(14.0, "#000", "Arial", "left", Some("#ff0000"), 0.0, "solid", "#000000", 0.0, 0.0), "1.0.0");
+        let k1 = cache_key(
+            "foo",
+            100.0,
+            &opts_with(14.0, "#000", "Arial", "left", None, 0.0, "solid", "#000000", 0.0, 0.0),
+            "1.0.0",
+        );
+        let k2 = cache_key(
+            "foo",
+            100.0,
+            &opts_with(14.0, "#000", "Arial", "left", Some("#ff0000"), 0.0, "solid", "#000000", 0.0, 0.0),
+            "1.0.0",
+        );
         assert_ne!(k1, k2);
     }
 
     #[test]
     fn cache_key_changes_with_border_width() {
-        let k1 = cache_key("foo", 100.0, &opts_with(14.0, "#000", "Arial", "left", None, 0.0, "solid", "#000000", 0.0, 0.0), "1.0.0");
-        let k2 = cache_key("foo", 100.0, &opts_with(14.0, "#000", "Arial", "left", None, 2.0, "solid", "#000000", 0.0, 0.0), "1.0.0");
+        let k1 = cache_key(
+            "foo",
+            100.0,
+            &opts_with(14.0, "#000", "Arial", "left", None, 0.0, "solid", "#000000", 0.0, 0.0),
+            "1.0.0",
+        );
+        let k2 = cache_key(
+            "foo",
+            100.0,
+            &opts_with(14.0, "#000", "Arial", "left", None, 2.0, "solid", "#000000", 0.0, 0.0),
+            "1.0.0",
+        );
         assert_ne!(k1, k2);
     }
 
     #[test]
     fn cache_key_changes_with_border_style() {
-        let k1 = cache_key("foo", 100.0, &opts_with(14.0, "#000", "Arial", "left", None, 1.0, "solid", "#000000", 0.0, 0.0), "1.0.0");
-        let k2 = cache_key("foo", 100.0, &opts_with(14.0, "#000", "Arial", "left", None, 1.0, "dashed", "#000000", 0.0, 0.0), "1.0.0");
+        let k1 = cache_key(
+            "foo",
+            100.0,
+            &opts_with(14.0, "#000", "Arial", "left", None, 1.0, "solid", "#000000", 0.0, 0.0),
+            "1.0.0",
+        );
+        let k2 = cache_key(
+            "foo",
+            100.0,
+            &opts_with(14.0, "#000", "Arial", "left", None, 1.0, "dashed", "#000000", 0.0, 0.0),
+            "1.0.0",
+        );
         assert_ne!(k1, k2);
     }
 
     #[test]
     fn cache_key_changes_with_border_color() {
-        let k1 = cache_key("foo", 100.0, &opts_with(14.0, "#000", "Arial", "left", None, 1.0, "solid", "#000000", 0.0, 0.0), "1.0.0");
-        let k2 = cache_key("foo", 100.0, &opts_with(14.0, "#000", "Arial", "left", None, 1.0, "solid", "#ff0000", 0.0, 0.0), "1.0.0");
+        let k1 = cache_key(
+            "foo",
+            100.0,
+            &opts_with(14.0, "#000", "Arial", "left", None, 1.0, "solid", "#000000", 0.0, 0.0),
+            "1.0.0",
+        );
+        let k2 = cache_key(
+            "foo",
+            100.0,
+            &opts_with(14.0, "#000", "Arial", "left", None, 1.0, "solid", "#ff0000", 0.0, 0.0),
+            "1.0.0",
+        );
         assert_ne!(k1, k2);
     }
 
     #[test]
     fn cache_key_changes_with_border_radius() {
-        let k1 = cache_key("foo", 100.0, &opts_with(14.0, "#000", "Arial", "left", None, 1.0, "solid", "#000000", 0.0, 0.0), "1.0.0");
-        let k2 = cache_key("foo", 100.0, &opts_with(14.0, "#000", "Arial", "left", None, 1.0, "solid", "#000000", 4.0, 0.0), "1.0.0");
+        let k1 = cache_key(
+            "foo",
+            100.0,
+            &opts_with(14.0, "#000", "Arial", "left", None, 1.0, "solid", "#000000", 0.0, 0.0),
+            "1.0.0",
+        );
+        let k2 = cache_key(
+            "foo",
+            100.0,
+            &opts_with(14.0, "#000", "Arial", "left", None, 1.0, "solid", "#000000", 4.0, 0.0),
+            "1.0.0",
+        );
         assert_ne!(k1, k2);
     }
 
     #[test]
     fn cache_key_changes_with_padding() {
-        let k1 = cache_key("foo", 100.0, &opts_with(14.0, "#000", "Arial", "left", None, 0.0, "solid", "#000000", 0.0, 0.0), "1.0.0");
-        let k2 = cache_key("foo", 100.0, &opts_with(14.0, "#000", "Arial", "left", None, 0.0, "solid", "#000000", 0.0, 8.0), "1.0.0");
+        let k1 = cache_key(
+            "foo",
+            100.0,
+            &opts_with(14.0, "#000", "Arial", "left", None, 0.0, "solid", "#000000", 0.0, 0.0),
+            "1.0.0",
+        );
+        let k2 = cache_key(
+            "foo",
+            100.0,
+            &opts_with(14.0, "#000", "Arial", "left", None, 0.0, "solid", "#000000", 0.0, 8.0),
+            "1.0.0",
+        );
         assert_ne!(k1, k2);
     }
 
@@ -274,15 +387,15 @@ mod tests {
     fn put_then_get_returns_same_svg() {
         let dir = tmp_dir();
         let svg = "<svg><rect/></svg>";
-        put(&dir, "testkey", svg).unwrap();
+        put(&dir, "testkey", svg, 10_000_000).unwrap();
         assert_eq!(get(&dir, "testkey").unwrap(), svg);
     }
 
     #[test]
     fn put_overwrites_existing_entry() {
         let dir = tmp_dir();
-        put(&dir, "k", "first").unwrap();
-        put(&dir, "k", "second").unwrap();
+        put(&dir, "k", "first", 10_000_000).unwrap();
+        put(&dir, "k", "second", 10_000_000).unwrap();
         assert_eq!(get(&dir, "k").unwrap(), "second");
     }
 
@@ -291,9 +404,31 @@ mod tests {
         let dir = std::env::temp_dir()
             .join(format!("presentator_cache_mkdir_{}", COUNTER.fetch_add(1, Ordering::SeqCst)));
         assert!(!dir.exists());
-        put(&dir, "k", "<svg/>").unwrap();
+        put(&dir, "k", "<svg/>", 10_000_000).unwrap();
         assert!(dir.exists());
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn put_evicts_oldest_when_over_limit() {
+        let dir = tmp_dir();
+        // Write a small SVG (20 bytes) and a larger one (60 bytes).
+        put(&dir, "old", "x".repeat(20).as_str(), 10_000_000).unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(10));
+        put(&dir, "new", "y".repeat(60).as_str(), 10_000_000).unwrap();
+        // Both should exist.
+        assert!(get(&dir, "old").is_some());
+        assert!(get(&dir, "new").is_some());
+
+        // Now do a put with a tight limit of 30 bytes.
+        // Total is 80, need to remove 50. Old is 20, still needs 30 → remove old.
+        // After old is gone (20 removed), we need 30 more → that removes new too.
+        std::thread::sleep(std::time::Duration::from_millis(10));
+        put(&dir, "newer", "z".repeat(10).as_str(), 30).unwrap();
+
+        assert!(get(&dir, "old").is_none(), "old should have been evicted");
+        // newer should exist (just written), new may have been evicted.
+        assert!(get(&dir, "newer").is_some(), "newer should exist");
     }
 
     // ── stats ─────────────────────────────────────────────────────────────────
@@ -301,20 +436,22 @@ mod tests {
     #[test]
     fn stats_returns_zeros_for_missing_dir() {
         let dir = std::env::temp_dir().join("presentator_cache_noexist_stats");
-        let s = stats(&dir);
+        let s = stats(&dir, 50_000_000);
         assert_eq!(s.entry_count, 0);
         assert_eq!(s.total_bytes, 0);
+        assert_eq!(s.max_bytes, 50_000_000);
     }
 
     #[test]
     fn stats_counts_svg_files_and_their_bytes() {
         let dir = tmp_dir();
         let svg = "<svg><rect/></svg>";
-        put(&dir, "a", svg).unwrap();
-        put(&dir, "b", svg).unwrap();
-        let s = stats(&dir);
+        put(&dir, "a", svg, 10_000_000).unwrap();
+        put(&dir, "b", svg, 10_000_000).unwrap();
+        let s = stats(&dir, 10_000_000);
         assert_eq!(s.entry_count, 2);
         assert_eq!(s.total_bytes, (svg.len() * 2) as u64);
+        assert_eq!(s.max_bytes, 10_000_000);
     }
 
     #[test]
@@ -322,7 +459,7 @@ mod tests {
         let dir = tmp_dir();
         // Simulate a leftover .tmp file (e.g. from a crashed write).
         std::fs::write(dir.join("orphan.tmp"), "partial").unwrap();
-        let s = stats(&dir);
+        let s = stats(&dir, 50_000_000);
         assert_eq!(s.entry_count, 0);
     }
 
@@ -331,11 +468,11 @@ mod tests {
     #[test]
     fn clear_removes_all_svg_files_and_returns_count() {
         let dir = tmp_dir();
-        put(&dir, "x", "<svg/>").unwrap();
-        put(&dir, "y", "<svg/>").unwrap();
+        put(&dir, "x", "<svg/>", 10_000_000).unwrap();
+        put(&dir, "y", "<svg/>", 10_000_000).unwrap();
         let removed = clear(&dir);
         assert_eq!(removed, 2);
-        assert_eq!(stats(&dir).entry_count, 0);
+        assert_eq!(stats(&dir, 50_000_000).entry_count, 0);
     }
 
     #[test]

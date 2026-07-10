@@ -1,3 +1,4 @@
+mod cache_eviction;
 mod markdown;
 mod overlay_cache;
 mod svg_render;
@@ -26,6 +27,9 @@ fn default_true() -> bool { true }
 fn default_pointer_linger_ms() -> u32 { 3000 }
 fn default_pointer_stroke_width() -> u32 { 3 }
 
+fn default_cache_overlay_svg_max_mb() -> u32 { 50 }
+fn default_cache_step_thumbnail_max_mb() -> u32 { 100 }
+
 fn default_key_bindings() -> HashMap<String, Vec<String>> {
     let mut map = HashMap::new();
     map.insert(
@@ -49,6 +53,10 @@ struct AppConfig {
     pointer_stroke_width: u32,
     #[serde(default = "default_key_bindings")]
     key_bindings: HashMap<String, Vec<String>>,
+    #[serde(default = "default_cache_overlay_svg_max_mb")]
+    cache_overlay_svg_max_mb: u32,
+    #[serde(default = "default_cache_step_thumbnail_max_mb")]
+    cache_step_thumbnail_max_mb: u32,
 }
 
 impl Default for AppConfig {
@@ -58,6 +66,8 @@ impl Default for AppConfig {
             pointer_linger_ms: default_pointer_linger_ms(),
             pointer_stroke_width: default_pointer_stroke_width(),
             key_bindings: default_key_bindings(),
+            cache_overlay_svg_max_mb: default_cache_overlay_svg_max_mb(),
+            cache_step_thumbnail_max_mb: default_cache_step_thumbnail_max_mb(),
         }
     }
 }
@@ -196,6 +206,7 @@ async fn render_markdown_to_svg<R: Runtime>(
         &options,
         env!("CARGO_PKG_VERSION"),
     );
+
     let cache_dir = app
         .path()
         .app_cache_dir()
@@ -212,12 +223,17 @@ async fn render_markdown_to_svg<R: Runtime>(
 
     log::info!("rendering markdown → svg id={id} width={width}");
 
+    // Read the cache limit before moving into the blocking closure.
+    let max_bytes = app.state::<AppConfigState>()
+        .lock().unwrap()
+        .cache_overlay_svg_max_mb as u64 * 1_048_576;
+
     // Typst compilation is CPU-intensive; offload it (and the subsequent cache
     // write) to the blocking thread pool so async executor threads stay free.
     tokio::task::spawn_blocking(move || -> Result<String, String> {
         let svg = markdown::render_markdown_to_svg(&content, &options, width)?;
         if let Some(ref dir) = cache_dir {
-            let _ = overlay_cache::put(dir, &key, &svg);
+            let _ = overlay_cache::put(dir, &key, &svg, max_bytes);
         }
         Ok(svg)
     })
@@ -228,14 +244,17 @@ async fn render_markdown_to_svg<R: Runtime>(
 
 #[tauri::command]
 fn get_overlay_cache_stats<R: Runtime>(app: AppHandle<R>) -> overlay_cache::CacheStats {
+    let max_bytes = app.state::<AppConfigState>()
+        .lock().unwrap()
+        .cache_overlay_svg_max_mb as u64 * 1_048_576;
     let cache_dir = app
         .path()
         .app_cache_dir()
         .ok()
         .map(|d| overlay_cache::overlay_svg_dir(&d));
     match cache_dir {
-        Some(dir) => overlay_cache::stats(&dir),
-        None => overlay_cache::CacheStats { entry_count: 0, total_bytes: 0 },
+        Some(dir) => overlay_cache::stats(&dir, max_bytes),
+        None => overlay_cache::CacheStats { entry_count: 0, total_bytes: 0, max_bytes },
     }
 }
 
@@ -285,7 +304,10 @@ fn cache_step_thumbnail<R: Runtime>(name: String, key: String, png_base64: Strin
     let cache_dir = app.path().app_cache_dir()
         .map_err(|e| e.to_string())
         .map(|d| thumbnail_cache::thumbnail_dir(&d))?;
-    let result = thumbnail_cache::put(&cache_dir, &key, &png_base64).map_err(|e| e.to_string());
+    let max_bytes = app.state::<AppConfigState>()
+        .lock().unwrap()
+        .cache_step_thumbnail_max_mb as u64 * 1_048_576;
+    let result = thumbnail_cache::put(&cache_dir, &key, &png_base64, max_bytes).map_err(|e| e.to_string());
     match &result {
         Ok(()) => log::debug!("step-thumbnail cached to disk: {name}"),
         Err(e) => log::warn!("step-thumbnail cache write failed: {name}: {e}"),
@@ -295,11 +317,14 @@ fn cache_step_thumbnail<R: Runtime>(name: String, key: String, png_base64: Strin
 
 #[tauri::command]
 fn get_step_thumbnail_cache_stats<R: Runtime>(app: AppHandle<R>) -> thumbnail_cache::CacheStats {
+    let max_bytes = app.state::<AppConfigState>()
+        .lock().unwrap()
+        .cache_step_thumbnail_max_mb as u64 * 1_048_576;
     let cache_dir = app.path().app_cache_dir().ok()
         .map(|d| thumbnail_cache::thumbnail_dir(&d));
     match cache_dir {
-        Some(dir) => thumbnail_cache::stats(&dir),
-        None => thumbnail_cache::CacheStats { entry_count: 0, total_bytes: 0 },
+        Some(dir) => thumbnail_cache::stats(&dir, max_bytes),
+        None => thumbnail_cache::CacheStats { entry_count: 0, total_bytes: 0, max_bytes },
     }
 }
 
@@ -345,19 +370,25 @@ pub fn run() {
 
             // Log cache stats for both caches at startup.
             if let Ok(cache_root) = app.path().app_cache_dir() {
-                let ov = overlay_cache::stats(&overlay_cache::overlay_svg_dir(&cache_root));
+                let cfg = app.state::<AppConfigState>().lock().unwrap().clone();
+                let ov_max = cfg.cache_overlay_svg_max_mb as u64 * 1_048_576;
+                let th_max = cfg.cache_step_thumbnail_max_mb as u64 * 1_048_576;
+
+                let ov = overlay_cache::stats(&overlay_cache::overlay_svg_dir(&cache_root), ov_max);
                 log::info!(
-                    "overlay-svg cache: {} entr{}, {} KB",
+                    "overlay-svg cache: {} entr{}, {} KB / {} MB",
                     ov.entry_count,
                     if ov.entry_count == 1 { "y" } else { "ies" },
                     ov.total_bytes / 1024,
+                    cfg.cache_overlay_svg_max_mb,
                 );
-                let th = thumbnail_cache::stats(&thumbnail_cache::thumbnail_dir(&cache_root));
+                let th = thumbnail_cache::stats(&thumbnail_cache::thumbnail_dir(&cache_root), th_max);
                 log::info!(
-                    "step-thumbnail cache: {} entr{}, {} KB",
+                    "step-thumbnail cache: {} entr{}, {} KB / {} MB",
                     th.entry_count,
                     if th.entry_count == 1 { "y" } else { "ies" },
                     th.total_bytes / 1024,
+                    cfg.cache_step_thumbnail_max_mb,
                 );
             }
 
@@ -510,6 +541,12 @@ mod tests {
     }
 
     #[test]
+    fn default_cache_limits() {
+        assert_eq!(AppConfig::default().cache_overlay_svg_max_mb, 50);
+        assert_eq!(AppConfig::default().cache_step_thumbnail_max_mb, 100);
+    }
+
+    #[test]
     fn default_key_bindings_contains_expected_actions() {
         let bindings = default_key_bindings();
         let next = bindings.get("presentation-next-step").expect("missing next-step");
@@ -535,6 +572,8 @@ mod tests {
     fn round_trip_preserves_all_fields() {
         let original = AppConfig {
             fullscreen_on_presentation: false,
+            cache_overlay_svg_max_mb: 10,
+            cache_step_thumbnail_max_mb: 20,
             key_bindings: {
                 let mut m = HashMap::new();
                 m.insert("presentation-next-step".to_string(), vec!["enter".to_string()]);
@@ -545,6 +584,8 @@ mod tests {
         let yaml = serde_yaml::to_string(&original).unwrap();
         let restored: AppConfig = serde_yaml::from_str(&yaml).unwrap();
         assert_eq!(restored.fullscreen_on_presentation, false);
+        assert_eq!(restored.cache_overlay_svg_max_mb, 10);
+        assert_eq!(restored.cache_step_thumbnail_max_mb, 20);
         assert_eq!(
             restored.key_bindings.get("presentation-next-step").unwrap(),
             &vec!["enter".to_string()]
@@ -557,6 +598,8 @@ mod tests {
     fn empty_yaml_object_deserializes_with_defaults() {
         let cfg: AppConfig = serde_yaml::from_str("{}").unwrap();
         assert!(cfg.fullscreen_on_presentation);
+        assert_eq!(cfg.cache_overlay_svg_max_mb, 50);
+        assert_eq!(cfg.cache_step_thumbnail_max_mb, 100);
         assert!(cfg.key_bindings.contains_key("presentation-next-step"));
         assert!(cfg.key_bindings.contains_key("presentation-prev-step"));
     }
@@ -575,6 +618,15 @@ mod tests {
         assert!(cfg.fullscreen_on_presentation);
     }
 
+    #[test]
+    fn missing_cache_limits_deserialize_with_defaults() {
+        let cfg: AppConfig = serde_yaml::from_str(
+            "fullscreen_on_presentation: true\nkey_bindings: {}\n"
+        ).unwrap();
+        assert_eq!(cfg.cache_overlay_svg_max_mb, 50);
+        assert_eq!(cfg.cache_step_thumbnail_max_mb, 100);
+    }
+
     // ── File I/O (serde layer only — AppHandle not available in unit tests) ───
 
     #[test]
@@ -582,6 +634,8 @@ mod tests {
         let path = std::env::temp_dir().join("presentator_test_config.yaml");
         let original = AppConfig {
             fullscreen_on_presentation: false,
+            cache_overlay_svg_max_mb: 25,
+            cache_step_thumbnail_max_mb: 75,
             key_bindings: {
                 let mut m = HashMap::new();
                 m.insert("presentation-prev-step".to_string(), vec!["shift-arrow-left".to_string()]);
@@ -594,6 +648,8 @@ mod tests {
         let _ = std::fs::remove_file(&path);
 
         assert_eq!(loaded.fullscreen_on_presentation, false);
+        assert_eq!(loaded.cache_overlay_svg_max_mb, 25);
+        assert_eq!(loaded.cache_step_thumbnail_max_mb, 75);
         assert_eq!(
             loaded.key_bindings.get("presentation-prev-step").unwrap(),
             &vec!["shift-arrow-left".to_string()]
@@ -678,6 +734,8 @@ mod tests {
         let cfg = get_app_settings(state);
         assert!(cfg.fullscreen_on_presentation);
         assert_eq!(cfg.pointer_linger_ms, 3000);
+        assert_eq!(cfg.cache_overlay_svg_max_mb, 50);
+        assert_eq!(cfg.cache_step_thumbnail_max_mb, 100);
     }
 
     #[test]
@@ -687,6 +745,8 @@ mod tests {
             fullscreen_on_presentation: false,
             pointer_linger_ms: 1000,
             pointer_stroke_width: 5,
+            cache_overlay_svg_max_mb: 10,
+            cache_step_thumbnail_max_mb: 20,
             key_bindings: HashMap::new(),
         };
         let handle = app.handle().clone();
@@ -695,6 +755,8 @@ mod tests {
         let updated = app.state::<AppConfigState>().lock().unwrap().clone();
         assert!(!updated.fullscreen_on_presentation);
         assert_eq!(updated.pointer_linger_ms, 1000);
+        assert_eq!(updated.cache_overlay_svg_max_mb, 10);
+        assert_eq!(updated.cache_step_thumbnail_max_mb, 20);
     }
 
     #[test]
@@ -704,12 +766,14 @@ mod tests {
         // save_app_config writes to the app config dir (may be OS-specific)
         let cfg = AppConfig {
             fullscreen_on_presentation: false,
+            cache_overlay_svg_max_mb: 15,
             ..AppConfig::default()
         };
         save_app_config(&handle, &cfg);
         // load_app_config should read back the same value
         let loaded = load_app_config(&handle);
         assert!(!loaded.fullscreen_on_presentation);
+        assert_eq!(loaded.cache_overlay_svg_max_mb, 15);
         // cleanup
         if let Some(path) = app_config_path(&handle) {
             let _ = std::fs::remove_file(path);
@@ -766,6 +830,7 @@ mod tests {
         // Might be 0 (fresh) or some positive number (shared OS cache); just check no panic.
         let _ = stats.entry_count;
         let _ = stats.total_bytes;
+        let _ = stats.max_bytes;
     }
 
     #[test]
@@ -783,6 +848,7 @@ mod tests {
         let stats = get_overlay_cache_stats(handle);
         let _ = stats.entry_count;
         let _ = stats.total_bytes;
+        let _ = stats.max_bytes;
     }
 
     #[test]
