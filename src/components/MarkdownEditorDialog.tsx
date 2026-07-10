@@ -49,6 +49,7 @@ export function MarkdownEditorDialog({ overlay, onSave, onQuickSave, onCancel }:
   const [style, setStyle] = useState<StyleState>(() => defaultStyle(overlay));
   const [previewSrc, setPreviewSrc] = useState<string | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
+  const [rendering, setRendering] = useState(false);
   const [fontSizeStr, setFontSizeStr] = useState(() => String(overlay.style?.font_size_pt ?? 14.0));
   const [renderWidthStr, setRenderWidthStr] = useState(() => String(overlay.style?.render_width_pct ?? 20));
   const [borderWidthStr, setBorderWidthStr] = useState(() => String(overlay.style?.border_width ?? 0));
@@ -177,6 +178,7 @@ export function MarkdownEditorDialog({ overlay, onSave, onQuickSave, onCancel }:
   }, []);
 
   function renderPreviewWith(text: string, s: StyleState) {
+    setRendering(true);
     invoke<string>("render_markdown_to_svg", {
       id: overlay.id,
       content: text,
@@ -186,9 +188,11 @@ export function MarkdownEditorDialog({ overlay, onSave, onQuickSave, onCancel }:
       .then((svg) => {
         setPreviewSrc(`data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`);
         setPreviewError(null);
+        setRendering(false);
       })
       .catch((err) => {
         setPreviewError(String(err));
+        setRendering(false);
       });
   }
 
@@ -249,6 +253,7 @@ export function MarkdownEditorDialog({ overlay, onSave, onQuickSave, onCancel }:
                 }}
                 className="markdown-editor-size-input"
                 aria-label="Render width as percent of canvas"
+                maxLength={3}
               />
               <span className="markdown-editor-style-unit">%</span>
             </label>
@@ -284,6 +289,7 @@ export function MarkdownEditorDialog({ overlay, onSave, onQuickSave, onCancel }:
                 }}
                 className="markdown-editor-size-input"
                 aria-label="Font size in pt"
+                maxLength={3}
               />
               <span className="markdown-editor-style-unit">pt</span>
             </label>
@@ -347,16 +353,27 @@ export function MarkdownEditorDialog({ overlay, onSave, onQuickSave, onCancel }:
           </div>
           {/* ── Background row: Background color, Padding ── */}
           <div className="markdown-editor-style-row">
-            <label className="markdown-editor-style-field">
+            <div className="markdown-editor-style-field">
               <span className="markdown-editor-style-label">Background color</span>
+              <label className="markdown-editor-color-toggle" aria-label="Toggle background color">
+                <input
+                  type="checkbox"
+                  checked={!!style.background_color}
+                  onChange={(e) => {
+                    updateStyle({ background_color: e.target.checked ? "#ffffff" : "" });
+                  }}
+                  className="markdown-editor-color-checkbox"
+                />
+              </label>
               <input
                 type="color"
                 value={style.background_color || "#ffffff"}
                 onChange={(e) => updateStyle({ background_color: e.target.value })}
-                className="markdown-editor-color-input"
+                className={`markdown-editor-color-input${style.background_color ? "" : " markdown-editor-color-input--disabled"}`}
                 aria-label="Background color"
+                disabled={!style.background_color}
               />
-            </label>
+            </div>
             <label className="markdown-editor-style-field">
               <span className="markdown-editor-style-label">Padding</span>
               <input
@@ -375,6 +392,7 @@ export function MarkdownEditorDialog({ overlay, onSave, onQuickSave, onCancel }:
                 }}
                 className="markdown-editor-size-input"
                 aria-label="Padding in pt"
+                maxLength={3}
               />
               <span className="markdown-editor-style-unit">pt</span>
             </label>
@@ -399,6 +417,7 @@ export function MarkdownEditorDialog({ overlay, onSave, onQuickSave, onCancel }:
                 }}
                 className="markdown-editor-size-input"
                 aria-label="Border width in pt"
+                maxLength={3}
               />
             </label>
             <label className="markdown-editor-style-field markdown-editor-border-toggle" role="group" aria-label="Border style">
@@ -406,9 +425,10 @@ export function MarkdownEditorDialog({ overlay, onSave, onQuickSave, onCancel }:
               {(["solid", "dashed", "dotted"] as const).map((s) => (
                 <button
                   key={s}
-                  className={`markdown-editor-align-btn${style.border_style === s ? " markdown-editor-align-btn--active" : ""}`}
-                  onClick={() => updateStyle({ border_style: s })}
+                  className={`markdown-editor-align-btn${style.border_style === s ? " markdown-editor-align-btn--active" : ""}${style.border_width === 0 ? " markdown-editor-align-btn--disabled" : ""}`}
+                  onClick={() => { if (style.border_width > 0) updateStyle({ border_style: s }); }}
                   aria-pressed={style.border_style === s}
+                  disabled={style.border_width === 0}
                   title={s}
                 >
                   {s === "solid" ? "━" : s === "dashed" ? "╌" : "┅"}
@@ -419,10 +439,11 @@ export function MarkdownEditorDialog({ overlay, onSave, onQuickSave, onCancel }:
               <span className="markdown-editor-style-label">Border color</span>
               <input
                 type="color"
-                value={style.border_color}
+                value={style.border_color || "#000000"}
                 onChange={(e) => updateStyle({ border_color: e.target.value })}
-                className="markdown-editor-color-input"
+                className={`markdown-editor-color-input${style.border_width === 0 ? " markdown-editor-color-input--disabled" : ""}`}
                 aria-label="Border color"
+                disabled={style.border_width === 0}
               />
             </label>
             <label className="markdown-editor-style-field">
@@ -441,9 +462,12 @@ export function MarkdownEditorDialog({ overlay, onSave, onQuickSave, onCancel }:
                     setBorderRadiusStr(String(style.border_radius));
                   }
                 }}
-                className="markdown-editor-size-input"
+                className={`markdown-editor-size-input${style.border_width === 0 ? " markdown-editor-size-input--disabled" : ""}`}
                 aria-label="Border radius in pt"
+                maxLength={3}
+                disabled={style.border_width === 0}
               />
+              <span className="markdown-editor-style-unit">pt</span>
             </label>
           </div>
         </div>
@@ -453,7 +477,11 @@ export function MarkdownEditorDialog({ overlay, onSave, onQuickSave, onCancel }:
             {previewError ? (
               <div className="markdown-editor-preview-error">{previewError}</div>
             ) : previewSrc ? (
-              <img src={previewSrc} alt="" className="markdown-editor-preview-img" />
+              <div className="markdown-editor-preview-img-wrapper">
+                <img src={previewSrc} alt="" className={`markdown-editor-preview-img${rendering ? " markdown-editor-preview-img--stale" : ""}`} />
+                {rendering && <div className="markdown-editor-preview-overlay" />}
+                {rendering && <div className="markdown-editor-preview-bar" />}
+              </div>
             ) : (
               <div className="markdown-editor-preview-placeholder">Rendering…</div>
             )}

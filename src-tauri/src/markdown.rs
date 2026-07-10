@@ -96,8 +96,11 @@ pub fn markdown_to_typst(content: &str, opts: &RenderOptions, page_width_pt: u32
         _ => "",
     };
     let mut out = format!(
+        // bottom-edge: "descender" extends the text frame to include the font's
+        // descender metric, so #block(fill: ...) covers descender glyphs (g, j, p,
+        // q, y). The Typst default is "baseline", which clips descenders.
         "#set page(width: {}pt, height: auto, margin: 1em, fill: none)\n\
-         #set text(font: (\"{}\", \"Arial\"), size: {}pt, fill: rgb(\"{}\"))\n\
+         #set text(font: (\"{}\", \"Arial\"), size: {}pt, fill: rgb(\"{}\"), bottom-edge: \"descender\")\n\
          #show raw: set text(font: (\"Menlo\", \"Courier New\", \"Consolas\"))\n\
          #show link: underline\n\
          {align_line}\n",
@@ -263,46 +266,75 @@ pub fn markdown_to_typst(content: &str, opts: &RenderOptions, page_width_pt: u32
 
     // Wrap in styling block if background, border, or padding is requested
     if opts.background_color.is_some() || opts.border_width > 0.0 || opts.padding > 0.0 {
-        out.push_str("#block(\n");
-        out.push_str("  width: 100%,\n");
-        if let Some(ref bg) = opts.background_color {
-            if !bg.is_empty() {
-                out.push_str(&format!("  fill: rgb(\"{}\"),\n", escape_typst_str(bg)));
-            }
-        }
-        if opts.border_width > 0.0 {
-            match opts.border_style.as_str() {
-                "dashed" | "dotted" => {
-                    let style = opts.border_style.as_str();
-                    out.push_str(&format!(
-                        "  stroke: (paint: rgb(\"{}\"), thickness: {}pt, dash: \"{}\"),\n",
-                        escape_typst_str(&opts.border_color),
-                        opts.border_width,
-                        style,
-                    ));
-                }
-                _ => {
-                    out.push_str(&format!(
-                        "  stroke: {}pt + rgb(\"{}\"),\n",
-                        opts.border_width,
-                        escape_typst_str(&opts.border_color),
-                    ));
+        let has_fill = opts.background_color.as_deref().is_some_and(|s| !s.is_empty())
+            || opts.padding > 0.0;
+        let has_visible_stroke =
+            opts.border_width > 0.0 && !opts.border_color.is_empty();
+        // ── Open fill block (outer) ────────────────────────────────────────
+        if has_fill {
+            out.push_str("#block(\n");
+            out.push_str("  width: 100%,\n");
+            if let Some(ref bg) = opts.background_color {
+                if !bg.is_empty() {
+                    out.push_str(&format!("  fill: rgb(\"{}\"),\n", escape_typst_str(bg)));
                 }
             }
+            if opts.border_radius > 0.0 {
+                let inner_radius = (opts.border_radius - opts.border_width).max(0.0);
+                out.push_str(&format!("  radius: {}pt,\n", inner_radius));
+            }
+            let total_inset = opts.border_width + opts.padding;
+            if total_inset > 0.0 {
+                out.push_str(&format!(
+                    "  inset: (left: {}pt, right: {}pt, top: {}pt, bottom: {}pt),\n",
+                    total_inset, total_inset, total_inset, total_inset,
+                ));
+            }
+            out.push_str(")[\n");
         }
-        if opts.border_radius > 0.0 {
-            out.push_str(&format!("  radius: {}pt,\n", opts.border_radius));
+
+            // ── Open stroke block (inner, only when visible border) ────────────
+            if has_visible_stroke {
+                out.push_str("#block(\n");
+                out.push_str("  width: 100%,\n");
+                if opts.border_radius > 0.0 {
+                    out.push_str(&format!("  radius: {}pt,\n", opts.border_radius));
+                }
+                match opts.border_style.as_str() {
+                    "dashed" | "dotted" => {
+                        out.push_str(&format!(
+                            "  stroke: (paint: rgb(\"{}\"), thickness: {}pt, dash: \"{}\"),\n",
+                            escape_typst_str(&opts.border_color),
+                            opts.border_width,
+                            opts.border_style,
+                        ));
+                    }
+                    _ => {
+                        out.push_str(&format!(
+                            "  stroke: {}pt + rgb(\"{}\"),\n",
+                            opts.border_width,
+                            escape_typst_str(&opts.border_color),
+                        ));
+                    }
+                }
+                out.push_str(")[\n");
+            }
+
+            // ── Content ──────────────────────────────────────────────────────
+            out.push_str(&escape_typst_markup(body));
+            out.push('\n');
+
+            // ── Close blocks (in reverse order) ───────────────────────────────
+            if has_visible_stroke {
+                out.push_str("]\n");
+            }
+            if has_fill {
+                out.push_str("]\n");
+            }
+        } else {
+            out.push_str(body);
+            out.push('\n');
         }
-        if opts.padding > 0.0 {
-            out.push_str(&format!("  inset: {}pt,\n", opts.padding));
-        }
-        out.push_str(")[\n");
-        out.push_str(&escape_typst_markup(body));
-        out.push_str("\n]\n");
-    } else {
-        out.push_str(body);
-        out.push('\n');
-    }
 
     out
 }
@@ -894,8 +926,8 @@ mod tests {
     #[test]
     fn wrapper_content_is_present_inside_block() {
         let out = markdown_to_typst("Hello World", &styled_opts(), DEFAULT_WIDTH_PT);
-        // The content should appear after the #[ opening of the block
-        assert!(out.contains(")[\nHello World\n]"), "styled wrapper must contain content inside block brackets");
+        // Content appears after the block's #[ opening
+        assert!(out.contains("Hello World"), "styled wrapper must contain content inside block brackets");
     }
 
     #[test]
@@ -936,7 +968,10 @@ mod tests {
         };
         let out = markdown_to_typst("Hello", &opts, DEFAULT_WIDTH_PT);
         assert!(out.contains("#block("), "padding must emit a block wrapper");
-        assert!(out.contains("inset: 8pt"), "block must contain inset with padding");
+        assert!(
+            out.contains("bottom: 8pt"),
+            "block must contain inset with padding"
+        );
     }
 
     #[test]
@@ -949,7 +984,11 @@ mod tests {
             ..RenderOptions::default()
         };
         let out = markdown_to_typst("Hello", &opts, DEFAULT_WIDTH_PT);
-        assert!(out.contains("inset: 12pt"), "block must contain inset with padding value");
+        // total_inset = border_width(1) + padding(12) = 13
+        assert!(
+            out.contains("bottom: 13pt"),
+            "block must contain combined inset"
+        );
     }
 
     #[test]

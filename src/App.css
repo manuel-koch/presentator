@@ -1885,8 +1885,14 @@ button:active {
     gap: 2px;
 }
 
+.markdown-editor-border-toggle .markdown-editor-align-btn {
+    min-width: 1.8rem;
+    text-align: center;
+    justify-content: center;
+}
+
 .markdown-editor-size-input {
-    width: 3.5rem;
+    width: 1.75rem;
     padding: 0.2em 0.3em;
     font-size: 0.8rem;
     background: var(--surface-input, var(--surface-popover));
@@ -1961,6 +1967,46 @@ button:active {
     background: none;
 }
 
+.markdown-editor-color-toggle {
+    display: inline-flex;
+    align-items: center;
+    cursor: pointer;
+    line-height: 1;
+}
+
+.markdown-editor-color-checkbox {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 0.85rem;
+    height: 0.85rem;
+    margin: 0;
+    border: 1px solid var(--border-muted);
+    border-radius: 3px;
+    background: transparent;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.1s, border-color 0.1s;
+}
+
+.markdown-editor-color-checkbox:checked {
+    background: var(--blue, #60a5fa);
+    border-color: var(--blue, #60a5fa);
+}
+
+.markdown-editor-color-checkbox:checked::after {
+    content: "✓";
+    font-size: 0.6rem;
+    font-weight: 700;
+    color: #fff;
+    line-height: 1;
+}
+
+.markdown-editor-color-checkbox:hover {
+    border-color: var(--border-control);
+}
+
 .markdown-editor-align-toggle {
     display: flex;
     align-items: center;
@@ -1987,6 +2033,22 @@ button:active {
     background: var(--surface-selected, var(--surface-hover));
     border-color: var(--border-control);
     color: var(--text-body);
+}
+
+.markdown-editor-align-btn--disabled {
+    opacity: 0.35;
+    cursor: default;
+    pointer-events: none;
+}
+
+.markdown-editor-color-input--disabled {
+    opacity: 0.35;
+    cursor: default;
+}
+
+.markdown-editor-size-input--disabled {
+    opacity: 0.35;
+    cursor: default;
 }
 
 .markdown-editor-panes {
@@ -2030,6 +2092,47 @@ button:active {
     width: 100%;
     height: auto;
     display: block;
+}
+
+.markdown-editor-preview-img-wrapper {
+    position: relative;
+    width: 100%;
+    overflow: hidden;
+}
+
+.markdown-editor-preview-img--stale {
+    opacity: 0.55;
+    transition: opacity 0.15s ease;
+}
+
+.markdown-editor-preview-overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+        180deg,
+        rgba(0,0,0,0) 60%,
+        rgba(0,0,0,0.06) 100%
+    );
+    pointer-events: none;
+}
+
+@keyframes markdown-editor-bar-pulse {
+    0%   { transform: scaleX(0); opacity: 1; }
+    50%  { transform: scaleX(1); opacity: 0.6; }
+    100% { transform: scaleX(0); opacity: 1; }
+}
+
+.markdown-editor-preview-bar {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: var(--accent, #4a90d9);
+    border-radius: 1px;
+    transform-origin: left;
+    animation: markdown-editor-bar-pulse 1.2s ease-in-out infinite;
+    pointer-events: none;
 }
 
 .markdown-editor-preview-placeholder {

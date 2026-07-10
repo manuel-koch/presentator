@@ -84,21 +84,66 @@ Render pipeline (all Rust, no browser engine):
 - [x] Update sidecar config for overlays
 - [x] Update sidecar config schema definition
 
-- [ ] Can't select "no" (transparent) color for background, thus reverting
+- [x] Can't select "no" (transparent) color for background, thus reverting
       to the initial default background color is not possible
 
-- [ ] Can't select "no" (transparent) color for border, thus reverting
+- [x] Can't select "no" (transparent) color for border, thus reverting
       to the initial default background color is not possible
 
-- [ ] The "dashed" border button is narrower as the "solid" or "dotted" button
+- [x] The "dashed" border button is narrower as the "solid" or "dotted" button
 
-- [ ] The border is half-in/half-out of the background-colored-area.
+- [x] The border is half-in/half-out of the background-colored-area.
       Should be completely inside the background-colored-area
 
-- [ ] The (colored) background bounding box of a rendered markdown text
-      is not correct. If the bottom text contains characters with decenders
+- [x] The (colored) background bounding box of a rendered markdown text
+      is not correct. If the bottom text contains characters with descenders
       like "j" then the lower part of the "y" is outside the background-colored
       bounding-box.
+
+      ## Root cause investigation (2026-07-10)
+
+      The `#block(fill: ...)` wrapper in Typst computes its height from the
+      content's line-height metrics, but the fill rectangle does **not** extend
+      to cover the full glyph bounding box of descender characters (g, j, p,
+      q, y) on the last line. Earlier lines are fine because inter-line
+      leading pushes the block height enough.
+
+      What was tried and why it's fragile:
+      - **`0.15em` bottom inset** — scales with font-size, but some descenders
+        (e.g. "j" alone vs "j"+"y" together) behave differently because Typst's
+        line-box sizing varies per glyph combination. A single "j" still pokes
+        out at `0.15em`.
+      - **Larger `em` values** — `0.3em` covers most descenders but creates
+        visible padding when the last line has no descender characters.
+      - **`4pt` fixed inset** — doesn't scale with font-size; at 28pt it's too
+        small, at 14pt it's visible padding.
+
+      **Likely root cause:** Typst's `#block(fill: ...)` measures text via font
+      metrics (ascent/descent from OS/2 table) which may be tighter than the
+      actual glyph bounds. The SVG viewBox matches the page height which is
+      auto-sized from the block, so even `typst_svg::svg_merged` output clips
+      the descender area.
+
+      **What a fix would need:**
+      - A Typst-native approach that ensures the background fill covers the
+        full visual glyph extent WITHOUT adding visible whitespace.
+      - Candidates to investigate (by a model with better Typst knowledge):
+        1. **`#highlight(fill: ...)`** — designed for inline text highlighting,
+           might handle glyph bounds correctly. Needs block-level width.
+        2. **`#show` rule** — rewrite the styled content to use a different
+           mechanism that includes descenders.
+        3. **SVG post-processing** — render without fill, then insert a
+           `<rect>` into the SVG at the correct bounding box (doesn't solve it
+           in Typst but works in the output).
+        4. **Typst `#box(fill: red, width: 100%)`** — inline-level box might
+           use different sizing rules than `#block`.
+        5. **File a Typst upstream bug** — if the font's OS/2 descent value is
+           ignored by `#block(fill: ...)` when computing block height.
+      - The proper fix must handle mixed font sizes within the same overlay
+        and work with the current `typst-as-lib 0.15` / `typst 0.14` versions.
+
+- [ ] When rendering markdown to svg and using border, the border is inside the
+      background-colored-bounds, even more than the width of the border.
 
 ## Presentation Mode (basic)
 
