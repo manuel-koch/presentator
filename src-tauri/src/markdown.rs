@@ -312,7 +312,7 @@ pub fn markdown_to_typst(content: &str, opts: &RenderOptions, page_width_pt: u32
                 ));
             }
             out.push_str(")[\n");
-            out.push_str(&escape_typst_markup(body));
+            out.push_str(body);
             out.push('\n');
             out.push_str("]\n");
         } else {
@@ -336,7 +336,7 @@ pub fn markdown_to_typst(content: &str, opts: &RenderOptions, page_width_pt: u32
                     ));
                 }
                 out.push_str(")[\n");
-                out.push_str(&escape_typst_markup(body));
+                out.push_str(body);
                 out.push('\n');
                 out.push_str("]\n");
             }
@@ -379,11 +379,15 @@ fn escape_typst_markup(s: &str) -> String {
     // Order matters: backslash first so introduced backslashes are not re-escaped.
     s.replace('\\', "\\\\")
         .replace('#', "\\#")
+        .replace('$', "\\$")
+        .replace('`', "\\`")
         .replace('[', "\\[")
         .replace(']', "\\]")
         .replace('@', "\\@")
         .replace('_', "\\_")
         .replace('*', "\\*")
+        .replace('/', "\\/")
+        .replace('<', "\\<")
 }
 
 /// Escapes characters that have special meaning inside a Typst string literal.
@@ -739,6 +743,16 @@ mod tests {
         assert!(body("path\\to\\file").contains("\\\\"));
     }
 
+    #[test]
+    fn dollar_sign_in_plain_text_is_escaped() {
+        assert!(body("Test\n$").contains("\\$"), "dollar sign must be escaped for Typst math mode");
+    }
+
+    #[test]
+    fn backtick_in_plain_text_is_escaped() {
+        assert!(body("Test\n`").contains("\\`"), "backtick must be escaped for Typst raw span");
+    }
+
     // ── HTML in markdown ──────────────────────────────────────────────────────
 
     #[test]
@@ -1024,5 +1038,169 @@ mod tests {
         };
         let out = markdown_to_typst("Hello", &opts, DEFAULT_WIDTH_PT);
         assert!(!out.contains("inset:"), "inset should not be emitted when padding and border are zero");
+    }
+
+    // ── Bold / italic in styled wrapper (regression: double-escape of Typst markup) ───
+
+    #[test]
+    fn bold_in_background_wrapper() {
+        let opts = RenderOptions {
+            background_color: Some("#ffff00".to_string()),
+            ..RenderOptions::default()
+        };
+        let out = markdown_to_typst("**bold**", &opts, DEFAULT_WIDTH_PT);
+        let block_section = out.splitn(2, "\n\n").nth(1).unwrap_or(&out);
+        assert!(
+            block_section.contains("*bold*"),
+            "bold inside a styled wrapper must have un-escaped Typst bold markers"
+        );
+    }
+
+    #[test]
+    fn bold_in_border_wrapper() {
+        let opts = RenderOptions {
+            border_width: 1.0,
+            border_color: "#000".to_string(),
+            ..RenderOptions::default()
+        };
+        let out = markdown_to_typst("**bold**", &opts, DEFAULT_WIDTH_PT);
+        let block_section = out.splitn(2, "\n\n").nth(1).unwrap_or(&out);
+        assert!(
+            block_section.contains("*bold*"),
+            "bold inside a border wrapper must have un-escaped Typst bold markers"
+        );
+    }
+
+    #[test]
+    fn italic_in_background_wrapper() {
+        let opts = RenderOptions {
+            background_color: Some("#ffff00".to_string()),
+            ..RenderOptions::default()
+        };
+        let out = markdown_to_typst("_italic_", &opts, DEFAULT_WIDTH_PT);
+        let block_section = out.splitn(2, "\n\n").nth(1).unwrap_or(&out);
+        assert!(
+            block_section.contains("_italic_"),
+            "italic inside a styled wrapper must have un-escaped Typst italic markers"
+        );
+    }
+
+    #[test]
+    fn bold_in_styled_wrapper_renders() {
+        let opts = RenderOptions {
+            background_color: Some("#ffff00".to_string()),
+            border_width: 2.0,
+            border_style: "dashed".to_string(),
+            border_color: "#ff0000".to_string(),
+            border_radius: 4.0,
+            ..RenderOptions::default()
+        };
+        render_markdown_to_svg("**bold**", &opts, DEFAULT_WIDTH)
+            .expect("bold with background+stroke should render");
+    }
+
+    #[test]
+    fn hash_escape_in_background_wrapper() {
+        let opts = RenderOptions {
+            background_color: Some("#fff".to_string()),
+            ..RenderOptions::default()
+        };
+        let out = markdown_to_typst("price #5", &opts, DEFAULT_WIDTH_PT);
+        let block_section = out.splitn(2, "\n\n").nth(1).unwrap_or(&out);
+        assert!(
+            block_section.contains("\\#5"),
+            "hash char in text must still be escaped inside styled wrapper"
+        );
+    }
+
+    #[test]
+    fn brackets_escape_in_border_wrapper() {
+        let opts = RenderOptions {
+            border_width: 1.0,
+            border_color: "#000".to_string(),
+            ..RenderOptions::default()
+        };
+        let out = markdown_to_typst("see [note]", &opts, DEFAULT_WIDTH_PT);
+        let block_section = out.splitn(2, "\n\n").nth(1).unwrap_or(&out);
+        assert!(
+            block_section.contains("\\[note\\]"),
+            "brackets in text must still be escaped inside styled wrapper"
+        );
+    }
+
+    #[test]
+    fn slash_at_end_of_paragraph_renders() {
+        // Regression: "/" at the end of a paragraph must not break Typst compilation.
+        render_markdown_to_svg("Step A /", &RenderOptions::default(), DEFAULT_WIDTH)
+            .expect("slash at end of paragraph should render");
+    }
+
+    #[test]
+    fn double_slash_at_end_of_paragraph_renders() {
+        // Regression: "//" at the end of a paragraph must not be treated as Typst comment.
+        render_markdown_to_svg("Step A //", &RenderOptions::default(), DEFAULT_WIDTH)
+            .expect("double slash at end of paragraph should render");
+        let full = markdown_to_typst("Step A //", &opts(), DEFAULT_WIDTH_PT);
+        // The body section (after preamble) must contain escaped "\\/\\/" (\"/\" → \"\\/\"
+        // in Typst markup so bare "/" is not parsed as code).
+        let body_section = full.splitn(2, "\n\n").nth(1).unwrap_or(&full);
+        assert!(
+            body_section.contains("\\/\\/"),
+            "escaped double-slash must appear inside the body section, got: {body_section:?}"
+        );
+    }
+
+    #[test]
+    fn slash_at_end_of_styled_paragraph_renders() {
+        let opts = RenderOptions {
+            background_color: Some("#fff".to_string()),
+            ..RenderOptions::default()
+        };
+        render_markdown_to_svg("Step A /", &opts, DEFAULT_WIDTH)
+            .expect("slash at end of styled paragraph should render");
+    }
+
+    #[test]
+    fn double_slash_in_styled_paragraph_renders() {
+        let opts = RenderOptions {
+            background_color: Some("#fff".to_string()),
+            ..RenderOptions::default()
+        };
+        render_markdown_to_svg("Step A //", &opts, DEFAULT_WIDTH)
+            .expect("double slash at end of styled paragraph should render");
+    }
+
+    #[test]
+    fn slash_alone_on_line_renders() {
+        // Regression: a standalone paragraph containing only "/" must not break Typst compilation.
+        render_markdown_to_svg("Test\n\n/", &RenderOptions::default(), DEFAULT_WIDTH)
+            .expect("slash alone on its own line between paragraphs should render");
+    }
+
+    #[test]
+    fn slash_alone_on_line_styled_renders() {
+        let opts = RenderOptions {
+            background_color: Some("#fff".to_string()),
+            ..RenderOptions::default()
+        };
+        render_markdown_to_svg("Test\n\n/", &opts, DEFAULT_WIDTH)
+            .expect("slash alone on its own line in styled paragraph should render");
+    }
+
+    #[test]
+    fn angle_bracket_without_close_renders() {
+        // Regression: "<text" without closing ">" must not break Typst compilation.
+        render_markdown_to_svg("Test\n<asdasd", &RenderOptions::default(), DEFAULT_WIDTH)
+            .expect("angle bracket without close should render");
+    }
+
+    #[test]
+    fn angle_bracket_without_close_styled_renders() {
+        let opts = RenderOptions {
+            background_color: Some("#fff".to_string()),
+            ..RenderOptions::default()
+        };
+        render_markdown_to_svg("Test\n<asdasd", &opts, DEFAULT_WIDTH)
+            .expect("angle bracket without close in styled context should render");
     }
 }
