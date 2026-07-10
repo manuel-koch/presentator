@@ -2098,9 +2098,17 @@ button:active {
     padding: 0.25rem 0;
 }
 
-.markdown-editor-preview {
+.markdown-editor-preview-wrapper {
     flex: 1;
     min-width: 0;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+}
+
+.markdown-editor-preview {
+    flex: 1;
+    min-height: 0;
     overflow-y: auto;
     padding: 0.75rem 1rem;
     background: #fff;
@@ -2156,6 +2164,28 @@ button:active {
 .markdown-editor-preview-placeholder {
     color: var(--text-muted);
     font-size: 0.875rem;
+}
+
+.markdown-editor-scroll-indicator {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 20px;
+    pointer-events: none;
+    z-index: 2;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+}
+.markdown-editor-scroll-indicator--top {
+    top: 0;
+    background: linear-gradient(180deg, rgba(0,0,0,0.15) 0%, transparent 100%);
+}
+.markdown-editor-scroll-indicator--bottom {
+    bottom: 0;
+    background: linear-gradient(0deg, rgba(0,0,0,0.15) 0%, transparent 100%);
+}
+.markdown-editor-scroll-indicator.is-visible {
+    opacity: 1;
 }
 
 .markdown-editor-preview-error {

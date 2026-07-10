@@ -282,7 +282,11 @@ export function SettingsDialog({ settings, onSave, onCancel, filename, presentat
                     min={10}
                     step={10}
                     value={overlaySvgMaxMb}
-                    onChange={(e) => setOverlaySvgMaxMb(Math.max(10, parseInt(e.target.value, 10) || 50))}
+                    onChange={(e) => {
+                      const v = parseInt(e.target.value, 10);
+                      if (!isNaN(v)) setOverlaySvgMaxMb(v);
+                    }}
+                    onBlur={() => setOverlaySvgMaxMb((prev) => Math.max(10, prev))}
                     className="settings-number-input"
                     style={{ width: "64px" }}
                     aria-label="Overlay cache max size in MB"
@@ -312,7 +316,11 @@ export function SettingsDialog({ settings, onSave, onCancel, filename, presentat
                     min={10}
                     step={10}
                     value={stepThumbMaxMb}
-                    onChange={(e) => setStepThumbMaxMb(Math.max(10, parseInt(e.target.value, 10) || 100))}
+                    onChange={(e) => {
+                      const v = parseInt(e.target.value, 10);
+                      if (!isNaN(v)) setStepThumbMaxMb(v);
+                    }}
+                    onBlur={() => setStepThumbMaxMb((prev) => Math.max(10, prev))}
                     className="settings-number-input"
                     style={{ width: "64px" }}
                     aria-label="Step preview cache max size in MB"

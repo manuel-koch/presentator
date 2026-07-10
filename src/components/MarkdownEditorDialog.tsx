@@ -56,6 +56,27 @@ export function MarkdownEditorDialog({ overlay, onSave, onQuickSave, onCancel }:
   const [borderRadiusStr, setBorderRadiusStr] = useState(() => String(overlay.style?.border_radius ?? 0));
   const [paddingStr, setPaddingStr] = useState(() => String(overlay.style?.padding ?? 0));
 
+  const [showScrollTop, setShowScrollTop] = useState(false);
+  const [showScrollBottom, setShowScrollBottom] = useState(false);
+  const previewRef = useRef<HTMLDivElement>(null);
+
+  function updateScrollIndicators() {
+    const el = previewRef.current;
+    if (!el) return;
+    const { scrollTop, scrollHeight, clientHeight } = el;
+    setShowScrollTop(scrollTop > 2);
+    setShowScrollBottom(scrollTop + clientHeight < scrollHeight - 2);
+  }
+
+  useEffect(() => {
+    const el = previewRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => updateScrollIndicators());
+    ro.observe(el);
+    updateScrollIndicators();
+    return () => ro.disconnect();
+  }, [previewSrc]);
+
   const [systemFonts, setSystemFonts] = useState<string[]>([]);
   const [fontSearch, setFontSearch] = useState("");
   const [fontPickerOpen, setFontPickerOpen] = useState(false);
@@ -473,7 +494,10 @@ export function MarkdownEditorDialog({ overlay, onSave, onQuickSave, onCancel }:
         </div>
         <div className="markdown-editor-panes">
           <div ref={editorContainerRef} className="markdown-editor-cm-container" />
-          <div className="markdown-editor-preview" aria-label="Preview">
+          <div className="markdown-editor-preview-wrapper" aria-label="Preview">
+            <div className={`markdown-editor-scroll-indicator markdown-editor-scroll-indicator--top${showScrollTop ? " is-visible" : ""}`} />
+            <div className={`markdown-editor-scroll-indicator markdown-editor-scroll-indicator--bottom${showScrollBottom ? " is-visible" : ""}`} />
+            <div className="markdown-editor-preview" ref={previewRef} onScroll={updateScrollIndicators}>
             {previewError ? (
               <div className="markdown-editor-preview-error">{previewError}</div>
             ) : previewSrc ? (
@@ -485,6 +509,7 @@ export function MarkdownEditorDialog({ overlay, onSave, onQuickSave, onCancel }:
             ) : (
               <div className="markdown-editor-preview-placeholder">Rendering…</div>
             )}
+          </div>
           </div>
         </div>
         <div className="markdown-editor-footer">

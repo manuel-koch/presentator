@@ -153,7 +153,7 @@ Render pipeline (all Rust, no browser engine):
       Can we use some 50%-gray-checkerboard background in the markdown editor
       viewport ?
 
-- [ ] The markdown editor has no indicator when the rendered content is
+- [x] The markdown editor has no indicator when the rendered content is
       vertically longer than the viewport.
       Add vertical scroll-indicators.
 
