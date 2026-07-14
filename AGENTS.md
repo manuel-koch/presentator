@@ -23,9 +23,9 @@ Interactive / dynamic presentation app built from SVG input files, running on ma
 * Execute actions via your tools
 
 **No file edits without explicit user consent:** Phrases like "propose",
-"suggest", "evaluate", "review", "analyze", "discuss", "explore", "re-think"
-are just chat triggers.
-Only edit/implement after user says "do it", "implement it" or equivalent.
+"suggest", "evaluate", "review", "analyze", "discuss", "explore", "re-think",
+"focus" or "highlight" are just chat triggers.
+Only edit/implement after user says "do it", "implement it", "fix it" or equivalent.
 
 ## Development Guideline
 
