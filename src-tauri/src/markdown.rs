@@ -178,7 +178,14 @@ pub fn markdown_to_typst(content: &str, opts: &RenderOptions, page_width_pt: u32
                     body.push_str("#box(stroke: 0.6pt, width: 0.65em, height: 0.65em)[] ");
                 }
             }
-            Event::Start(Tag::List(start)) => list_stack.push(start.is_some()),
+            Event::Start(Tag::List(start)) => {
+                if !list_stack.is_empty() {
+                    // Nested list: separate from parent item content with a newline
+                    // so Typst sees the indented child list on its own line.
+                    body.push('\n');
+                }
+                list_stack.push(start.is_some());
+            }
             Event::End(TagEnd::List(_)) => {
                 list_stack.pop();
                 body.push('\n');
@@ -695,6 +702,78 @@ mod tests {
         let out = body("1. first\n2. second");
         assert!(out.contains("+ first\n"));
         assert!(out.contains("+ second\n"));
+    }
+
+    #[test]
+    fn nested_bullet_list_has_newline_before_child() {
+        // Regression: nested items must not merge onto the same line as the parent.
+        let out = body("* A\n  * A1\n  * A2\n* B\n  * B1\n  * B2");
+        assert!(
+            out.contains("- A\n  - A1"),
+            "first child A1 must be on its own line (indented) after parent A, got: {:?}",
+            out,
+        );
+        assert!(
+            out.contains("  - A1\n  - A2"),
+            "sibling children must each be on their own line"
+        );
+        assert!(
+            out.contains("  - B1\n  - B2"),
+            "second group of siblings must be correct"
+        );
+    }
+
+    #[test]
+    fn nested_ordered_list_produces_indented_plus() {
+        let out = body("1. X\n   1. Y\n   2. Z\n2. W");
+        assert!(
+            out.contains("+ X\n  + Y"),
+            "children of ordered list must be indented on their own line, got: {:?}",
+            out,
+        );
+        assert!(out.contains("+ Y\n  + Z"));
+        assert!(out.contains("+ W"), "root-level item W must appear");
+    }
+
+    #[test]
+    fn nested_mixed_list_indentation_is_correct() {
+        // Bullet inside ordered list
+        let out = body("1. item\n   * sub\n   * sub2");
+        assert!(
+            out.contains("+ item\n  - sub"),
+            "bullet-nested-in-ordered must indent correctly, got: {:?}",
+            out,
+        );
+    }
+
+    #[test]
+    fn nested_bullet_list_renders_to_svg() {
+        render_markdown_to_svg(
+            "* A\n  * A1\n  * A2\n* B\n  * B1\n  * B2",
+            &RenderOptions::default(),
+            DEFAULT_WIDTH,
+        )
+        .expect("nested bullet list must compile to valid SVG");
+    }
+
+    #[test]
+    fn nested_list_three_levels_renders_to_svg() {
+        render_markdown_to_svg(
+            "* A\n  * B\n    * C",
+            &RenderOptions::default(),
+            DEFAULT_WIDTH,
+        )
+        .expect("three-level nested list must compile to valid SVG");
+    }
+
+    #[test]
+    fn nested_list_with_text_after_child_renders_to_svg() {
+        render_markdown_to_svg(
+            "* parent\n  * child\nmore text",
+            &RenderOptions::default(),
+            DEFAULT_WIDTH,
+        )
+        .expect("nested list followed by paragraph must compile to valid SVG");
     }
 
     // ── Links ─────────────────────────────────────────────────────────────────

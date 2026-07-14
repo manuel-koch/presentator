@@ -169,7 +169,7 @@ Render pipeline (all Rust, no browser engine):
       to create a new step with its viewport aligned to markdown-overlay-rect
       at current mouse hit-point.
 
-- [ ] Nested bullet points are not rendered correctly, e.g. the following snippet
+- [x] Nested bullet points are not rendered correctly, e.g. the following snippet
       ```markdown
       * A
         * A1
