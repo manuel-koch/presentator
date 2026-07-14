@@ -37,9 +37,10 @@ removing the finished tasks from the todo in favor of updated feature descriptio
 
 ## Bugs
 
-- [ ] When doing drag'n'drop of a step in the step-list, then text under the mouse-move
-      gets selected. This looks strange and is unexpected, since user just wants to re-position
-      the step in the list and not select some visible text in the step-list.
+- [ ] When doing drag'n'drop of a step in the step-list via the step-handle,
+      then text under the mouse-move gets selected. This looks strange and
+      is unexpected, since user just wants to re-position the step in the list
+      and not select some visible text in the step-list beneath it.
 
 ## Markdown Overlay Content
 
@@ -164,6 +165,36 @@ Render pipeline (all Rust, no browser engine):
       This will be shown whenever a markdown-overlay or a step-preview
       is re-rendered.
 
+- [ ] Create a new action-menu-item in the right-click context menu
+      to create a new step with its viewport aligned to markdown-overlay-rect
+      at current mouse hit-point.
+
+- [ ] Nested bullet points are not rendered correctly, e.g. the following snippet
+      ```markdown
+      * A
+        * A1
+        * A2
+      * B
+        * B1
+        * B2
+      ```
+      is visually rendered as
+      ```text
+      • A - A1
+        ‣ A2
+      • B - B1
+        ‣ B2
+      ```
+
+## Presentation Mode (mouse indicator)
+
+- [ ] Drawing some lines via the mouse indicator functionality during presentation-mode
+      When advancing to another step, the drawing of the lines stays at current viewport
+      position while the viewport "moves" over the background to the new step-viewport-position.
+  - When line-drawings exist at the begin of a transition to a new step, immediately hide
+    the drawings ( instant, no blending ), to not render lines while the viewport is moving/blending to
+    the new position on the canvas.
+  
 ## Presentation Mode (basic)
 
 - [ ] Step navigation UI (next / previous)
