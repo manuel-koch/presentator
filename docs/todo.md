@@ -165,6 +165,17 @@ Render pipeline (all Rust, no browser engine):
       This will be shown whenever a markdown-overlay or a step-preview
       is re-rendered.
 
+- [ ] Right-click within a step-viewport-rect should add a menu-item
+      to the context menu to make this step current step.
+      Thus afterwards clicking inside a overlay-rect can be used to align
+      current selected step-viewport to an overlay.
+      - When multiple step viewport rects overlap at the hit-point,
+        show a section per step (distinct headings), each with its own
+        "Make current step" + "Focus in viewport" items.
+      - This requires changing the hit-test return type from a single
+        `step` to an array `steps[]` where the first list-entry represents the
+        step with the lower index in the step list.
+
 - [ ] Create a new action-menu-item in the right-click context menu
       to create a new step with its viewport aligned to markdown-overlay-rect
       at current mouse hit-point.
